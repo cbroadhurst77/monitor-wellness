@@ -9,7 +9,7 @@ namespace MonitorWellness.Core;
 /// never rebuilt, so a monitor added/removed after launch (or a device context invalidated
 /// by a sleep/resume cycle) would silently go stale.
 /// </summary>
-public sealed class GammaControllerManager : IDisposable
+public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarget
 {
     private readonly Dictionary<string, GammaRampController> _controllers = new();
     private bool _disposed;
@@ -71,6 +71,13 @@ public sealed class GammaControllerManager : IDisposable
     /// current target (schedule or migraine) right after calling this.
     /// </summary>
     public void ReapplyAfterWake() => RebuildControllers();
+
+    /// <summary>IColorTemperatureTarget implementation — applies the same Kelvin/contrast to every currently-tracked monitor, the primitive MigraineModeController's activate/fade logic pushes through.</summary>
+    public void ApplyToAll(int kelvin, double contrastReduction)
+    {
+        foreach (var controller in Controllers)
+            controller.ApplyColorTemperatureWithContrast(kelvin, contrastReduction);
+    }
 
     public void Dispose()
     {

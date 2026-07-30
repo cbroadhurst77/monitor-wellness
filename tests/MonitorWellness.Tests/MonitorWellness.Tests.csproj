@@ -1,10 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- net8.0, not net8.0-windows: the classes under test (SolarCalculator, ScheduleCurve,
-         ColorTemperature) are pure math with no Win32/WPF/WinForms dependency, so the test
-         project doesn't need the Windows Desktop runtime either. -->
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- net8.0-windows + UseWPF, not plain net8.0: most classes under test (SolarCalculator,
+         ScheduleCurve, ColorTemperature, etc.) are pure math with no Win32/WPF/WinForms
+         dependency, but MigraineModeController itself depends on System.Windows.Media.Color
+         and System.Windows.Threading.DispatcherTimer directly (not just its now-fakeable
+         GammaControllerManager/OverlayController dependencies, see HardwareTargets.cs),
+         so testing it at all requires the Windows Desktop runtime here too. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -36,6 +40,10 @@
     <Compile Include="..\..\src\MonitorWellness\Core\HistoryStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\FullscreenHeuristic.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightAdapter.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AppSettings.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\HardwareTargets.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\MigraineModeController.cs" />
   </ItemGroup>
 
 </Project>

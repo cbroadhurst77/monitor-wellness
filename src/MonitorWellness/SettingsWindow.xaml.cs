@@ -62,6 +62,7 @@ public partial class SettingsWindow : Window
         _numericInputs.Add((NightBrightnessInput, NightBrightnessSlider, true));
         _numericInputs.Add((MigraineOpacityInput, MigraineOpacitySlider, true));
         _numericInputs.Add((MigraineContrastInput, MigraineContrastSlider, true));
+        _numericInputs.Add((DeepNightBrightnessInput, DeepNightBrightnessSlider, true));
 
         LoadFromSettings();
     }
@@ -168,6 +169,42 @@ public partial class SettingsWindow : Window
         RefreshHistorySummary();
     }
 
+    /// <summary>
+    /// The aggregate summary above answers "how often and how well, on average" — this hands
+    /// over the same raw HistoryEvent records HistoryStore.Load() already returns, one row per
+    /// event, so a user can cross-reference activation timing against anything else they track
+    /// (e.g. a personal migraine diary) rather than being limited to the on-screen averages.
+    /// </summary>
+    private void ExportHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            FileName = "MonitorWellness-history.csv",
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            Title = "Export Monitor Wellness History",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var events = HistoryStore.Load();
+            var lines = new List<string> { "TimestampUtc,EventType,Mild,DurationSeconds,Rating" };
+            lines.AddRange(events.Select(evt => string.Join(",",
+                evt.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
+                evt.EventType,
+                evt.Mild?.ToString() ?? "",
+                evt.DurationSeconds?.ToString(CultureInfo.InvariantCulture) ?? "",
+                evt.Rating?.ToString(CultureInfo.InvariantCulture) ?? "")));
+            File.WriteAllLines(dialog.FileName, lines);
+            System.Windows.MessageBox.Show(this, $"History exported to {dialog.FileName}.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't export history: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void RefreshHistorySummary()
     {
         if (HistoryTrackingCheckBox.IsChecked != true)
@@ -212,6 +249,9 @@ public partial class SettingsWindow : Window
         _pendingHotkeyModifiers = source.MigraineHotkeyModifiers;
         _pendingHotkeyKey = source.MigraineHotkeyKey;
         HotkeyBox.Text = FormatHotkey(_pendingHotkeyModifiers, _pendingHotkeyKey);
+
+        DeepNightBrightnessSlider.Value = source.DeepNightBrightness;
+        DeepNightColorBox.Text = source.DeepNightOverlayColorHex;
     }
 
     /// <summary>
@@ -426,17 +466,24 @@ public partial class SettingsWindow : Window
 
         var result = await _geocoding.SearchAsync(query);
 
-        FindLocationButton.IsEnabled = true;
-
         if (result is null)
         {
             LocationSearchStatus.Text = $"Couldn't find \"{query}\" — try a different spelling, or a nearby larger town.";
-            return;
+        }
+        else
+        {
+            LatitudeBox.Text = result.Latitude.ToString("F4", CultureInfo.InvariantCulture);
+            LongitudeBox.Text = result.Longitude.ToString("F4", CultureInfo.InvariantCulture);
+            LocationSearchStatus.Text = $"Found: {result.DisplayName}";
         }
 
-        LatitudeBox.Text = result.Latitude.ToString("F4", CultureInfo.InvariantCulture);
-        LongitudeBox.Text = result.Longitude.ToString("F4", CultureInfo.InvariantCulture);
-        LocationSearchStatus.Text = $"Found: {result.DisplayName}";
+        // Nominatim's usage policy asks for roughly no more than 1 request/second. This is a
+        // manual, one-off search box, not a batch process, so the real-world risk is low --
+        // but keeping the button disabled a beat past the request itself closes the gap
+        // between "compliant in practice" and "compliant by design" for this app's only
+        // network call.
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        FindLocationButton.IsEnabled = true;
     }
 
     // --- Live preview -------------------------------------------------------------------
@@ -470,6 +517,16 @@ public partial class SettingsWindow : Window
     }
 
     private void MigraineAutoRevertSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_loaded) UpdateSliderLabels();
+    }
+
+    /// <summary>
+    /// No live preview here (unlike Day/Night/migraine) — deep night only kicks in once solar
+    /// elevation drops past nautical twilight or the bedtime clock, a state this window can't
+    /// easily fake a preview for on demand.
+    /// </summary>
+    private void DeepNightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_loaded) UpdateSliderLabels();
     }
@@ -734,9 +791,9 @@ public partial class SettingsWindow : Window
         return string.Join("+", parts);
     }
 
-    private bool TryValidateMigraineColorHex(out string colorHex, out string error)
+    private static bool TryValidateHexColor(TextBox box, string fieldLabel, out string colorHex, out string error)
     {
-        colorHex = MigraineColorBox.Text.Trim();
+        colorHex = box.Text.Trim();
         error = "";
         try
         {
@@ -745,10 +802,16 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidOperationException)
         {
-            error = "Migraine overlay color must be a valid hex color, e.g. #321408.";
+            error = $"{fieldLabel} must be a valid hex color, e.g. #321408.";
             return false;
         }
     }
+
+    private bool TryValidateMigraineColorHex(out string colorHex, out string error) =>
+        TryValidateHexColor(MigraineColorBox, "Migraine overlay color", out colorHex, out error);
+
+    private bool TryValidateDeepNightColorHex(out string colorHex, out string error) =>
+        TryValidateHexColor(DeepNightColorBox, "Deep-night overlay color", out colorHex, out error);
 
     private bool TryValidateBedtime(out string? bedtimeLocal, out string error)
     {
@@ -788,6 +851,9 @@ public partial class SettingsWindow : Window
         if (!TryValidateMigraineColorHex(out string migraineColorHex, out error))
             return false;
 
+        if (!TryValidateDeepNightColorHex(out string deepNightColorHex, out error))
+            return false;
+
         if (!TryValidateBedtime(out string? bedtimeLocal, out error))
             return false;
 
@@ -795,6 +861,8 @@ public partial class SettingsWindow : Window
         snapshot.NightKelvin = nightKelvin;
         snapshot.DayBrightness = DayBrightnessSlider.Value;
         snapshot.NightBrightness = NightBrightnessSlider.Value;
+        snapshot.DeepNightBrightness = DeepNightBrightnessSlider.Value;
+        snapshot.DeepNightOverlayColorHex = deepNightColorHex;
         snapshot.MigraineOverlayColorHex = migraineColorHex;
         snapshot.MigraineOverlayOpacity = MigraineOpacitySlider.Value;
         snapshot.MigraineContrastReduction = MigraineContrastSlider.Value;
@@ -911,6 +979,9 @@ public partial class SettingsWindow : Window
         if (!TryValidateMigraineColorHex(out string migraineColorHex, out error))
             return false;
 
+        if (!TryValidateDeepNightColorHex(out string deepNightColorHex, out error))
+            return false;
+
         if (!TryValidateBedtime(out string? bedtimeLocal, out error))
             return false;
 
@@ -944,6 +1015,8 @@ public partial class SettingsWindow : Window
         _settings.NightKelvin = nightKelvin;
         _settings.DayBrightness = dayBrightness;
         _settings.NightBrightness = nightBrightness;
+        _settings.DeepNightBrightness = DeepNightBrightnessSlider.Value;
+        _settings.DeepNightOverlayColorHex = deepNightColorHex;
         _settings.MigraineOverlayColorHex = migraineColorHex;
         _settings.MigraineOverlayOpacity = migraineOpacity;
         _settings.MigraineContrastReduction = MigraineContrastSlider.Value;

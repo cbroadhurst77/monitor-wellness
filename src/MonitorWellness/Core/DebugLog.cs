@@ -30,9 +30,12 @@ public static class DebugLog
             RotateIfTooLarge();
             File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Logging must never be the thing that crashes the app.
+            // Logging must never be the thing that crashes the app. RotateIfTooLarge touches
+            // FileInfo.Length and opens a FileStream before this catch takes effect, and both
+            // can throw UnauthorizedAccessException under permission conditions IOException
+            // doesn't cover -- matches the pattern already used in ProfileStore.Load/HistoryStore.Load.
         }
     }
 

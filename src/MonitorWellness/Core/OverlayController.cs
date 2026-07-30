@@ -10,7 +10,7 @@ namespace MonitorWellness.Core;
 /// display topology. Screen.DeviceName (e.g. "\\.\DISPLAY1") uses the same format as
 /// MonitorEnumerator's device names, so the two can be correlated directly.
 /// </summary>
-public sealed class OverlayController : IDisposable
+public sealed class OverlayController : IDisposable, IOverlayTarget
 {
     private readonly Dictionary<string, OverlayWindow> _windows = new();
     private bool _disposed;

@@ -73,7 +73,7 @@
                     <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
                     <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
                 </Grid>
-                <TextBlock Text="Profiles save/restore the Day/Night, migraine, and bedtime settings below — not your location or per-monitor setup. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="Profiles save/restore Day/Night, Deep Night, migraine, and bedtime settings only — not your location, per-monitor setup, break reminders, ambient light matching, or history tracking. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
                     <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>
@@ -174,6 +174,24 @@
                     <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
                 </Grid>
                 <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                <TextBlock Text="Deep Night" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBlock Text="Once the sun (or bedtime clock above) reaches deep night, brightness and overlay color blend further toward these values — a bedtime-level warmth stage beyond what Night color temp's safe gamma-ramp floor can reach on its own." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <StackPanel Margin="0,0,0,4">
+                    <TextBlock Text="Deep-night brightness"/>
+                    <Slider x:Name="DeepNightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DeepNightSlider_ValueChanged"
+                            AutomationProperties.Name="Deep-night brightness percentage"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBox x:Name="DeepNightBrightnessInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
+                                 LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                 AutomationProperties.Name="Deep-night brightness exact percentage"/>
+                        <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Margin="0,0,0,12">
+                    <TextBlock Text="Deep-night overlay color (hex, e.g. #190C04)"/>
+                    <TextBox x:Name="DeepNightColorBox"/>
+                </StackPanel>
 
                 <TextBlock Text="Migraine Mode" FontWeight="Bold" Margin="0,0,0,4"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -278,7 +296,10 @@
                 <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
                 <TextBlock Text="Frequency and duration alone can't tell you whether Migraine Mode is actually helping — this adds a quick, skippable 1-5 rating after each use so the summary below can show that too." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <TextBlock x:Name="HistorySummaryText" FontSize="11" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <Button x:Name="ClearHistoryButton" Content="Clear History" HorizontalAlignment="Left" Padding="8,2" Click="ClearHistoryButton_Click"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
+                    <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
+                </StackPanel>
 
             </StackPanel>
         </ScrollViewer>

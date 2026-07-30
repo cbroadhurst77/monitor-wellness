@@ -358,8 +358,10 @@ public partial class App : Application
             // Skip while migraine mode is active -- someone already dealing with that doesn't
             // need an unrelated interruption layered on top. The timer keeps running on its
             // normal interval rather than resetting, so it resumes nudging once migraine mode
-            // ends rather than needing a full interval to elapse again.
-            if (_migraine?.IsActive != true)
+            // ends rather than needing a full interval to elapse again. Also skip while a
+            // fullscreen app (video, game, screen share) likely owns the screen -- reuses the
+            // same heuristic MigraineModeController already relies on for its own fullscreen check.
+            if (_migraine?.IsActive != true && !FullscreenDetector.IsForegroundWindowLikelyFullscreen())
             {
                 _trayIcon?.ShowBalloonTip(
                     8_000,

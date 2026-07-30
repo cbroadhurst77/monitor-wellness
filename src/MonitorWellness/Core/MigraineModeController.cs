@@ -39,8 +39,8 @@ public sealed class MigraineModeController
     /// </summary>
     private const double MildIntensityMultiplier = 0.6;
 
-    private readonly GammaControllerManager _gammaManager;
-    private readonly OverlayController _overlay;
+    private readonly IColorTemperatureTarget _colorTemperatureTarget;
+    private readonly IOverlayTarget _overlayTarget;
     private readonly AppSettings _settings;
     private readonly Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> _computeScheduleTarget;
     private readonly Func<bool>? _isForegroundFullscreenLikely;
@@ -88,14 +88,14 @@ public sealed class MigraineModeController
     public event Action? RatingRequested;
 
     public MigraineModeController(
-        GammaControllerManager gammaManager,
-        OverlayController overlay,
+        IColorTemperatureTarget colorTemperatureTarget,
+        IOverlayTarget overlayTarget,
         AppSettings settings,
         Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> computeScheduleTarget,
         Func<bool>? isForegroundFullscreenLikely = null)
     {
-        _gammaManager = gammaManager;
-        _overlay = overlay;
+        _colorTemperatureTarget = colorTemperatureTarget;
+        _overlayTarget = overlayTarget;
         _settings = settings;
         _computeScheduleTarget = computeScheduleTarget;
         _isForegroundFullscreenLikely = isForegroundFullscreenLikely;
@@ -120,13 +120,12 @@ public sealed class MigraineModeController
 
         double intensity = mild ? MildIntensityMultiplier : 1.0;
 
-        foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperatureWithContrast(_settings.NightKelvin, _settings.MigraineContrastReduction * intensity);
+        _colorTemperatureTarget.ApplyToAll(_settings.NightKelvin, _settings.MigraineContrastReduction * intensity);
 
         Color color = ParseColor(_settings.MigraineOverlayColorHex);
         double opacity = _settings.MigraineOverlayOpacity * intensity;
-        var byDevice = _overlay.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
-        _overlay.Apply(byDevice);
+        var byDevice = _overlayTarget.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
+        _overlayTarget.Apply(byDevice);
 
         _autoRevertTimer?.Stop();
         if (_settings.MigraineAutoRevertMinutes > 0)
@@ -212,11 +211,10 @@ public sealed class MigraineModeController
         // Normal schedule never uses contrast reduction, so the fade target is always 0 —
         // fading contrast back to identity at the same pace as everything else.
         double contrast = Lerp(_fadeFromContrast, 0.0, t);
-        foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperatureWithContrast(kelvin, contrast);
+        _colorTemperatureTarget.ApplyToAll(kelvin, contrast);
 
         var byDevice = new Dictionary<string, (Color, double)>();
-        foreach (var deviceName in _overlay.DeviceNames)
+        foreach (var deviceName in _overlayTarget.DeviceNames)
         {
             double targetBrightness = targetBrightnessByDevice.TryGetValue(deviceName, out var b) ? b : 1.0;
             double targetAlpha = 1.0 - targetBrightness;
@@ -228,7 +226,7 @@ public sealed class MigraineModeController
             Color color = LerpColor(_fadeFromColor, targetDimColor, t);
             byDevice[deviceName] = (color, alpha);
         }
-        _overlay.Apply(byDevice);
+        _overlayTarget.Apply(byDevice);
 
         if (t >= 1.0)
         {
