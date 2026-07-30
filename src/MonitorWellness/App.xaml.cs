@@ -219,7 +219,15 @@ public partial class App : Application
             if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
                 continue;
 
-            controller.ApplyColorTemperature(kelvin);
+            if (!controller.ApplyColorTemperature(kelvin))
+            {
+                // Confirmed this actually happens in practice: a user-entered Kelvin value
+                // below this hardware's safe gamma ramp floor (~3300K, see the Week 1
+                // finding) gets silently rejected by the driver, leaving the display stuck
+                // at whatever color it last reached rather than transitioning. Previously
+                // unlogged here — RunScheduleTick just ignored the return value.
+                DebugLog.Write($"ApplyColorTemperature({kelvin}) REJECTED by driver for {controller.DeviceName} — likely below this hardware's safe floor.");
+            }
         }
 
         _overlay?.ApplyDim(brightnessByDevice, dimColor);

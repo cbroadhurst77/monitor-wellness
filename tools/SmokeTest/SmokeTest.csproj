@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="..\..\src\MonitorWellness\Core\SolarCalculator.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ScheduleCurve.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ColorTemperature.cs" />
   </ItemGroup>
 </Project>

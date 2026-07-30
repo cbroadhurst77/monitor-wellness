@@ -181,6 +181,16 @@ public partial class SettingsWindow : Window
             error = "Night color temp must be a whole number.";
             return false;
         }
+        if (!ColorTemperature.IsSafeForGammaRamp(dayKelvin))
+        {
+            error = $"Day color temp of {dayKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value.";
+            return false;
+        }
+        if (!ColorTemperature.IsSafeForGammaRamp(nightKelvin))
+        {
+            error = $"Night color temp of {nightKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value (3400K is the safe floor found during testing).";
+            return false;
+        }
         if (!double.TryParse(DayBrightnessBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double dayBrightness) || dayBrightness < 0 || dayBrightness > 1)
         {
             error = "Day brightness must be between 0 and 1.";

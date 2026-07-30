@@ -51,8 +51,11 @@ public sealed class GammaRampController : IDisposable
     /// 3400K@100% and 6500K@85% each succeed alone). This means gamma ramp can only be used
     /// for modest brightness assist on top of color temperature — real, visible dimming has
     /// to come from the overlay window layer (Week 2+), not from scaling this ramp further.
+    /// The threshold itself lives on ColorTemperature (shared with the settings window's
+    /// input validation — confirmed necessary in practice when a user entered 2500K, which
+    /// silently failed on this hardware; see IMPLEMENTATION.md).
     /// </summary>
-    private const double MinSafeChannelFactor = 0.55; // small margin above the observed ~0.5 cutoff
+    private const double MinSafeChannelFactor = ColorTemperature.MinSafeChannelFactor;
 
     /// <summary>
     /// Sets this monitor's gamma ramp to the given color temperature, with an optional small

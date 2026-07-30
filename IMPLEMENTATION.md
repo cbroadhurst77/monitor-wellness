@@ -447,3 +447,16 @@ rebind, per-monitor dim multipliers) untouched.
   schedule phase (overlay-assisted extra warmth/dim beyond gamma's floor) to match f.lux's
   missing third "bedtime" stage and circadian research supporting warmer light near sleep.
   Verified the new phase's math synthetically; still needs a real visual check after dark.
+- 2026-07-30: Live user tuning + a real hardware bug caught from it. The out-of-the-box
+  daytime defaults (6500K, 100% brightness) were uncomfortable in practice — real-time
+  feedback settled on 4000K / 55% brightness as personally comfortable, confirming the
+  eye-strain research found earlier (daytime dimming, not just evening) was worth acting on,
+  not just noting. Separately, adjusting Night color temp down to 2500K via the settings
+  window silently failed on this hardware (confirmed directly: `ApplyColorTemperature`
+  returns `false` for 2500K, `true` for 3400K) — exactly the Week 1 gamma ramp floor finding,
+  but this time hit by a real user typing a value into a text box rather than by design.
+  Fixed the immediate setting (back to the confirmed-safe 3400K floor) and closed the gap
+  properly: `ColorTemperature.IsSafeForGammaRamp()` now backs live validation in the settings
+  window (rejects unsafe values with an explanation before they can be saved), and
+  `RunScheduleTick` now logs a rejected gamma call instead of silently ignoring the return
+  value — previously the one place in the whole app that dropped this signal on the floor.

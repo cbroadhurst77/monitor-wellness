@@ -7,6 +7,23 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class ColorTemperature
 {
+    /// <summary>
+    /// Windows rejects SetDeviceGammaRamp calls once a channel's ramp deviates from identity
+    /// by more than roughly a factor of 2 (empirically confirmed on real hardware — see the
+    /// Week 1 finding in IMPLEMENTATION.md). This margin sits just above the observed ~0.5
+    /// cutoff. Shared here (rather than duplicated in GammaRampController) so anything that
+    /// needs to warn about an unsafe Kelvin value up front — like the settings window — uses
+    /// the exact same threshold as the code that actually applies it.
+    /// </summary>
+    public const double MinSafeChannelFactor = 0.55;
+
+    /// <summary>True if this Kelvin value's minimum RGB channel factor stays above the gamma ramp safety margin on its own (i.e. at full brightness, no additional dimming assist).</summary>
+    public static bool IsSafeForGammaRamp(int kelvin)
+    {
+        var (r, g, b) = KelvinToRgbFactors(kelvin);
+        return Math.Min(r, Math.Min(g, b)) >= MinSafeChannelFactor;
+    }
+
     public static (double R, double G, double B) KelvinToRgbFactors(int kelvin)
     {
         double temp = Math.Clamp(kelvin, 1000, 40000) / 100.0;
