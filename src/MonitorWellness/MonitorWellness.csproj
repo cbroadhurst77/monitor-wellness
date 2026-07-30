@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>MonitorWellness</RootNamespace>
+    <AssemblyName>MonitorWellness</AssemblyName>
+    <Platforms>x64</Platforms>
+    <!-- WFAC010 assumes a WinForms-owned entry point (Application.SetHighDpiMode). This app
+         is WPF-hosted, so Per-Monitor-V2 is declared in app.manifest instead - see the
+         comment there. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embedded (not Content/CopyToOutputDirectory) so these survive a self-contained
+         single-file publish: Content files are not extracted alongside a single-file exe at
+         runtime, which broke tray icon loading (DirectoryNotFoundException) the first time
+         this was published as one file. Embedded resources are compiled directly into the
+         assembly, so there is no separate file to go missing. -->
+    <EmbeddedResource Include="Assets\migraine_on.ico" LogicalName="MonitorWellness.Assets.migraine_on.ico" />
+    <EmbeddedResource Include="Assets\migraine_off.ico" LogicalName="MonitorWellness.Assets.migraine_off.ico" />
+  </ItemGroup>
+
+</Project>

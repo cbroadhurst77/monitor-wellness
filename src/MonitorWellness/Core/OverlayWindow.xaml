@@ -1,0 +1,21 @@
+<Window x:Class="MonitorWellness.Core.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Topmost="True"
+        Focusable="False"
+        ShowActivated="False">
+    <Grid x:Name="TintLayer" Background="Transparent">
+        <TextBlock x:Name="LabelText"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontSize="120"
+                   FontWeight="Bold"
+                   Foreground="White"
+                   Visibility="Collapsed"/>
+    </Grid>
+</Window>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="MonitorWellness.app"/>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/> <!-- Windows 10/11 -->
+    </application>
+  </compatibility>
+  <!-- This app is WPF-hosted (WinForms is only used for the NotifyIcon), and WPF's own
+       Per-Monitor-V2 support is driven by this manifest declaration, not by the WinForms
+       ApplicationHighDpiMode/Application.SetHighDpiMode mechanism (that only fires from a
+       WinForms-generated entry point, which this app doesn't have). Declaring it here is
+       what actually gets the overlay windows to render at the correct scale on monitors
+       with different DPI than the primary display. The WFAC010 analyzer warning this
+       triggers assumes a WinForms-owned entry point and doesn't apply to this app -
+       suppressed in the .csproj with that reasoning recorded. -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>
