@@ -297,13 +297,21 @@ manual file edits.
   gamma controller rebuild-on-topology-change and sleep/wake reapply now handled (Week 4),
   but only tested via `SystemEvents` firing correctly, not an actual physical sleep/resume
   cycle or hot-plug — worth a real test before relying on it.
-- Product name not yet chosen ("Monitor Wellness" is a placeholder throughout the code).
+- **Product name confirmed: "Monitor Wellness."** No rename needed — it was already the name
+  used throughout the code (assembly, namespace, folder names, installer AppName, Task
+  Scheduler task name, `%AppData%\MonitorWellness\` settings path).
 - **Installer is unsigned.** Expect a SmartScreen "unknown publisher" warning on first run
   for any real user — code signing is already deferred to v1.1+ above, but worth deciding
   whether that's acceptable for an initial free/OSS release or a blocker.
-- **The installer's actual UAC/install/uninstall flow has not been verified end-to-end** —
-  see the Week 4 finding. Needs a manual run by Chris before calling packaging "done."
-- No GitHub repo exists yet for the "Publish to GitHub Releases" distribution decision.
+- **The installer's actual UAC/install/uninstall flow could not be verified on this
+  machine — it's an IT-managed device that blocks installing unapproved software.** This
+  also explains some earlier oddities from this same dev session (a deny-only Administrators
+  group token, permission-denied errors in unrelated AppData folders) — this machine's admin
+  rights are filtered/restricted by policy, consistent with a managed corporate device. The
+  installer itself compiles cleanly and the exact `schtasks` command was independently
+  verified correct (see the Week 4 finding), but the actual install/uninstall flow needs to
+  be tested on a machine without this restriction — a personal/unmanaged Windows machine, or
+  a VM.
 
 ## Change log
 
