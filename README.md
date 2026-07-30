@@ -1,11 +1,21 @@
 # Monitor Wellness
 
 A Windows tray app that adjusts monitor color temperature and brightness across multiple
-displays based on sunrise/sunset, with a dedicated **migraine mode** for immediate relief
-when a migraine or aura starts.
+displays based on sunrise/sunset, with a dedicated **migraine mode** you can trigger the
+moment a migraine or aura starts.
 
 Rebuilt from an earlier PowerShell + f.lux + AutoHotkey prototype into a standalone .NET/WPF
 application — no dependency on third-party tools.
+
+**This is not a medical device and is not a substitute for professional medical care.**
+Migraine mode's color choice is based on published research on light and migraine
+photophobia (see below), but that research studied ambient light exposure, not a screen
+overlay — this app applies the same underlying idea through the best mechanism available in
+software, not a reproduction of the clinical studies. If you experience migraines, talk to a
+doctor about treatment; use this as one comfort tool alongside that, not instead of it.
+
+No telemetry, no network calls, no accounts — everything (settings, diagnostic logs) stays
+local in `%AppData%\MonitorWellness\`.
 
 ## Features
 
@@ -13,8 +23,10 @@ application — no dependency on third-party tools.
   actual sunrise/sunset (not a fixed clock time)
 - Per-monitor overrides — exclude a monitor entirely, or scale how much it dims relative to
   the others
-- **Migraine mode**: instant activation (deep warm tint + heavy dim, no fade-in delay) via a
-  global hotkey or the tray menu, with a gradual fade back to normal on deactivation
+- **Migraine mode**: instant activation (a muted green tint + heavy dim, no fade-in delay —
+  green rather than the warm tint you might expect, based on research on light and migraine
+  photophobia; see [EVALUATION.md](EVALUATION.md)) via a global hotkey or the tray menu, with
+  a gradual fade back to normal on deactivation
 - Settings window for location, schedule bounds, migraine appearance, and hotkey rebinding
 - "Identify Monitors" — flashes each display's internal name on-screen, since Windows'
   on-screen monitor numbers don't reliably match device enumeration order
@@ -25,20 +37,23 @@ Early — first 4-week build cycle just completed. Functional and tested on real
 (Windows 11, 3-monitor setup), but not yet signed, not yet published, and the installer's
 full install/uninstall flow needs a manual verification pass. See
 [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full build log, architecture decisions, and
-known issues.
+known issues, and [EVALUATION.md](EVALUATION.md) for an honest assessment of engineering
+maturity and the actual strength of the scientific claims behind the color/brightness
+choices — including where evidence is solid, where it's mixed, and where a design choice is
+a reasonable comfort feature rather than a proven intervention.
 
 ## Building from source
 
 Requires the .NET 8 SDK (or newer) and Windows.
 
-```
+```bash
 dotnet build src/MonitorWellness/MonitorWellness.csproj -c Debug
 ```
 
 To produce a self-contained single-file executable (no separate .NET runtime install
 required to run it):
 
-```
+```powershell
 dotnet publish src/MonitorWellness/MonitorWellness.csproj -c Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
   -o publish
@@ -49,7 +64,7 @@ dotnet publish src/MonitorWellness/MonitorWellness.csproj -c Release -r win-x64 
 Requires [Inno Setup](https://jrsoftware.org/isinfo.php) 6+. Build the publish output above
 first, then:
 
-```
+```powershell
 "C:\path\to\Inno Setup 6\ISCC.exe" installer\MonitorWellness.iss
 ```
 
