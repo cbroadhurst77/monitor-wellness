@@ -45,6 +45,39 @@ public static class ScheduleCurve
     public static double GetDeepNightFactor(double elevationDeg)
         => SmoothStep(InverseLerpClamped(NightThresholdDeg, DeepNightThresholdDeg, elevationDeg));
 
+    /// <summary>
+    /// An alternative, clock-time-driven path to the same deep-night factor produced by
+    /// GetDeepNightFactor. For anyone who goes to bed well before the sun sets deep enough
+    /// (winter especially) or wants the wind-down to track their actual routine rather than
+    /// the sun's, this ramps 0.0 -&gt; 1.0 over the <paramref name="rampMinutes"/> before
+    /// bedtime, holds at 1.0 from bedtime through <paramref name="maxPastMinutes"/> after it
+    /// (so it doesn't stay maxed out all the way until the following evening), then eases back
+    /// to 0.0 outside that window. Callers combine this with GetDeepNightFactor via Math.Max so
+    /// whichever signal -- sun or clock -- reaches deep night first wins.
+    /// </summary>
+    public static double GetBedtimeFactor(DateTime nowLocal, TimeSpan bedtimeOfDay, double rampMinutes = 90, double maxPastMinutes = 600)
+    {
+        double minutesFromBedtime = (nowLocal.TimeOfDay - bedtimeOfDay).TotalMinutes;
+
+        // Normalize into (-720, 720] so a bedtime near midnight doesn't see a spurious
+        // ~1440-minute gap between e.g. 23:45 and 00:15.
+        while (minutesFromBedtime > 720) minutesFromBedtime -= 1440;
+        while (minutesFromBedtime <= -720) minutesFromBedtime += 1440;
+
+        if (minutesFromBedtime < 0)
+        {
+            // Before bedtime: ramp up over the last rampMinutes.
+            double t = InverseLerpClamped(-rampMinutes, 0.0, minutesFromBedtime);
+            return SmoothStep(t);
+        }
+
+        // At or after bedtime: full strength until maxPastMinutes, then ease back down over
+        // the same ramp length so it doesn't cut off abruptly the next morning.
+        if (minutesFromBedtime <= maxPastMinutes) return 1.0;
+        double tDown = InverseLerpClamped(maxPastMinutes + rampMinutes, maxPastMinutes, minutesFromBedtime);
+        return SmoothStep(tDown);
+    }
+
     private static double InverseLerpClamped(double a, double b, double value)
         => Math.Clamp((value - a) / (b - a), 0.0, 1.0);
 

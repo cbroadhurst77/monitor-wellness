@@ -40,6 +40,14 @@ public sealed class AppSettings
     public List<string> ExcludedMonitors { get; set; } = new();
 
     /// <summary>
+    /// Device names to exclude from color temperature shifting specifically, while still
+    /// letting them dim with the rest of the schedule — for a photo/video reference monitor
+    /// that needs to stay color-accurate but doesn't need to stay at full brightness all
+    /// night. Distinct from ExcludedMonitors (which skips both color and brightness).
+    /// </summary>
+    public List<string> ColorExcludedMonitors { get; set; } = new();
+
+    /// <summary>
     /// Per-monitor scaling (device name -> multiplier) applied to how much a monitor dims
     /// relative to the global schedule. 1.0 (or absent) follows the global target exactly;
     /// less than 1.0 dims that monitor less than the global target (useful for panels that
@@ -94,4 +102,28 @@ public sealed class AppSettings
     /// unwelcome if someone's genuinely still mid-migraine when it fires. Opt-in, not default-on.
     /// </summary>
     public int MigraineAutoRevertMinutes { get; set; } = 0;
+
+    /// <summary>
+    /// Play a system sound when the hotkey toggles migraine mode, in addition to the always-
+    /// on visual balloon tip. Defaults to false: migraine sufferers commonly also experience
+    /// phonophobia (sound sensitivity) during an attack — the same population this feature is
+    /// for — so an audible confirmation is opt-in rather than assumed helpful.
+    /// </summary>
+    public bool PlaySoundOnMigraineToggle { get; set; } = false;
+
+    /// <summary>
+    /// AutoStartManager.Register() was called and succeeded — tracked separately from the
+    /// live Task Scheduler state so a startup check can notice if the two have drifted apart
+    /// (e.g. a Windows update or IT policy silently removed the task) and tell the user,
+    /// rather than auto-start just quietly stopping working with no explanation.
+    /// </summary>
+    public bool AutoStartEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Optional "HH:mm" local bedtime. When set, ScheduleCurve.GetBedtimeFactor blends in
+    /// deep-night warmth/dim on a clock-time schedule as well as the usual solar one, via
+    /// Math.Max in App.ComputeScheduleTarget -- whichever reaches deep night first wins. Null
+    /// (the default) disables this; the sun alone still drives deep night as before.
+    /// </summary>
+    public string? BedtimeLocal { get; set; } = null;
 }

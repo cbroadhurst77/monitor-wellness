@@ -70,7 +70,8 @@ public partial class App : Application
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Toggle Migraine Mode", null, (_, _) => _migraine.Toggle());
-        menu.Items.Add("Activate Migraine Mode", null, (_, _) => _migraine.Activate());
+        menu.Items.Add("Activate Migraine Mode (Full)", null, (_, _) => _migraine.Activate(mild: false));
+        menu.Items.Add("Activate Migraine Mode (Mild)", null, (_, _) => _migraine.Activate(mild: true));
         menu.Items.Add("Deactivate Migraine Mode", null, (_, _) => _migraine.Deactivate());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Identify Monitors", null, (_, _) =>
@@ -96,7 +97,21 @@ public partial class App : Application
         _resumeScheduleMenuItem = new ToolStripMenuItem("Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(new ToolStripSeparator());
-        var autoStartItem = new ToolStripMenuItem("Start with Windows") { Checked = AutoStartManager.IsRegistered() };
+        bool autoStartCurrentlyRegistered = AutoStartManager.IsRegistered();
+        if (_settings.AutoStartEnabled && !autoStartCurrentlyRegistered)
+        {
+            // The user turned this on at some point and it's since disappeared — e.g. a
+            // Windows update or IT policy silently removed the Task Scheduler entry. Worth
+            // saying so explicitly rather than letting auto-start just quietly stop working.
+            DebugLog.Write("Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is missing");
+            _trayIcon.ShowBalloonTip(
+                10_000,
+                "Monitor Wellness",
+                "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
+                ToolTipIcon.Warning);
+        }
+
+        var autoStartItem = new ToolStripMenuItem("Start with Windows") { Checked = autoStartCurrentlyRegistered };
         autoStartItem.Click += (_, _) =>
         {
             bool wasOn = autoStartItem.Checked;
@@ -104,6 +119,8 @@ public partial class App : Application
             if (success)
             {
                 autoStartItem.Checked = !wasOn;
+                _settings.AutoStartEnabled = !wasOn;
+                SettingsStore.Save(_settings);
             }
             else if (_trayIcon is not null)
             {
@@ -182,7 +199,25 @@ public partial class App : Application
         _hotkey.Pressed += () =>
         {
             DebugLog.Write("Global hotkey pressed: toggling migraine mode");
+            bool wasActive = _migraine?.IsActive == true;
             _migraine?.Toggle();
+
+            // A visual confirmation matters specifically here: the hotkey is the path most
+            // likely to be used mid-aura, when vision may already be compromised, so relying
+            // on noticing the screen change alone is less reliable than it should be. Sound
+            // is opt-in, not default — see AppSettings.PlaySoundOnMigraineToggle for why.
+            bool nowActive = !wasActive;
+            _trayIcon?.ShowBalloonTip(
+                4_000,
+                "Monitor Wellness",
+                nowActive ? "Migraine Mode ON" : "Migraine Mode OFF — fading back to normal",
+                ToolTipIcon.None);
+
+            if (_settings.PlaySoundOnMigraineToggle)
+            {
+                try { (nowActive ? System.Media.SystemSounds.Exclamation : System.Media.SystemSounds.Asterisk).Play(); }
+                catch (Exception ex) { DebugLog.Write($"PlaySoundOnMigraineToggle failed: {ex.Message}"); }
+            }
         };
 
         if (!_hotkey.IsRegistered && _trayIcon is not null)
@@ -216,10 +251,11 @@ public partial class App : Application
         if (_trayIcon is null || _migraine is null) return;
 
         _trayIcon.Icon = _migraine.IsActive ? _iconOn : _iconOff;
+        string intensitySuffix = _migraine.IsMild ? " (Mild)" : "";
         _trayIcon.Text = _migraine.IsActive
             ? _migraine.AutoRevertAtUtc is DateTime revertAt
-                ? $"Monitor Wellness — Migraine Mode ON (auto-off {revertAt.ToLocalTime():HH:mm})"
-                : "Monitor Wellness — Migraine Mode ON"
+                ? $"Monitor Wellness — Migraine Mode ON{intensitySuffix} (auto-off {revertAt.ToLocalTime():HH:mm})"
+                : $"Monitor Wellness — Migraine Mode ON{intensitySuffix}"
             : _migraine.IsFadingOut
                 ? "Monitor Wellness — fading back to normal"
                 : "Monitor Wellness";
@@ -240,6 +276,11 @@ public partial class App : Application
         double nightBrightness = ScheduleCurve.GetTargetBrightness(elevation, _settings.DayBrightness, _settings.NightBrightness);
 
         double deepNightFactor = ScheduleCurve.GetDeepNightFactor(elevation);
+        if (!string.IsNullOrWhiteSpace(_settings.BedtimeLocal) && TimeSpan.TryParse(_settings.BedtimeLocal, out var bedtime))
+        {
+            double bedtimeFactor = ScheduleCurve.GetBedtimeFactor(DateTime.Now, bedtime);
+            deepNightFactor = Math.Max(deepNightFactor, bedtimeFactor);
+        }
         double globalBrightness = Lerp(nightBrightness, _settings.DeepNightBrightness, deepNightFactor);
 
         var dimColor = LerpColor(
@@ -311,6 +352,14 @@ public partial class App : Application
         {
             if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
                 continue;
+
+            if (_settings.ColorExcludedMonitors.Contains(controller.DeviceName))
+            {
+                // Color-accurate reference monitor: stays at native color, but still
+                // participates in the brightness schedule below.
+                controller.ResetToIdentity();
+                continue;
+            }
 
             if (!controller.ApplyColorTemperature(kelvin))
             {

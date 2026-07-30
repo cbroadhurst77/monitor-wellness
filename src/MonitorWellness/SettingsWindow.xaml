@@ -93,6 +93,17 @@
                     </StackPanel>
                 </Grid>
 
+                <CheckBox x:Name="BedtimeEnabledCheckBox" Content="Also deepen toward bedtime warmth/dim by a fixed clock time" Margin="0,0,0,4" Checked="BedtimeEnabledCheckBox_Changed" Unchecked="BedtimeEnabledCheckBox_Changed"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Bedtime (HH:mm)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
+                </Grid>
+                <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
                 <TextBlock Text="Migraine Mode" FontWeight="Bold" Margin="0,0,0,4"/>
                 <StackPanel Margin="0,0,0,4">
                     <TextBlock Text="Overlay color (hex, e.g. #173620)"/>
@@ -114,6 +125,8 @@
                     <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
                     <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                 </StackPanel>
+                <CheckBox x:Name="PlaySoundCheckBox" Content="Play a sound when the hotkey toggles migraine mode" Margin="0,0,0,4"/>
+                <TextBlock Text="Off by default — migraine sufferers often also have sound sensitivity during an attack, so an audible confirmation is opt-in, not assumed helpful. A silent visual notification always shows either way." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <StackPanel Margin="0,0,0,4">
                     <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>
                     <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="#FFF0F0F0"
@@ -128,9 +141,16 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Cancel" Width="80" Padding="4" Margin="0,0,8,0" Click="Cancel_Click"/>
-            <Button Content="Save" Width="80" Padding="4" IsDefault="True" Click="Save_Click"/>
-        </StackPanel>
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Reset to Defaults" HorizontalAlignment="Left" Padding="8,4" Click="ResetButton_Click"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="Cancel" Width="80" Padding="4" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <Button Content="Save" Width="80" Padding="4" IsDefault="True" Click="Save_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

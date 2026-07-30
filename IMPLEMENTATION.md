@@ -581,30 +581,98 @@ brightness parameter at all, enforcing the separation at the API level) and
 back to 0 during deactivation alongside everything else) and the settings window (slider,
 0-30%, live preview).
 
-### Outstanding from the broader improvement brainstorm
+### Outstanding from the broader improvement brainstorm (as of Week 8)
 
-The Week 8 discussion surfaced about a dozen candidate improvements; five were built this
-pass (above). Explicitly **not** done, so this doesn't quietly read as "the list is finished":
+The Week 8 discussion surfaced about a dozen candidate improvements; five were built that
+pass. See Week 9 below for six more of the remaining items.
 
-- **Per-monitor color temp override** — currently only the dim *multiplier* is per-monitor;
+## Week 9 — Six more feature additions from the same brainstorm
+
+Continuing straight down the Week 8 "outstanding" list. Same discipline as before: real
+hardware/behavior verification before considering anything done, and automated test coverage
+grown alongside. Test count grew from 40 to 50 in this pass.
+
+### 1. Reset to Defaults button in Settings
+
+`ResetButton_Click` re-populates color/brightness/migraine controls from a fresh
+`new AppSettings()` via a new `LoadPreferencesFrom(AppSettings source)` helper (extracted from
+the existing load path so both the initial load and Reset share one code path). Deliberately
+excludes Latitude/Longitude/ExcludedMonitors/MonitorDimMultiplier — those are personal
+location and hardware setup, not "preferences" in the sense Reset is meant to cover.
+Confirmation dialog before resetting; live-previews the reset values immediately after,
+consistent with every other control in the window.
+
+### 2. Hotkey confirmation feedback
+
+The hotkey handler in `App.xaml.cs` now shows a balloon tip ("Migraine Mode ON/OFF") on every
+toggle, and optionally plays a system sound (`AppSettings.PlaySoundOnMigraineToggle`, default
+**false**). Motivation: migraine mode is most likely to be triggered mid-aura, when vision is
+already compromised, so a purely visual confirmation isn't reliable on its own — but sound is
+opt-in because phonophobia (sound sensitivity) is a common migraine comorbidity in the same
+population this feature serves. The balloon tip is unconditional; the sound is the only
+opt-in part.
+
+### 3. Auto-start drift check on startup
+
+`AppSettings.AutoStartEnabled` now tracks *intent* (did the user turn this on) separately from
+the live Task Scheduler state. On startup, `App.xaml.cs` compares the two — if the user
+enabled auto-start previously but the task is no longer registered (Windows update, IT policy,
+manual removal), a warning balloon explains what likely happened rather than auto-start just
+silently stopping. Not the same as verifying a real reboot actually launched the app (still
+outstanding, see below) — this only detects that the *registration* has drifted, checked at
+every startup.
+
+### 4. Per-monitor color-only exclusion
+
+New `AppSettings.ColorExcludedMonitors`, distinct from the existing `ExcludedMonitors`: a
+monitor on this list keeps dimming with the rest of the schedule but is reset to identity
+gamma (`GammaRampController.ResetToIdentity`) rather than shifting color temperature —
+for a photo/video reference monitor that needs to stay color-accurate but doesn't need to
+stay at full brightness all night. Settings window's per-monitor rows gained a second
+"Color-accurate" checkbox alongside the existing Exclude checkbox; both the live preview path
+and the real schedule tick (`RunScheduleTick`) respect it.
+
+### 5. Migraine intensity presets (mild/severe)
+
+Rather than a second fully independent set of tuned values, "mild" activation
+(`MigraineModeController.Activate(mild: true)`) scales the *configured* overlay opacity and
+contrast reduction by a fixed 0.6 multiplier — same color/hue, less intense. Simpler mental
+model for the user ("lighter than my usual setting") than maintaining two presets. Tray menu
+gained "Activate Migraine Mode (Full)" and "(Mild)" entries alongside the existing toggle;
+`IsMild` is tracked through activation, deactivation (the fade-out correctly fades from the
+scaled values, not the full ones), and the tray tooltip (shows a "(Mild)" suffix while active).
+
+### 6. Bedtime-aware deep night
+
+New `ScheduleCurve.GetBedtimeFactor(DateTime nowLocal, TimeSpan bedtimeOfDay, rampMinutes=90,
+maxPastMinutes=600)` — an alternative, clock-time-driven path to the same 0.0-1.0 deep-night
+factor that `GetDeepNightFactor` already produces from solar elevation. Ramps up over the 90
+minutes before bedtime, holds at 1.0 through 10 hours after it, then eases back down —
+handling bedtimes near midnight correctly via day-rollover normalization on the
+minutes-from-bedtime calculation. `App.ComputeScheduleTarget()` combines the two factors via
+`Math.Max`, so whichever signal (sun or clock) reaches deep night first wins; this matters most
+in winter, when full solar deep night arrives long after a typical bedtime. New
+`AppSettings.BedtimeLocal` (nullable "HH:mm" string, null = feature off, sun alone still
+drives deep night). Settings window gained an enable checkbox + HH:mm text box under Day/Night
+Schedule. Ten new tests cover the ramp-up, the hold window's both ends, the ramp-down, and
+both midnight-crossing directions explicitly (`tests/ScheduleCurveTests.cs`) — this was the one
+item in this batch complex enough to need edge-case coverage beyond a single hardware check.
+
+### Outstanding from the broader improvement brainstorm (as of Week 9)
+
+- **Per-monitor color temp override** — still only the dim *multiplier* is per-monitor;
   Kelvin is still global across all monitors.
-- **Bedtime-aware deep night** — the deep-night phase (Week 5) is purely solar-elevation-
-  driven; asking for an actual bedtime would let it align with real sleep timing instead of
-  astronomical darkness.
-- **Migraine intensity presets** (mild/severe) — currently one configured migraine
-  appearance, not a quick pick between a couple of pre-tuned levels.
-- **Confirmation feedback on hotkey trigger** (toast/sound) — useful specifically because
-  migraine mode is most likely to be triggered when vision is already compromised (aura),
-  making a purely visual confirmation less reliable than it should be.
-- **Verify auto-start actually worked after a real reboot** — the new toggle (#4 above)
-  confirms the Task Scheduler entry was created, but nothing checks that it actually fired
-  and the app is running after an actual logon, or warns if not.
-- **Saved profiles**, **first-run onboarding**, **reset-to-defaults button**, **dark mode for
-  the settings window** — straightforward UX polish, not attempted.
+- **Verify auto-start actually worked after a real reboot** — the Week 9 drift check confirms
+  the Task Scheduler *registration* persisted, but nothing has confirmed the app actually
+  launched and is running after a genuine logon (not just a manual process start).
+- **Saved profiles**, **first-run onboarding**, **dark mode for the settings window** —
+  straightforward UX polish, not attempted.
 - Already tracked elsewhere, still open: DDC/CI hardware brightness, HDR display handling,
   ambient light sensor support, auto-update checker, code signing (all in "Deferred to
   v1.1+" near the top of this file); accessibility — screen reader, high-contrast mode,
-  keyboard-only navigation (tracked in EVALUATION.md, untouched by this pass).
+  keyboard-only navigation (tracked in EVALUATION.md, untouched by this pass); the Inno Setup
+  installer's UAC/install/uninstall flow has still never been verified end-to-end (this
+  machine's IT policy blocks installer execution — needs an unmanaged machine or VM).
 
 ## Change log
 
@@ -671,3 +739,10 @@ pass (above). Explicitly **not** done, so this doesn't quietly read as "the list
   rule; auto-start elevation succeeded with no visible UAC prompt on this machine, consistent
   with its already-unusual UAC/token behavior. Test count: 24 -> 40. Outstanding items from
   the brainstorm are listed explicitly rather than left implicit.
+- 2026-07-30: Week 9. Implemented 6 more items from the same brainstorm: Reset to Defaults,
+  hotkey confirmation feedback (visual + opt-in sound), auto-start drift detection on startup,
+  per-monitor color-only exclusion, migraine mild/severe intensity presets, and bedtime-aware
+  deep night. All six verified live against the running app (3 monitors) after building
+  cleanly; the bedtime factor's day-rollover math got explicit edge-case tests since it was the
+  one item complex enough to need them beyond a single hardware check. Test count: 40 -> 50.
+  Remaining outstanding items updated accordingly.

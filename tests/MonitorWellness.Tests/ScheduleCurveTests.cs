@@ -81,4 +81,85 @@ public class ScheduleCurveTests
         double factor = ScheduleCurve.GetDeepNightFactor(ScheduleCurve.DeepNightThresholdDeg - 20);
         Assert.Equal(1.0, factor, precision: 6);
     }
+
+    private static readonly TimeSpan Bedtime2200 = new(22, 0, 0);
+
+    [Fact]
+    public void GetBedtimeFactor_WellBeforeRamp_IsZero()
+    {
+        var now = new DateTime(2024, 1, 15, 20, 0, 0); // 2 hours before 22:00 bedtime
+        Assert.Equal(0.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_AtStartOfRamp_IsZero()
+    {
+        var now = new DateTime(2024, 1, 15, 20, 30, 0); // exactly 90 min before bedtime
+        Assert.Equal(0.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_HalfwayThroughRamp_IsAboutHalf()
+    {
+        var now = new DateTime(2024, 1, 15, 21, 15, 0); // 45 min before bedtime, half the 90-min ramp
+        double factor = ScheduleCurve.GetBedtimeFactor(now, Bedtime2200);
+        Assert.Equal(0.5, factor, precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_AtBedtime_IsOne()
+    {
+        var now = new DateTime(2024, 1, 15, 22, 0, 0);
+        Assert.Equal(1.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_WellIntoNight_IsStillOne()
+    {
+        var now = new DateTime(2024, 1, 15, 22, 0, 0).AddMinutes(300); // 5 hours after bedtime, within the 600-min window
+        Assert.Equal(1.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_AtEndOfHoldWindow_IsStillOne()
+    {
+        var now = new DateTime(2024, 1, 15, 22, 0, 0).AddMinutes(600); // exactly maxPastMinutes after bedtime
+        Assert.Equal(1.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_HalfwayThroughMorningRampDown_IsAboutHalf()
+    {
+        var now = new DateTime(2024, 1, 15, 22, 0, 0).AddMinutes(600 + 45); // halfway through the 90-min ramp-down
+        double factor = ScheduleCurve.GetBedtimeFactor(now, Bedtime2200);
+        Assert.Equal(0.5, factor, precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_PastRampDown_IsZeroAgain()
+    {
+        var now = new DateTime(2024, 1, 15, 22, 0, 0).AddMinutes(600 + 90); // fully past the wind-down
+        Assert.Equal(0.0, ScheduleCurve.GetBedtimeFactor(now, Bedtime2200), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_BedtimeNearMidnight_JustAfterCrossesDayBoundaryCorrectly()
+    {
+        // Bedtime 23:30; "now" is 00:15 -- 45 minutes later, but the clock has wrapped past
+        // midnight. Without day-rollover normalization this would look like ~23 hours away.
+        var bedtime = new TimeSpan(23, 30, 0);
+        var now = new DateTime(2024, 1, 15, 0, 15, 0);
+        Assert.Equal(1.0, ScheduleCurve.GetBedtimeFactor(now, bedtime), precision: 6);
+    }
+
+    [Fact]
+    public void GetBedtimeFactor_BedtimeJustAfterMidnight_RampsUpBeforeMidnight()
+    {
+        // Bedtime 00:30; "now" is 23:45 the previous night -- 45 minutes before bedtime,
+        // which also wraps across the day boundary.
+        var bedtime = new TimeSpan(0, 30, 0);
+        var now = new DateTime(2024, 1, 15, 23, 45, 0);
+        double factor = ScheduleCurve.GetBedtimeFactor(now, bedtime);
+        Assert.Equal(0.5, factor, precision: 6);
+    }
 }

@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
     private readonly GeocodingService _geocoding = new();
 
     private readonly Dictionary<string, CheckBox> _excludeBoxes = new();
+    private readonly Dictionary<string, CheckBox> _colorExcludeBoxes = new();
     private readonly Dictionary<string, TextBox> _multiplierBoxes = new();
 
     private uint _pendingHotkeyModifiers;
@@ -48,18 +49,7 @@ public partial class SettingsWindow : Window
     {
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
-        DayKelvinSlider.Value = _settings.DayKelvin;
-        NightKelvinSlider.Value = _settings.NightKelvin;
-        DayBrightnessSlider.Value = _settings.DayBrightness;
-        NightBrightnessSlider.Value = _settings.NightBrightness;
-        MigraineColorBox.Text = _settings.MigraineOverlayColorHex;
-        MigraineOpacitySlider.Value = _settings.MigraineOverlayOpacity;
-        MigraineContrastSlider.Value = _settings.MigraineContrastReduction;
-        MigraineAutoRevertSlider.Value = _settings.MigraineAutoRevertMinutes;
-
-        _pendingHotkeyModifiers = _settings.MigraineHotkeyModifiers;
-        _pendingHotkeyKey = _settings.MigraineHotkeyKey;
-        HotkeyBox.Text = FormatHotkey(_pendingHotkeyModifiers, _pendingHotkeyKey);
+        LoadPreferencesFrom(_settings);
 
         BuildMonitorRows();
 
@@ -69,6 +59,50 @@ public partial class SettingsWindow : Window
         UpdateSunTimesDisplay();
         UpdateSliderLabels();
         PreviewDay(); // something visible on screen the moment the window opens, matching whichever phase was last touched (day, as the default starting point)
+    }
+
+    /// <summary>
+    /// Populates the color/brightness/migraine controls from any AppSettings-shaped source —
+    /// used both to load the real saved settings and by the Reset button (with a fresh
+    /// `new AppSettings()`). Deliberately excludes Latitude/Longitude/ExcludedMonitors/
+    /// MonitorDimMultiplier — those are personal location and hardware setup, not
+    /// "preferences" in the sense Reset is meant to cover.
+    /// </summary>
+    private void LoadPreferencesFrom(AppSettings source)
+    {
+        DayKelvinSlider.Value = source.DayKelvin;
+        NightKelvinSlider.Value = source.NightKelvin;
+        DayBrightnessSlider.Value = source.DayBrightness;
+        NightBrightnessSlider.Value = source.NightBrightness;
+        MigraineColorBox.Text = source.MigraineOverlayColorHex;
+        MigraineOpacitySlider.Value = source.MigraineOverlayOpacity;
+        MigraineContrastSlider.Value = source.MigraineContrastReduction;
+        MigraineAutoRevertSlider.Value = source.MigraineAutoRevertMinutes;
+        PlaySoundCheckBox.IsChecked = source.PlaySoundOnMigraineToggle;
+
+        BedtimeEnabledCheckBox.IsChecked = !string.IsNullOrWhiteSpace(source.BedtimeLocal);
+        BedtimeBox.Text = source.BedtimeLocal ?? "22:30";
+        BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
+
+        _pendingHotkeyModifiers = source.MigraineHotkeyModifiers;
+        _pendingHotkeyKey = source.MigraineHotkeyKey;
+        HotkeyBox.Text = FormatHotkey(_pendingHotkeyModifiers, _pendingHotkeyKey);
+    }
+
+    private void ResetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "Reset color, brightness, and migraine settings to their defaults? Your location and per-monitor setup won't change.",
+            "Monitor Wellness",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        LoadPreferencesFrom(new AppSettings());
+        UpdateSliderLabels();
+        PreviewDay();
     }
 
     private void LoadWorldMapImage()
@@ -210,6 +244,11 @@ public partial class SettingsWindow : Window
         if (_loaded) UpdateSliderLabels();
     }
 
+    private void BedtimeEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
+    }
+
     private void UpdateSliderLabels()
     {
         DayKelvinLabel.Text = $"{(int)DayKelvinSlider.Value}K";
@@ -245,7 +284,13 @@ public partial class SettingsWindow : Window
     private void ApplySchedulePreview(int kelvin, double globalBrightness)
     {
         foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperature(kelvin); // silently no-ops on this monitor if the value is unsafe — see KelvinSafetyWarning
+        {
+            bool colorExcluded = _colorExcludeBoxes.TryGetValue(controller.DeviceName, out var box) && box.IsChecked == true;
+            if (colorExcluded)
+                controller.ResetToIdentity();
+            else
+                controller.ApplyColorTemperature(kelvin); // silently no-ops on this monitor if the value is unsafe — see KelvinSafetyWarning
+        }
 
         var brightnessByDevice = BuildBrightnessByDeviceForPreview(globalBrightness);
         _overlay.ApplyDim(brightnessByDevice, System.Windows.Media.Colors.Black);
@@ -302,6 +347,7 @@ public partial class SettingsWindow : Window
     private void BuildMonitorRows()
     {
         _excludeBoxes.Clear();
+        _colorExcludeBoxes.Clear();
         _multiplierBoxes.Clear();
 
         var rows = new List<UIElement>();
@@ -310,7 +356,8 @@ public partial class SettingsWindow : Window
             var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
 
             var label = new TextBlock { Text = ShortDeviceName(deviceName), VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(label, 0);
@@ -321,17 +368,30 @@ public partial class SettingsWindow : Window
                 IsChecked = _settings.ExcludedMonitors.Contains(deviceName),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = "Skip this monitor entirely — no color or brightness adjustment.",
             };
             Grid.SetColumn(excludeBox, 1);
             _excludeBoxes[deviceName] = excludeBox;
 
+            var colorExcludeBox = new CheckBox
+            {
+                Content = "Color-accurate",
+                IsChecked = _settings.ColorExcludedMonitors.Contains(deviceName),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = "Keep this monitor's native color (e.g. a photo/video reference display) — it still dims with the schedule.",
+            };
+            Grid.SetColumn(colorExcludeBox, 2);
+            _colorExcludeBoxes[deviceName] = colorExcludeBox;
+
             double multiplier = _settings.MonitorDimMultiplier.TryGetValue(deviceName, out var m) ? m : 1.0;
             var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture) };
-            Grid.SetColumn(multiplierBox, 2);
+            Grid.SetColumn(multiplierBox, 3);
             _multiplierBoxes[deviceName] = multiplierBox;
 
             row.Children.Add(label);
             row.Children.Add(excludeBox);
+            row.Children.Add(colorExcludeBox);
             row.Children.Add(multiplierBox);
             rows.Add(row);
         }
@@ -443,6 +503,17 @@ public partial class SettingsWindow : Window
             return false;
         }
 
+        string? bedtimeLocal = null;
+        if (BedtimeEnabledCheckBox.IsChecked == true)
+        {
+            if (!TimeSpan.TryParse(BedtimeBox.Text.Trim(), CultureInfo.InvariantCulture, out var parsedBedtime) || parsedBedtime < TimeSpan.Zero || parsedBedtime >= TimeSpan.FromDays(1))
+            {
+                error = "Bedtime must be in HH:mm format, e.g. 22:30.";
+                return false;
+            }
+            bedtimeLocal = BedtimeBox.Text.Trim();
+        }
+
         var multipliers = new Dictionary<string, double>();
         foreach (var (deviceName, box) in _multiplierBoxes)
         {
@@ -465,10 +536,16 @@ public partial class SettingsWindow : Window
         _settings.MigraineOverlayOpacity = migraineOpacity;
         _settings.MigraineContrastReduction = MigraineContrastSlider.Value;
         _settings.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
+        _settings.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
+        _settings.BedtimeLocal = bedtimeLocal;
         _settings.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
         _settings.ExcludedMonitors = _excludeBoxes
+            .Where(kv => kv.Value.IsChecked == true)
+            .Select(kv => kv.Key)
+            .ToList();
+        _settings.ColorExcludedMonitors = _colorExcludeBoxes
             .Where(kv => kv.Value.IsChecked == true)
             .Select(kv => kv.Key)
             .ToList();

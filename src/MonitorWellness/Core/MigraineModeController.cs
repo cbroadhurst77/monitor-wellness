@@ -20,6 +20,14 @@ public sealed class MigraineModeController
     private static readonly TimeSpan FadeDuration = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan FadeTickInterval = TimeSpan.FromMilliseconds(200);
 
+    /// <summary>
+    /// "Mild" activation scales the configured overlay opacity and contrast reduction by
+    /// this factor rather than using a separate, independently-tuned preset — simpler for the
+    /// user to reason about ("lighter than my usual setting") than a second full set of
+    /// values to configure. Color temperature and hue are unchanged; only intensity differs.
+    /// </summary>
+    private const double MildIntensityMultiplier = 0.6;
+
     private readonly GammaControllerManager _gammaManager;
     private readonly OverlayController _overlay;
     private readonly AppSettings _settings;
@@ -33,12 +41,16 @@ public sealed class MigraineModeController
     private double _fadeFromContrast;
 
     private DispatcherTimer? _autoRevertTimer;
+    private bool _activeIsMild;
 
     /// <summary>UTC time the current activation will auto-revert at, or null if auto-revert is off or migraine mode isn't active.</summary>
     public DateTime? AutoRevertAtUtc { get; private set; }
 
     public bool IsActive { get; private set; }
     public bool IsFadingOut { get; private set; }
+
+    /// <summary>True if the current (or most recently ended) activation used the mild preset.</summary>
+    public bool IsMild => _activeIsMild;
 
     /// <summary>True while the normal schedule tick should not touch gamma ramp or overlay.</summary>
     public bool SuspendsNormalSchedule => IsActive || IsFadingOut;
@@ -57,18 +69,26 @@ public sealed class MigraineModeController
         _computeScheduleTarget = computeScheduleTarget;
     }
 
-    public void Activate()
+    /// <summary>
+    /// Activates migraine mode. mild=true applies a lighter version of the configured
+    /// appearance (see MildIntensityMultiplier) — same color, less intense — for when the
+    /// full configured intensity feels like more than what's needed right now.
+    /// </summary>
+    public void Activate(bool mild = false)
     {
-        DebugLog.Write("MigraineMode: Activate");
+        DebugLog.Write($"MigraineMode: Activate (mild={mild})");
         _fadeTimer?.Stop();
         IsFadingOut = false;
         IsActive = true;
+        _activeIsMild = mild;
+
+        double intensity = mild ? MildIntensityMultiplier : 1.0;
 
         foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperatureWithContrast(_settings.NightKelvin, _settings.MigraineContrastReduction);
+            controller.ApplyColorTemperatureWithContrast(_settings.NightKelvin, _settings.MigraineContrastReduction * intensity);
 
         Color color = ParseColor(_settings.MigraineOverlayColorHex);
-        double opacity = _settings.MigraineOverlayOpacity;
+        double opacity = _settings.MigraineOverlayOpacity * intensity;
         var byDevice = _overlay.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
         _overlay.Apply(byDevice);
 
@@ -105,10 +125,11 @@ public sealed class MigraineModeController
         _autoRevertTimer = null;
         AutoRevertAtUtc = null;
 
+        double intensity = _activeIsMild ? MildIntensityMultiplier : 1.0;
         _fadeFromColor = ParseColor(_settings.MigraineOverlayColorHex);
-        _fadeFromOpacity = _settings.MigraineOverlayOpacity;
+        _fadeFromOpacity = _settings.MigraineOverlayOpacity * intensity;
         _fadeFromKelvin = _settings.NightKelvin;
-        _fadeFromContrast = _settings.MigraineContrastReduction;
+        _fadeFromContrast = _settings.MigraineContrastReduction * intensity;
 
         IsActive = false;
         IsFadingOut = true;
