@@ -1,7 +1,5 @@
 # Monitor Wellness
 
-*(working name — not finalized yet)*
-
 A Windows tray app that adjusts monitor color temperature and brightness across multiple
 displays based on sunrise/sunset, with a dedicated **migraine mode** for immediate relief
 when a migraine or aura starts.
