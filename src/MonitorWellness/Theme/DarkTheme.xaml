@@ -1,0 +1,55 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Merged into a Window's own Resources at construction time when
+        Core.ThemeDetector.IsSystemDarkTheme() is true (see ThemeDetector.ApplyDarkThemeIfNeeded).
+        Window.Foreground is an inherited property, so setting it here via the Window style
+        propagates to every unstyled TextBlock/Label/CheckBox automatically; only controls
+        with their own Background (TextBox/Button/ComboBox) need an explicit style below.
+        Approximate, not pixel-perfect: WPF's default control chrome (focus/hover glow, drop
+        shadows) still assumes a light theme underneath these overrides, an accepted tradeoff
+        for a first pass rather than a full custom ControlTemplate per control.
+    -->
+
+    <!--
+        MW.WindowBackground/MW.WindowForeground are applied directly to the Window instance
+        in code (ThemeDetector.ApplyDarkThemeIfNeeded), not via an implicit Style here;
+        confirmed live that a Window's own implicit TargetType=Window style, merged into its
+        own Resources after InitializeComponent, is not picked up for the window itself (only
+        for descendants), even though the same merge timing works fine for the styles below.
+    -->
+    <SolidColorBrush x:Key="MW.WindowBackground" Color="#FF1E1E1E"/>
+    <SolidColorBrush x:Key="MW.WindowForeground" Color="#FFE0E0E0"/>
+    <SolidColorBrush x:Key="MW.ControlBackground" Color="#FF2D2D30"/>
+    <SolidColorBrush x:Key="MW.ControlBorder" Color="#FF3F3F46"/>
+
+    <Style TargetType="{x:Type TextBox}">
+        <Setter Property="Background" Value="{StaticResource MW.ControlBackground}"/>
+        <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="SelectionBrush" Value="#FF4A6FA5"/>
+    </Style>
+
+    <Style TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="{StaticResource MW.ControlBackground}"/>
+        <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+    </Style>
+
+    <Style TargetType="{x:Type ComboBox}">
+        <Setter Property="Background" Value="{StaticResource MW.ControlBackground}"/>
+        <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+    </Style>
+
+    <Style TargetType="{x:Type CheckBox}">
+        <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+    </Style>
+
+    <Style TargetType="{x:Type Border}">
+        <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+    </Style>
+
+</ResourceDictionary>

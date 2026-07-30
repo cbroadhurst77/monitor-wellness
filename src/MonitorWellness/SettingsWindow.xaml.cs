@@ -29,6 +29,7 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, CheckBox> _excludeBoxes = new();
     private readonly Dictionary<string, CheckBox> _colorExcludeBoxes = new();
     private readonly Dictionary<string, TextBox> _multiplierBoxes = new();
+    private readonly Dictionary<string, TextBox> _kelvinOffsetBoxes = new();
 
     private uint _pendingHotkeyModifiers;
     private uint _pendingHotkeyKey;
@@ -37,6 +38,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved)
     {
         InitializeComponent();
+        ThemeDetector.ApplyDarkThemeIfNeeded(this);
         _settings = settings;
         _gammaManager = gammaManager;
         _overlay = overlay;
@@ -52,6 +54,7 @@ public partial class SettingsWindow : Window
         LoadPreferencesFrom(_settings);
 
         BuildMonitorRows();
+        RefreshProfilesComboBox();
 
         LoadWorldMapImage();
         _loaded = true;
@@ -287,9 +290,15 @@ public partial class SettingsWindow : Window
         {
             bool colorExcluded = _colorExcludeBoxes.TryGetValue(controller.DeviceName, out var box) && box.IsChecked == true;
             if (colorExcluded)
+            {
                 controller.ResetToIdentity();
-            else
-                controller.ApplyColorTemperature(kelvin); // silently no-ops on this monitor if the value is unsafe — see KelvinSafetyWarning
+                continue;
+            }
+
+            int offset = 0;
+            if (_kelvinOffsetBoxes.TryGetValue(controller.DeviceName, out var offsetBox))
+                int.TryParse(offsetBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset);
+            controller.ApplyColorTemperature(kelvin + offset); // silently no-ops on this monitor if the value is unsafe — see KelvinSafetyWarning
         }
 
         var brightnessByDevice = BuildBrightnessByDeviceForPreview(globalBrightness);
@@ -349,6 +358,7 @@ public partial class SettingsWindow : Window
         _excludeBoxes.Clear();
         _colorExcludeBoxes.Clear();
         _multiplierBoxes.Clear();
+        _kelvinOffsetBoxes.Clear();
 
         var rows = new List<UIElement>();
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))
@@ -357,6 +367,7 @@ public partial class SettingsWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
 
             var label = new TextBlock { Text = ShortDeviceName(deviceName), VerticalAlignment = VerticalAlignment.Center };
@@ -385,14 +396,20 @@ public partial class SettingsWindow : Window
             _colorExcludeBoxes[deviceName] = colorExcludeBox;
 
             double multiplier = _settings.MonitorDimMultiplier.TryGetValue(deviceName, out var m) ? m : 1.0;
-            var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture) };
+            var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture), ToolTip = "Dim multiplier (1.0 = follow the global schedule exactly)." };
             Grid.SetColumn(multiplierBox, 3);
             _multiplierBoxes[deviceName] = multiplierBox;
+
+            int kelvinOffset = _settings.MonitorKelvinOffset.TryGetValue(deviceName, out var k) ? k : 0;
+            var kelvinOffsetBox = new TextBox { Text = kelvinOffset.ToString(CultureInfo.InvariantCulture), Margin = new Thickness(4, 0, 0, 0), ToolTip = "Kelvin offset for this monitor only — e.g. -300 if it reads warmer than the others at the same setting." };
+            Grid.SetColumn(kelvinOffsetBox, 4);
+            _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
             row.Children.Add(label);
             row.Children.Add(excludeBox);
             row.Children.Add(colorExcludeBox);
             row.Children.Add(multiplierBox);
+            row.Children.Add(kelvinOffsetBox);
             rows.Add(row);
         }
 
@@ -447,6 +464,135 @@ public partial class SettingsWindow : Window
         return string.Join("+", parts);
     }
 
+    private bool TryValidateMigraineColorHex(out string colorHex, out string error)
+    {
+        colorHex = MigraineColorBox.Text.Trim();
+        error = "";
+        try
+        {
+            _ = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(colorHex)!;
+            return true;
+        }
+        catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidOperationException)
+        {
+            error = "Migraine overlay color must be a valid hex color, e.g. #321408.";
+            return false;
+        }
+    }
+
+    private bool TryValidateBedtime(out string? bedtimeLocal, out string error)
+    {
+        bedtimeLocal = null;
+        error = "";
+        if (BedtimeEnabledCheckBox.IsChecked != true)
+            return true;
+
+        if (!TimeSpan.TryParse(BedtimeBox.Text.Trim(), CultureInfo.InvariantCulture, out var parsed) || parsed < TimeSpan.Zero || parsed >= TimeSpan.FromDays(1))
+        {
+            error = "Bedtime must be in HH:mm format, e.g. 22:30.";
+            return false;
+        }
+
+        bedtimeLocal = BedtimeBox.Text.Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// Captures just the Day/Night/migraine/bedtime controls into a fresh AppSettings, for
+    /// saving as a named profile — the same "preferences" subset LoadPreferencesFrom reads
+    /// back out of one, deliberately excluding location and per-monitor setup. Does not
+    /// touch/validate the location or monitor-row controls at all, unlike TryParseAll.
+    /// </summary>
+    private bool TryBuildPreferencesSnapshot(out AppSettings snapshot, out string error)
+    {
+        snapshot = new AppSettings();
+
+        int dayKelvin = (int)DayKelvinSlider.Value;
+        int nightKelvin = (int)NightKelvinSlider.Value;
+        if (!ColorTemperature.IsSafeForGammaRamp(dayKelvin) || !ColorTemperature.IsSafeForGammaRamp(nightKelvin))
+        {
+            error = "Fix the Day/Night color temp warning above before saving a profile.";
+            return false;
+        }
+
+        if (!TryValidateMigraineColorHex(out string migraineColorHex, out error))
+            return false;
+
+        if (!TryValidateBedtime(out string? bedtimeLocal, out error))
+            return false;
+
+        snapshot.DayKelvin = dayKelvin;
+        snapshot.NightKelvin = nightKelvin;
+        snapshot.DayBrightness = DayBrightnessSlider.Value;
+        snapshot.NightBrightness = NightBrightnessSlider.Value;
+        snapshot.MigraineOverlayColorHex = migraineColorHex;
+        snapshot.MigraineOverlayOpacity = MigraineOpacitySlider.Value;
+        snapshot.MigraineContrastReduction = MigraineContrastSlider.Value;
+        snapshot.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
+        snapshot.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
+        snapshot.BedtimeLocal = bedtimeLocal;
+        snapshot.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
+        snapshot.MigraineHotkeyKey = _pendingHotkeyKey;
+        error = "";
+        return true;
+    }
+
+    private void RefreshProfilesComboBox(string? selectName = null)
+    {
+        var names = ProfileStore.ListNames();
+        ProfilesComboBox.ItemsSource = names;
+        if (selectName is not null && names.Contains(selectName))
+            ProfilesComboBox.SelectedItem = selectName;
+        else if (names.Count > 0)
+            ProfilesComboBox.SelectedIndex = 0;
+    }
+
+    private void LoadProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfilesComboBox.SelectedItem is not string name)
+            return;
+
+        var profile = ProfileStore.Load(name);
+        if (profile is null)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't load profile \"{name}\".", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        LoadPreferencesFrom(profile);
+        UpdateSliderLabels();
+        PreviewDay();
+    }
+
+    private void SaveProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryBuildPreferencesSnapshot(out var snapshot, out string error))
+        {
+            System.Windows.MessageBox.Show(this, error, "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dialog = new ProfileNameDialog(ProfilesComboBox.SelectedItem as string ?? "") { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ProfileStore.Save(dialog.ProfileName, snapshot);
+        RefreshProfilesComboBox(dialog.ProfileName);
+    }
+
+    private void DeleteProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfilesComboBox.SelectedItem is not string name)
+            return;
+
+        var result = System.Windows.MessageBox.Show(this, $"Delete profile \"{name}\"?", "Monitor Wellness", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        ProfileStore.Delete(name);
+        RefreshProfilesComboBox();
+    }
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         if (!TryParseAll(out string error))
@@ -492,27 +638,11 @@ public partial class SettingsWindow : Window
         double nightBrightness = NightBrightnessSlider.Value;
         double migraineOpacity = MigraineOpacitySlider.Value;
 
-        string migraineColorHex = MigraineColorBox.Text.Trim();
-        try
-        {
-            _ = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(migraineColorHex)!;
-        }
-        catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidOperationException)
-        {
-            error = "Migraine overlay color must be a valid hex color, e.g. #321408.";
+        if (!TryValidateMigraineColorHex(out string migraineColorHex, out error))
             return false;
-        }
 
-        string? bedtimeLocal = null;
-        if (BedtimeEnabledCheckBox.IsChecked == true)
-        {
-            if (!TimeSpan.TryParse(BedtimeBox.Text.Trim(), CultureInfo.InvariantCulture, out var parsedBedtime) || parsedBedtime < TimeSpan.Zero || parsedBedtime >= TimeSpan.FromDays(1))
-            {
-                error = "Bedtime must be in HH:mm format, e.g. 22:30.";
-                return false;
-            }
-            bedtimeLocal = BedtimeBox.Text.Trim();
-        }
+        if (!TryValidateBedtime(out string? bedtimeLocal, out error))
+            return false;
 
         var multipliers = new Dictionary<string, double>();
         foreach (var (deviceName, box) in _multiplierBoxes)
@@ -523,6 +653,18 @@ public partial class SettingsWindow : Window
                 return false;
             }
             multipliers[deviceName] = multiplier;
+        }
+
+        var kelvinOffsets = new Dictionary<string, int>();
+        foreach (var (deviceName, box) in _kelvinOffsetBoxes)
+        {
+            if (!int.TryParse(box.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int offset))
+            {
+                error = $"Kelvin offset for {ShortDeviceName(deviceName)} must be a whole number.";
+                return false;
+            }
+            if (offset != 0)
+                kelvinOffsets[deviceName] = offset;
         }
 
         // All parsed successfully — commit to the live settings object.
@@ -541,6 +683,7 @@ public partial class SettingsWindow : Window
         _settings.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
+        _settings.MonitorKelvinOffset = kelvinOffsets;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)
             .Select(kv => kv.Key)

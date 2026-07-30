@@ -674,6 +674,102 @@ item in this batch complex enough to need edge-case coverage beyond a single har
   installer's UAC/install/uninstall flow has still never been verified end-to-end (this
   machine's IT policy blocks installer execution — needs an unmanaged machine or VM).
 
+## Week 10 — Closing out the brainstorm's UX-polish items
+
+Finished the remaining generally-applicable items from the brainstorm list. Test count grew
+from 50 to 54.
+
+### 1. Per-monitor color temperature override
+
+New `AppSettings.MonitorKelvinOffset` (device name -> Kelvin offset, default empty/0), added
+to the schedule-computed Kelvin before applying it to that specific monitor's gamma ramp — for
+a panel that reads visibly warmer or cooler than the others at the same nominal setting, the
+same real-world variation `MonitorDimMultiplier` already exists to correct for brightness.
+Rides on the existing driver-rejection safety net rather than adding new clamping logic: if an
+offset pushes a monitor's ramp outside the safe range, `ApplyColorTemperature` already returns
+`false` and `RunScheduleTick` already logs it (Week 6 finding) — no new failure mode to
+handle. Settings window's per-monitor rows gained a fifth "Kelvin offset" box; both the live
+preview path and the real schedule tick apply it.
+
+### 2. Saved profiles
+
+`Core/ProfileStore.cs` saves/lists/loads/deletes named snapshots of the Day/Night/migraine/
+bedtime "preferences" — the same subset the Reset button and `LoadPreferencesFrom` already
+treat as one unit, under `%AppData%\MonitorWellness\Profiles\<name>.json`. Deliberately
+excludes location and per-monitor setup, same reasoning as Reset: those are hardware/place
+facts, not a "mode" someone switches between. New Settings window section (dropdown + Load/
+Save As/Delete) sits right under Location. Saving reuses the migraine-color-hex and bedtime
+validation already written for the main Save button (extracted into two shared private
+helpers, `TryValidateMigraineColorHex`/`TryValidateBedtime`, used by both `TryParseAll` and the
+new `TryBuildPreferencesSnapshot`) so a profile can never be saved with values Save itself
+would reject. "Save As..." prompts for a name via a small new `ProfileNameDialog` window rather
+than pulling in `Microsoft.VisualBasic.Interaction.InputBox` for one text prompt. Verified live:
+saved a profile from a changed slider value, moved the slider again, loaded the profile back,
+confirmed it snapped to the saved value.
+
+### 3. First-run onboarding
+
+New `AppSettings.HasCompletedOnboarding` (default `false`, so it's naturally `false` exactly
+once — the very first launch on a fresh install). `OnboardingWindow` shows automatically at the
+end of `OnStartup` when it's still `false`: brief explanation of the color/brightness schedule,
+Migraine Mode and its hotkey, where the tray menu lives, and a nudge to set a real location
+(the app still defaults to London). Either button (open Settings now, or dismiss) marks
+onboarding complete on `Closed` — there's no path that leaves it stuck re-showing.
+
+### 4. Dark mode for settings/onboarding windows
+
+New `Core/ThemeDetector.IsSystemDarkTheme()` reads Windows' own
+`HKCU\...\Themes\Personalize\AppsUseLightTheme` — the *app* theme setting specifically, which
+can differ from the *system* (taskbar/Start) theme; confirmed live on this machine, where the
+system looked dark but `AppsUseLightTheme` was still 1 (light), and Settings correctly kept
+rendering light until that specific setting was actually switched. `Theme/DarkTheme.xaml`
+holds implicit styles for `TextBox`/`Button`/`ComboBox`/`CheckBox`/`Border`, merged into a
+window's own `Resources` at construction time when dark mode is detected. Two real bugs
+surfaced and fixed via live testing rather than assumption, consistent with this project's
+whole testing discipline:
+
+- A plain relative resource URI (`"Theme/DarkTheme.xaml"`) silently failed to resolve when the
+  `ResourceDictionary` is constructed from code rather than from XAML — no exception, dark
+  mode just never appeared. Fixed with the explicit `pack://application:,,,/...` form, which
+  resolves correctly regardless of calling context.
+- Even after that fix, only descendant controls (TextBox, etc.) picked up their dark styling —
+  the window's own background/foreground did not. A `Window` does not pick up an implicit
+  `TargetType=Window` style from a dictionary merged into its own `Resources` *after*
+  `InitializeComponent()`; only descendants re-resolve correctly at that point. Fixed by
+  setting `Background`/`Foreground` directly on the window instance in
+  `ThemeDetector.ApplyDarkThemeIfNeeded` instead of relying on an implicit self-style.
+
+Applied to `SettingsWindow`, `OnboardingWindow`, and the new `ProfileNameDialog`. Read once at
+construction — no live re-theming if Windows' setting changes while a window is already open,
+an accepted v1 limitation consistent with not over-building this particular corner.
+
+### 5. Auto-start reboot diagnostics
+
+Can't trigger or verify a real reboot from inside an agentic coding session — that's
+disruptive to interrupt for testing, and the previous Week 9 drift check already covers the
+*registration* half. What this adds is the tooling to check the other half without one:
+`AutoStartManager.GetDiagnostics()` runs `schtasks /query /v /fo LIST` and
+`AutoStartManager.ParseFields()` (pure, tested against a real captured sample) extracts
+Status/Last Run Time/Last Result/Next Run Time — the only way to tell, from inside the app,
+whether the scheduled task has ever actually *fired* rather than just still being registered.
+New tray item "Auto-start Diagnostics..." shows this in a message box, with an explicit note
+that Last Run Time only updates after a genuine Windows logon. **Still outstanding**: an actual
+reboot-and-check hasn't been performed — this tooling exists so the user can do that check
+themselves whenever convenient, without needing another coding session for it.
+
+### Outstanding from the broader improvement brainstorm (as of Week 10)
+
+- **Verify auto-start actually worked after a real reboot** — tooling now exists (Auto-start
+  Diagnostics above); the actual reboot-and-check itself hasn't been performed.
+- Already tracked elsewhere, still open: DDC/CI hardware brightness, HDR display handling,
+  ambient light sensor support, auto-update checker, code signing (all in "Deferred to
+  v1.1+" near the top of this file); accessibility — screen reader, high-contrast mode,
+  keyboard-only navigation (tracked in EVALUATION.md, untouched by this pass); the Inno Setup
+  installer's UAC/install/uninstall flow has still never been verified end-to-end (this
+  machine's IT policy blocks installer execution — needs an unmanaged machine or VM); live
+  re-theming if Windows' dark/light app mode changes while a window is already open (Week 10,
+  item 4 — read once at window construction only).
+
 ## Change log
 
 - 2026-07-30: Initial plan created from architecture discussion.
@@ -746,3 +842,14 @@ item in this batch complex enough to need edge-case coverage beyond a single har
   cleanly; the bedtime factor's day-rollover math got explicit edge-case tests since it was the
   one item complex enough to need them beyond a single hardware check. Test count: 40 -> 50.
   Remaining outstanding items updated accordingly.
+- 2026-07-30: Week 10. Closed out the rest of the generally-applicable brainstorm items:
+  per-monitor Kelvin override, saved profiles, first-run onboarding, dark mode for the
+  settings/onboarding windows, and auto-start reboot diagnostics tooling. Dark mode caught two
+  real bugs live rather than by inspection: a relative resource URI silently failing to
+  resolve when set from code (fixed with an absolute pack URI), and a Window not picking up
+  its own implicit style from a dictionary merged into its Resources after
+  InitializeComponent, unlike its descendants (fixed by setting Background/Foreground
+  directly). Verified all five live, including a full profile save/change/load round-trip.
+  Test count: 50 -> 54. The only item left genuinely open from the whole brainstorm is
+  confirming auto-start survives an actual reboot — the diagnostics tooling now exists for the
+  user to check that themselves.

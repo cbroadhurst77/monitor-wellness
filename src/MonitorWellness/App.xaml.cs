@@ -134,6 +134,7 @@ public partial class App : Application
             }
         };
         menu.Items.Add(autoStartItem);
+        menu.Items.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Settings...", null, (_, _) => OpenSettingsWindow());
         menu.Items.Add(new ToolStripSeparator());
@@ -145,6 +146,17 @@ public partial class App : Application
         _timer.Start();
 
         RunScheduleTick();
+
+        if (!_settings.HasCompletedOnboarding)
+        {
+            var onboarding = new OnboardingWindow(OpenSettingsWindow);
+            onboarding.Closed += (_, _) =>
+            {
+                _settings.HasCompletedOnboarding = true;
+                SettingsStore.Save(_settings);
+            };
+            onboarding.Show();
+        }
     }
 
     private SettingsWindow? _settingsWindow;
@@ -230,6 +242,30 @@ public partial class App : Application
                 "That migraine mode shortcut is already used by another app. Use the tray menu to trigger Migraine Mode, or pick a different shortcut in Settings.",
                 ToolTipIcon.Warning);
         }
+    }
+
+    /// <summary>
+    /// Answers the one question the drift-check-on-startup balloon (above) can't: not just
+    /// "is the task still registered," but "has it actually fired" -- the only way, short of
+    /// physically rebooting and watching, to check whether auto-start really survives a real
+    /// logon rather than just a manual "Start with Windows" click.
+    /// </summary>
+    private static void ShowAutoStartDiagnostics()
+    {
+        var diagnostics = AutoStartManager.GetDiagnostics();
+        string message = !diagnostics.IsRegistered
+            ? "Auto-start is not currently registered. Turn on \"Start with Windows\" from this menu first."
+            : $"Status: {diagnostics.Status ?? "unknown"}\n" +
+              $"Last Run Time: {diagnostics.LastRunTime ?? "unknown"}\n" +
+              $"Last Result: {diagnostics.LastResult ?? "unknown"} (0 = last run succeeded)\n" +
+              $"Next Run Time: {diagnostics.NextRunTime ?? "unknown"}\n\n" +
+              "\"Last Run Time\" only updates after an actual Windows logon triggers the task " +
+              "-- it won't change just from toggling \"Start with Windows\" or running the app " +
+              "manually. If you want to confirm auto-start survives a real reboot, restart " +
+              "Windows normally and check this again afterward.";
+
+        System.Windows.MessageBox.Show(message, "Monitor Wellness — Auto-start Diagnostics", MessageBoxButton.OK,
+            diagnostics.IsRegistered ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
@@ -361,14 +397,16 @@ public partial class App : Application
                 continue;
             }
 
-            if (!controller.ApplyColorTemperature(kelvin))
+            int offset = _settings.MonitorKelvinOffset.TryGetValue(controller.DeviceName, out var off) ? off : 0;
+            int targetKelvin = kelvin + offset;
+            if (!controller.ApplyColorTemperature(targetKelvin))
             {
                 // Confirmed this actually happens in practice: a user-entered Kelvin value
                 // below this hardware's safe gamma ramp floor (~3300K, see the Week 1
                 // finding) gets silently rejected by the driver, leaving the display stuck
                 // at whatever color it last reached rather than transitioning. Previously
                 // unlogged here — RunScheduleTick just ignored the return value.
-                DebugLog.Write($"ApplyColorTemperature({kelvin}) REJECTED by driver for {controller.DeviceName} — likely below this hardware's safe floor.");
+                DebugLog.Write($"ApplyColorTemperature({targetKelvin}) REJECTED by driver for {controller.DeviceName} — likely below this hardware's safe floor.");
             }
         }
 

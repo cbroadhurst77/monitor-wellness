@@ -1,0 +1,44 @@
+<Window x:Class="MonitorWellness.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to Monitor Wellness"
+        Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Welcome to Monitor Wellness" FontWeight="Bold" FontSize="18" Margin="0,0,0,12"/>
+
+        <StackPanel Grid.Row="1">
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                Monitor Wellness automatically shifts your screens' color temperature and
+                brightness across the day based on sunrise/sunset at your location — similar
+                to f.lux, tuned with eye-strain and circadian research.
+            </TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                <Run Text="Migraine Mode"/> gives instant relief with a research-backed muted
+                green tint. Trigger it from the tray icon menu, or the
+                <Run Text="Ctrl+Alt+Shift+M" FontWeight="SemiBold"/> hotkey (changeable in Settings).
+            </TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                Everything is controlled from the tray icon near your clock — right-click it
+                any time for Settings, Pause Schedule, or Migraine Mode.
+            </TextBlock>
+            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,0">
+                One thing worth doing now: Monitor Wellness defaults to London's sunrise/sunset
+                times. Open Settings and set your real location so the schedule matches where
+                you actually are.
+            </TextBlock>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Got it, maybe later" Width="130" Padding="4" Margin="0,0,8,0" Click="Dismiss_Click"/>
+            <Button Content="Open Settings Now" Width="130" Padding="4" IsDefault="True" Click="OpenSettings_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

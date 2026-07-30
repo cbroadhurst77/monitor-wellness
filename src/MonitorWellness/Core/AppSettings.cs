@@ -58,6 +58,18 @@ public sealed class AppSettings
     public Dictionary<string, double> MonitorDimMultiplier { get; set; } = new();
 
     /// <summary>
+    /// Per-monitor color temperature offset in Kelvin (device name -> offset, absent or 0 =
+    /// no adjustment), added to the global schedule-computed Kelvin before applying to that
+    /// monitor's gamma ramp specifically. For a panel that reads visibly warmer or cooler than
+    /// the others at the same nominal setting -- a real, monitor-to-monitor variation, not
+    /// something the global Day/Night Kelvin sliders alone can correct since they apply
+    /// uniformly. Rides on the same driver-rejection safety net as any other Kelvin value
+    /// (GammaRampController.ApplyColorTemperature already returns false and gets logged rather
+    /// than applied if the offset pushes a monitor's ramp outside the safe range).
+    /// </summary>
+    public Dictionary<string, int> MonitorKelvinOffset { get; set; } = new();
+
+    /// <summary>
     /// Migraine mode overlay tint. A muted, desaturated green rather than the amber/red used
     /// in the original prototype — this is a deliberate research-backed choice, not a
     /// stylistic one. Noseda &amp; Burstein (Brain, 2016) found that white, blue, amber, and
@@ -126,4 +138,11 @@ public sealed class AppSettings
     /// (the default) disables this; the sun alone still drives deep night as before.
     /// </summary>
     public string? BedtimeLocal { get; set; } = null;
+
+    /// <summary>
+    /// Set once the first-run onboarding window has been shown and dismissed (either path —
+    /// "Open Settings Now" or "Got it"). False only ever occurs on a brand-new settings.json,
+    /// so this is really just "is this the very first launch."
+    /// </summary>
+    public bool HasCompletedOnboarding { get; set; } = false;
 }

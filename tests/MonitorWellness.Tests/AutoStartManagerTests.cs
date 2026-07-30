@@ -50,4 +50,60 @@ public class AutoStartManagerTests
         Assert.Contains("/query", args);
         Assert.Contains($"/tn \"{AutoStartManager.TaskName}\"", args);
     }
+
+    [Fact]
+    public void BuildQueryVerboseArguments_RequestsListFormat()
+    {
+        string args = AutoStartManager.BuildQueryVerboseArguments();
+        Assert.Contains("/query", args);
+        Assert.Contains($"/tn \"{AutoStartManager.TaskName}\"", args);
+        Assert.Contains("/v", args);
+        Assert.Contains("/fo LIST", args);
+    }
+
+    // Captured verbatim from a real `schtasks /query /tn MonitorWellness /v /fo LIST` on a
+    // task that has never actually fired yet (Last Run Time is schtasks' epoch placeholder,
+    // Last Result 267011 = "task has not yet run") -- exactly the state GetDiagnostics needs
+    // to distinguish from "fired at least once," which is the whole point of this feature.
+    private const string SampleListOutput =
+        "Folder: \\\r\n" +
+        "HostName:                             EQ-LT-002\r\n" +
+        "TaskName:                             \\MonitorWellness\r\n" +
+        "Next Run Time:                        N/A\r\n" +
+        "Status:                               Ready\r\n" +
+        "Logon Mode:                           Interactive only\r\n" +
+        "Last Run Time:                        30/11/1999 00:00:00\r\n" +
+        "Last Result:                          267011\r\n" +
+        "Author:                               EQ-LT-002\\chris\r\n" +
+        "Task To Run:                          \"C:\\Program Files\\dotnet\\dotnet.exe\" \r\n" +
+        "Run As User:                          chris\r\n" +
+        "Schedule Type:                        At logon time\r\n" +
+        "Repeat: Every:                        N/A\r\n";
+
+    [Fact]
+    public void ParseFields_ExtractsTheFieldsDiagnosticsNeeds()
+    {
+        var fields = AutoStartManager.ParseFields(SampleListOutput);
+
+        Assert.Equal("Ready", fields["Status"]);
+        Assert.Equal("N/A", fields["Next Run Time"]);
+        Assert.Equal("30/11/1999 00:00:00", fields["Last Run Time"]);
+        Assert.Equal("267011", fields["Last Result"]);
+    }
+
+    [Fact]
+    public void ParseFields_DoesNotThrowOnMalformedRepeatLines()
+    {
+        // "Repeat: Every:" has two colons -- schtasks' own quirk, not something this parser
+        // can fix -- but it must not throw or corrupt the fields that come before it.
+        var fields = AutoStartManager.ParseFields(SampleListOutput);
+        Assert.True(fields.ContainsKey("Status"));
+    }
+
+    [Fact]
+    public void ParseFields_EmptyInput_ReturnsEmptyMap()
+    {
+        var fields = AutoStartManager.ParseFields("");
+        Assert.Empty(fields);
+    }
 }

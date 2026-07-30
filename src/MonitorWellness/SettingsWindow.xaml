@@ -54,6 +54,21 @@
                 </Grid>
                 <TextBlock x:Name="SunTimesText" FontSize="11" Foreground="DimGray" Margin="0,0,0,12"/>
 
+                <TextBlock Text="Profiles" FontWeight="Bold" Margin="0,0,0,4"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ComboBox x:Name="ProfilesComboBox" Grid.Column="0" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
+                    <Button Grid.Column="1" Content="Load" Padding="8,2" Margin="0,0,4,0" Click="LoadProfileButton_Click"/>
+                    <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
+                    <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
+                </Grid>
+                <TextBlock Text="Profiles save/restore the Day/Night, migraine, and bedtime settings below — not your location or per-monitor setup. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
                 <TextBlock Text="Day / Night Schedule" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBlock Text="Dragging a slider previews it on your real screens right now — nothing is saved until you click Save, and Cancel leaves everything untouched." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,2">
@@ -136,6 +151,7 @@
 
                 <TextBlock Text="Monitors" FontWeight="Bold" Margin="0,0,0,4"/>
                 <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
+                <TextBlock Text="Last two boxes per row: dim multiplier (1.0 = follow the schedule exactly), then a Kelvin offset for monitors that read warmer/cooler than the others (hover either for details)." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <ItemsControl x:Name="MonitorsList"/>
 
             </StackPanel>

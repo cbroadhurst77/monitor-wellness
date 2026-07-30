@@ -32,6 +32,10 @@ public static class AutoStartManager
     public static string BuildQueryArguments()
         => $"/query /tn \"{TaskName}\"";
 
+    /// <summary>Builds the schtasks argument string for a verbose, parseable query. Pure and testable.</summary>
+    public static string BuildQueryVerboseArguments()
+        => $"/query /tn \"{TaskName}\" /v /fo LIST";
+
     /// <summary>True if the auto-start task is currently registered. Does not require elevation.</summary>
     public static bool IsRegistered()
     {
@@ -67,6 +71,66 @@ public static class AutoStartManager
     }
 
     public static bool Unregister() => RunElevated(BuildDeleteArguments());
+
+    /// <summary>
+    /// Task Scheduler's own record of whether this task has actually fired -- specifically
+    /// LastRunTime/LastResult -- which is the only way to check, from inside the running app,
+    /// whether auto-start survived a real reboot. IsRegistered() alone only confirms the task
+    /// *definition* still exists; it says nothing about whether it has ever successfully run.
+    /// Does not require elevation.
+    /// </summary>
+    public sealed record AutoStartDiagnostics(bool IsRegistered, string? Status, string? LastRunTime, string? LastResult, string? NextRunTime);
+
+    public static AutoStartDiagnostics GetDiagnostics()
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", BuildQueryVerboseArguments())
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            string output = process?.StandardOutput.ReadToEnd() ?? "";
+            process?.WaitForExit(5000);
+
+            if (process?.ExitCode != 0)
+                return new AutoStartDiagnostics(false, null, null, null, null);
+
+            var fields = ParseFields(output);
+            return new AutoStartDiagnostics(
+                IsRegistered: true,
+                Status: fields.GetValueOrDefault("Status"),
+                LastRunTime: fields.GetValueOrDefault("Last Run Time"),
+                LastResult: fields.GetValueOrDefault("Last Result"),
+                NextRunTime: fields.GetValueOrDefault("Next Run Time"));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            DebugLog.Write($"AutoStartManager.GetDiagnostics failed: {ex.Message}");
+            return new AutoStartDiagnostics(false, null, null, null, null);
+        }
+    }
+
+    /// <summary>Parses schtasks' "/fo LIST" plain-text output into a label -&gt; value map. Pure and testable -- no process involved.</summary>
+    public static Dictionary<string, string> ParseFields(string schtasksListOutput)
+    {
+        var result = new Dictionary<string, string>();
+        foreach (string rawLine in schtasksListOutput.Split('\n'))
+        {
+            string line = rawLine.TrimEnd('\r');
+            int colonIndex = line.IndexOf(':');
+            if (colonIndex <= 0)
+                continue;
+
+            string label = line[..colonIndex].Trim();
+            string value = line[(colonIndex + 1)..].Trim();
+            if (label.Length > 0 && value.Length > 0)
+                result[label] = value;
+        }
+        return result;
+    }
 
     private static bool RunElevated(string arguments)
     {
