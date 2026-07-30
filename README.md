@@ -81,4 +81,5 @@ settings live in a JSON file instead of the registry, etc.).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Bundles one third-party asset (the location picker's world
+map) under its own license — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).

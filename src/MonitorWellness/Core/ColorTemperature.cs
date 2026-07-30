@@ -10,12 +10,16 @@ public static class ColorTemperature
     /// <summary>
     /// Windows rejects SetDeviceGammaRamp calls once a channel's ramp deviates from identity
     /// by more than roughly a factor of 2 (empirically confirmed on real hardware — see the
-    /// Week 1 finding in IMPLEMENTATION.md). This margin sits just above the observed ~0.5
-    /// cutoff. Shared here (rather than duplicated in GammaRampController) so anything that
-    /// needs to warn about an unsafe Kelvin value up front — like the settings window — uses
-    /// the exact same threshold as the code that actually applies it.
+    /// Week 1 finding in IMPLEMENTATION.md). Confirmed data points on this hardware: 6500K@50%
+    /// (combined factor exactly 0.50) fails; 3400K alone (factor 0.5301) passes; 3000K alone
+    /// (factor 0.4310) fails. 0.52 sits strictly between the confirmed-fail 0.50 exact boundary
+    /// and 3000K's 0.4310, while still comfortably including 3400K — this app's own NightKelvin
+    /// default. A prior value of 0.55 was too conservative: it excluded 3400K itself, which
+    /// would have made the settings window's Kelvin validation (added this session) reject the
+    /// app's own working default — caught by an automated test, not by hand-testing, which is
+    /// exactly the kind of regression these tests exist to catch.
     /// </summary>
-    public const double MinSafeChannelFactor = 0.55;
+    public const double MinSafeChannelFactor = 0.52;
 
     /// <summary>True if this Kelvin value's minimum RGB channel factor stays above the gamma ramp safety margin on its own (i.e. at full brightness, no additional dimming assist).</summary>
     public static bool IsSafeForGammaRamp(int kelvin)

@@ -46,13 +46,16 @@ recommend it to someone else."
   run. Survivable for a free/OSS tool with a GitHub README explaining it, but it is the single
   biggest visible signal that undercuts a "trustworthy, professional" first impression,
   regardless of code quality behind it.
-- **Zero automated tests.** Every verification in this project (`tools/SmokeTest`,
-  `tools/GammaCheck`) has been a hand-run, throwaway console script, re-purposed repeatedly
-  for whatever needed checking that day. That's a legitimate and honestly quite effective
-  *development* technique — it's what actually found the real bugs — but it leaves nothing
-  behind that runs automatically to catch a regression next time something changes. A
-  solar-elevation or gamma-clamping bug reintroduced next month would not be caught by
-  anything except another human noticing.
+- **~~Zero automated tests.~~ Fixed (Week 6).** An xUnit suite now covers the pure-logic core
+  (`SolarCalculator`, `ScheduleCurve`, `ColorTemperature`) with no Win32/WPF dependency. Worth
+  noting as a point in favor of this project's overall discipline: writing these tests
+  immediately caught a live bug (the settings window's Kelvin safety check would have
+  rejected the app's own `NightKelvin` default) — the same "verify against reality, don't
+  assume" habit that's been the strongest thing about this codebase throughout, now backed by
+  something that runs automatically instead of only when someone remembers to check by hand.
+  Everything Win32/WPF-dependent (gamma ramp calls, overlay windows, the settings window UI
+  itself) still has no automated coverage — that would need a UI automation or integration
+  test layer, a larger undertaking than this pass.
 - **Tested on exactly one machine.** One user, one 3-monitor Windows 11 setup, Intel UHD
   integrated graphics. No dedicated AMD/Nvidia GPU has been tested. No laptop. No HDR-enabled
   display — HDR fundamentally changes how the OS composites gamma/color, and this app's
@@ -204,9 +207,10 @@ In priority order:
 1. **Verify the installer end-to-end on an unmanaged machine or VM.** This is the largest gap
    between "built" and "shippable." Nothing else here matters if installation doesn't
    reliably work.
-2. **Add a basic automated test suite** (even just unit tests for `SolarCalculator`,
-   `ScheduleCurve`, and `ColorTemperature` — the pure-function core with no Win32
-   dependencies) so a future change can't silently reintroduce a fixed bug.
+2. ~~Add a basic automated test suite~~ **Done (Week 6)** — `SolarCalculator`,
+   `ScheduleCurve`, and `ColorTemperature` are covered, and it already paid for itself by
+   catching a live bug before it shipped. Still open: no coverage at all for the
+   Win32/WPF-dependent layer (gamma ramp calls, overlay windows, settings window).
 3. **Soften health/efficacy claims to match the evidence** — done in this pass for the
    README; worth a same pass over any future marketing copy, a website, or a store listing.
 4. **Add a one-line medical disclaimer** somewhere a user will actually see it (the README

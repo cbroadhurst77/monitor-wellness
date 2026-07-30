@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using MonitorWellness.Core;
 using CheckBox = System.Windows.Controls.CheckBox;
 using TextBox = System.Windows.Controls.TextBox;
@@ -21,12 +23,14 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _settings;
     private readonly OverlayController _overlay;
     private readonly Action _onSaved;
+    private readonly GeocodingService _geocoding = new();
 
     private readonly Dictionary<string, CheckBox> _excludeBoxes = new();
     private readonly Dictionary<string, TextBox> _multiplierBoxes = new();
 
     private uint _pendingHotkeyModifiers;
     private uint _pendingHotkeyKey;
+    private bool _loaded;
 
     public SettingsWindow(AppSettings settings, OverlayController overlay, Action onSaved)
     {
@@ -54,6 +58,91 @@ public partial class SettingsWindow : Window
         HotkeyBox.Text = FormatHotkey(_pendingHotkeyModifiers, _pendingHotkeyKey);
 
         BuildMonitorRows();
+
+        LoadWorldMapImage();
+        _loaded = true;
+        UpdateMapMarker();
+    }
+
+    private void LoadWorldMapImage()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("MonitorWellness.Assets.worldmap.jpg")
+            ?? throw new InvalidOperationException("Embedded world map resource not found.");
+
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad; // load fully now so the stream can be disposed
+        bitmap.StreamSource = stream;
+        bitmap.EndInit();
+        bitmap.Freeze();
+
+        MapImage.Source = bitmap;
+    }
+
+    /// <summary>
+    /// Standard equirectangular projection: longitude maps linearly across the full image
+    /// width (-180 to +180), latitude linearly down the full height (+90 to -90). The world
+    /// map asset is a true equirectangular projection (see ATTRIBUTIONS.md), so this holds
+    /// regardless of the container's on-screen size — MapContainer's Width/Height are fixed
+    /// in XAML specifically so this math doesn't need to handle letterboxing.
+    /// </summary>
+    private void UpdateMapMarker()
+    {
+        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat))
+            return;
+        if (!double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon))
+            return;
+
+        lat = Math.Clamp(lat, -90, 90);
+        lon = Math.Clamp(lon, -180, 180);
+
+        double x = (lon + 180.0) / 360.0 * MapContainer.Width;
+        double y = (90.0 - lat) / 180.0 * MapContainer.Height;
+
+        Canvas.SetLeft(MapMarker, x - MapMarker.Width / 2.0);
+        Canvas.SetTop(MapMarker, y - MapMarker.Height / 2.0);
+    }
+
+    private void LatLongBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_loaded)
+            UpdateMapMarker();
+    }
+
+    private void MapContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var pos = e.GetPosition(MapContainer);
+
+        double lon = pos.X / MapContainer.Width * 360.0 - 180.0;
+        double lat = 90.0 - pos.Y / MapContainer.Height * 180.0;
+
+        LatitudeBox.Text = Math.Clamp(lat, -90, 90).ToString("F4", CultureInfo.InvariantCulture);
+        LongitudeBox.Text = Math.Clamp(lon, -180, 180).ToString("F4", CultureInfo.InvariantCulture);
+        LocationSearchStatus.Text = "";
+    }
+
+    private async void FindLocationButton_Click(object sender, RoutedEventArgs e)
+    {
+        string query = LocationSearchBox.Text.Trim();
+        if (query.Length == 0)
+            return;
+
+        FindLocationButton.IsEnabled = false;
+        LocationSearchStatus.Text = "Searching...";
+
+        var result = await _geocoding.SearchAsync(query);
+
+        FindLocationButton.IsEnabled = true;
+
+        if (result is null)
+        {
+            LocationSearchStatus.Text = $"Couldn't find \"{query}\" — try a different spelling, or a nearby larger town.";
+            return;
+        }
+
+        LatitudeBox.Text = result.Latitude.ToString("F4", CultureInfo.InvariantCulture);
+        LongitudeBox.Text = result.Longitude.ToString("F4", CultureInfo.InvariantCulture);
+        LocationSearchStatus.Text = $"Found: {result.DisplayName}";
     }
 
     private void BuildMonitorRows()

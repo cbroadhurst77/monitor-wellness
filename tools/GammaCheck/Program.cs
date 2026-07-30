@@ -1,11 +1,18 @@
 using MonitorWellness.Core;
 
-var settings = SettingsStore.Load();
-Console.WriteLine($"Before: NightKelvin={settings.NightKelvin}");
+var monitors = MonitorEnumerator.GetActiveMonitors();
+var controllers = new List<GammaRampController>();
+foreach (var m in monitors)
+{
+    try { controllers.Add(new GammaRampController(m.DeviceName)); }
+    catch (InvalidOperationException) { }
+}
 
-settings.NightKelvin = 3400; // confirmed safe floor on this hardware
+foreach (int k in new[] { 4000, 3400, 3000 })
+{
+    var results = controllers.Select(c => c.ApplyColorTemperature(k)).ToList();
+    Console.WriteLine($"{k}K -> [{string.Join(", ", results)}]");
+}
 
-SettingsStore.Save(settings);
-
-var reloaded = SettingsStore.Load();
-Console.WriteLine($"After:  NightKelvin={reloaded.NightKelvin}");
+Console.WriteLine("Resetting to identity...");
+foreach (var c in controllers) { c.ResetToIdentity(); c.Dispose(); }

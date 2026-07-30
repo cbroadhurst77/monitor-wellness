@@ -18,14 +18,18 @@ Target: shippable v1 in 4 weeks, solo, free/open source, Windows-only.
 - **Auto-start**: Task Scheduler entry, not a Run key.
 - **Installer**: Inno Setup.
 - **Distribution**: GitHub Releases.
-- **Location input**: manual lat/long entry only for v1. No IP geolocation.
+- **Location input**: superseded post-v1 — manual lat/long entry, town/postcode search
+  (Nominatim), and a click-to-set world map picker are all now supported (Week 6). Still no
+  *automatic* IP-based geolocation — the user always explicitly searches or clicks, nothing
+  happens without that action.
 - **DDC/CI hardware brightness**: deferred to v1.1. v1 relies on gamma ramp + overlay only.
 
 ## Deferred to v1.1+
 
 - [ ] DDC/CI hardware monitor brightness control (`Dxva2.dll`, `SetMonitorBrightness`)
 - [ ] Laptop panel brightness via WMI (`WmiMonitorBrightnessMethods`)
-- [ ] IP-based geolocation prefill for lat/long
+- [ ] IP-based geolocation auto-prefill for lat/long (manual search/map picker now covers the
+  "I don't know my exact coordinates" problem without this — see Week 6)
 - [ ] Auto-update checker against GitHub Releases
 - [ ] Code signing cert
 - [ ] Per-monitor contrast control for migraine mode
@@ -412,6 +416,61 @@ a one-off migration using the app's own `SettingsStore.Load()`/`Save()` (guarant
 JSON), updating only the tint color and leaving the user's other customizations (hotkey
 rebind, per-monitor dim multipliers) untouched.
 
+---
+
+## Week 6 — Automated tests and easier location entry
+
+### Automated test suite (`tests/MonitorWellness.Tests`)
+
+EVALUATION.md's top engineering recommendation was closing the "zero automated tests" gap —
+every prior verification in this project was a hand-run, throwaway console script
+(`tools/SmokeTest`, `tools/GammaCheck`), effective at finding bugs in the moment but leaving
+nothing behind to catch a regression later. Added an xUnit project covering the pure-logic
+core with no Win32/WPF dependency — `SolarCalculator`, `ScheduleCurve`, `ColorTemperature` —
+targeting plain `net8.0` rather than `net8.0-windows` since none of it needs the Windows
+Desktop runtime.
+
+**Writing these tests immediately found a real, live bug**, exactly the outcome automated
+tests are supposed to produce: `ColorTemperature.IsSafeForGammaRamp(3400)` returned `false`.
+3400K is this app's own `NightKelvin` default and has been confirmed working on real hardware
+repeatedly throughout this project — meaning the Kelvin safety validation added to the
+settings window earlier this session would have **rejected the app's own default value** the
+next time someone opened Settings and hit Save without touching that field. Root cause:
+`MinSafeChannelFactor` was set to 0.55 as "a small margin above the observed ~0.5 cutoff," but
+3400K's actual factor is 0.5301 — inside that margin. Lowered the constant to 0.52, which sits
+strictly between the confirmed-fail exact boundary (0.50) and 3000K's confirmed-fail factor
+(0.4310), while correctly including 3400K. Re-verified against real hardware afterward
+(`tools/GammaCheck`) — no regression, 4000K/3400K still pass, 3000K still correctly fails.
+
+A second test (assuming elevation is symmetric around solar noon within a small window) was
+also wrong — replaced with a more robust monotonicity check, since the symmetry assumption
+didn't hold well enough over multi-hour windows at this latitude/season to be a reliable test
+invariant.
+
+### Easier location entry: search by place/postcode, and a clickable map
+
+Two additions to the settings window, both feeding the same `Latitude`/`Longitude` fields:
+
+- **`Core/GeocodingService.cs`**: looks up a town, city, or postcode/zip via
+  [Nominatim](https://nominatim.openstreetmap.org/) (OpenStreetMap's free geocoding API, no
+  API key required). This is the only network call anywhere in the app — everything else
+  stays fully local — and it only fires when the user explicitly clicks "Find." Uses a
+  descriptive `User-Agent` per Nominatim's usage policy.
+- **A clickable world map** in the settings window. The map image
+  (`Assets/worldmap.jpg`, embedded resource, CC BY-SA 3.0 — see `ATTRIBUTIONS.md`) is a true
+  equirectangular projection, so screen-to-coordinate conversion is a straightforward linear
+  formula (longitude across full width -180..+180, latitude down full height +90..-90) with no
+  letterboxing to account for, since the container's fixed XAML size matches the source
+  image's aspect ratio. Clicking anywhere sets Latitude/Longitude directly; a marker shows the
+  current location and updates live as either text field changes.
+
+Precision here doesn't need to be exact — sunrise/sunset timing barely changes over tens of
+kilometers, so "roughly click where you live" is entirely sufficient for what this app uses
+the coordinates for.
+
+Both features verified live: geocoding search and map click both correctly updated the
+schedule's location.
+
 ## Change log
 
 - 2026-07-30: Initial plan created from architecture discussion.
@@ -460,3 +519,8 @@ rebind, per-monitor dim multipliers) untouched.
   window (rejects unsafe values with an explanation before they can be saved), and
   `RunScheduleTick` now logs a rejected gamma call instead of silently ignoring the return
   value — previously the one place in the whole app that dropped this signal on the floor.
+- 2026-07-30: Week 6. Added an xUnit test suite for the pure-logic core — writing it
+  immediately caught a live bug (the settings window's own Kelvin safety check would have
+  rejected the app's own NightKelvin default). Added town/postcode search (Nominatim) and a
+  clickable world map to the settings window for easier location entry, closing the "manual
+  lat/long only" limitation without adding automatic IP-based geolocation.

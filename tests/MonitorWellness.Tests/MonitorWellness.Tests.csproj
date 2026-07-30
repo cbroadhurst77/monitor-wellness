@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net8.0, not net8.0-windows: the classes under test (SolarCalculator, ScheduleCurve,
+         ColorTemperature) are pure math with no Win32/WPF/WinForms dependency, so the test
+         project doesn't need the Windows Desktop runtime either. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\MonitorWellness\Core\SolarCalculator.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ScheduleCurve.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ColorTemperature.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\GeocodingService.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\DebugLog.cs" />
+  </ItemGroup>
+
+</Project>

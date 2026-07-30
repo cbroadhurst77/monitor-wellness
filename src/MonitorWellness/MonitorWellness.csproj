@@ -25,6 +25,8 @@
          assembly, so there is no separate file to go missing. -->
     <EmbeddedResource Include="Assets\migraine_on.ico" LogicalName="MonitorWellness.Assets.migraine_on.ico" />
     <EmbeddedResource Include="Assets\migraine_off.ico" LogicalName="MonitorWellness.Assets.migraine_off.ico" />
+    <!-- CC BY-SA 3.0, Strebe. See ATTRIBUTIONS.md -->
+    <EmbeddedResource Include="Assets\worldmap.jpg" LogicalName="MonitorWellness.Assets.worldmap.jpg" />
   </ItemGroup>
 
 </Project>
