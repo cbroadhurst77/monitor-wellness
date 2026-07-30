@@ -168,12 +168,27 @@ public partial class App : Application
                 : "Monitor Wellness";
     }
 
-    /// <summary>Pure computation of the current schedule target — no side effects, so migraine mode's fade-out can call it repeatedly to know what to fade toward.</summary>
-    private (int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice) ComputeScheduleTarget()
+    /// <summary>
+    /// Pure computation of the current schedule target — no side effects, so migraine mode's
+    /// fade-out can call it repeatedly to know what to fade toward. Includes the deep-night
+    /// bedtime-like phase (see ScheduleCurve/AppSettings doc comments): once past civil
+    /// twilight, brightness keeps dropping toward DeepNightBrightness and the dim overlay's
+    /// own color shifts from black toward DeepNightOverlayColorHex, approximating the extra
+    /// warmth research supports close to bedtime that gamma ramp can't reach on its own.
+    /// </summary>
+    private (int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, System.Windows.Media.Color DimColor) ComputeScheduleTarget()
     {
         double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
         int kelvin = ScheduleCurve.GetTargetKelvin(elevation, _settings.DayKelvin, _settings.NightKelvin);
-        double globalBrightness = ScheduleCurve.GetTargetBrightness(elevation, _settings.DayBrightness, _settings.NightBrightness);
+        double nightBrightness = ScheduleCurve.GetTargetBrightness(elevation, _settings.DayBrightness, _settings.NightBrightness);
+
+        double deepNightFactor = ScheduleCurve.GetDeepNightFactor(elevation);
+        double globalBrightness = Lerp(nightBrightness, _settings.DeepNightBrightness, deepNightFactor);
+
+        var dimColor = LerpColor(
+            System.Windows.Media.Colors.Black,
+            ParseColor(_settings.DeepNightOverlayColorHex),
+            deepNightFactor);
 
         var brightnessByDevice = new Dictionary<string, double>();
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
@@ -189,7 +204,7 @@ public partial class App : Application
             brightnessByDevice[controller.DeviceName] = Math.Clamp(1.0 - dimAmount, 0.0, 1.0);
         }
 
-        return (kelvin, brightnessByDevice);
+        return (kelvin, brightnessByDevice, dimColor);
     }
 
     private void RunScheduleTick()
@@ -197,7 +212,7 @@ public partial class App : Application
         if (_migraine?.SuspendsNormalSchedule == true)
             return; // migraine mode owns the gamma ramp + overlay right now
 
-        var (kelvin, brightnessByDevice) = ComputeScheduleTarget();
+        var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget();
 
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
         {
@@ -207,7 +222,7 @@ public partial class App : Application
             controller.ApplyColorTemperature(kelvin);
         }
 
-        _overlay?.ApplyDim(brightnessByDevice);
+        _overlay?.ApplyDim(brightnessByDevice, dimColor);
 
         if (_trayIcon is not null && _migraine?.IsActive != true)
         {
@@ -215,6 +230,17 @@ public partial class App : Application
             _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°";
         }
     }
+
+    private static System.Windows.Media.Color ParseColor(string hex)
+        => (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
+
+    private static double Lerp(double from, double to, double t) => from + (to - from) * t;
+
+    private static System.Windows.Media.Color LerpColor(System.Windows.Media.Color from, System.Windows.Media.Color to, double t)
+        => System.Windows.Media.Color.FromRgb(
+            (byte)Lerp(from.R, to.R, t),
+            (byte)Lerp(from.G, to.G, t),
+            (byte)Lerp(from.B, to.B, t));
 
     private static System.Drawing.Icon LoadEmbeddedIcon(string resourceName)
     {

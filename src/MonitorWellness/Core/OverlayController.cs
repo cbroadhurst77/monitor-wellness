@@ -2,7 +2,6 @@ using System.Windows.Forms;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Color = System.Windows.Media.Color;
-using Colors = System.Windows.Media.Colors;
 
 namespace MonitorWellness.Core;
 
@@ -76,14 +75,17 @@ public sealed class OverlayController : IDisposable
     }
 
     /// <summary>
-    /// Convenience wrapper over Apply for the common case: a black dim overlay per monitor,
-    /// given effective brightness (1.0 = no dimming, lower = darker) per device name.
+    /// Convenience wrapper over Apply for the common case: a dim overlay per monitor, given
+    /// effective brightness (1.0 = no dimming, lower = darker) per device name. dimColor is
+    /// usually black, but the normal schedule shifts it toward a warm dark brown during deep
+    /// night (see AppSettings.DeepNightOverlayColorHex) to approximate warmth gamma ramp can't
+    /// reach on its own.
     /// </summary>
-    public void ApplyDim(IReadOnlyDictionary<string, double> brightnessByDevice)
+    public void ApplyDim(IReadOnlyDictionary<string, double> brightnessByDevice, Color dimColor)
     {
         var byDevice = brightnessByDevice.ToDictionary(
             kv => kv.Key,
-            kv => (Colors.Black, 1.0 - Math.Clamp(kv.Value, 0.0, 1.0)));
+            kv => (dimColor, 1.0 - Math.Clamp(kv.Value, 0.0, 1.0)));
         Apply(byDevice);
     }
 

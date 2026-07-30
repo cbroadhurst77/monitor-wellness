@@ -1,6 +1,6 @@
 # Monitor Wellness App — Implementation Tracker
 
-Project name TBD. Rebuild of the PowerShell + f.lux + Dimmer.exe + AutoHotkey prototype
+Rebuild of the PowerShell + f.lux + Dimmer.exe + AutoHotkey prototype
 (`MigraineMode_on.ps1`, `MigraineMode_off.ps1`, `MigraineToggle.ahk`, `Dimmer/Dimmer.exe`)
 into a standalone Windows tray app. Those old files stay in place as behavioral reference
 only — none of their code carries forward as-is.
@@ -300,6 +300,10 @@ manual file edits.
 - **Product name confirmed: "Monitor Wellness."** No rename needed — it was already the name
   used throughout the code (assembly, namespace, folder names, installer AppName, Task
   Scheduler task name, `%AppData%\MonitorWellness\` settings path).
+- **The new deep-night phase (Week 5) has only been verified synthetically, not with real
+  eyes after dark.** The math checks out (see Week 5 section), but nobody has actually looked
+  at the screen once elevation drops past -12° to confirm the warm-brown overlay blend looks
+  intentional rather than muddy or off.
 - **Installer is unsigned.** Expect a SmartScreen "unknown publisher" warning on first run
   for any real user — code signing is already deferred to v1.1+ above, but worth deciding
   whether that's acceptable for an initial free/OSS release or a blocker.
@@ -312,6 +316,101 @@ manual file edits.
   verified correct (see the Week 4 finding), but the actual install/uninstall flow needs to
   be tested on a machine without this restriction — a personal/unmanaged Windows machine, or
   a VM.
+
+---
+
+## Week 5 — Research-backed schedule and migraine tint redesign
+
+The original day/night schedule and migraine mode tint were built on plausible-sounding
+assumptions (warm = cozy = good for migraines) rather than actual research. This pass did a
+real literature/industry search and changed two things as a direct result.
+
+### Migraine mode: amber/red tint replaced with green
+
+**This is the more important finding of the two.** The original migraine mode used a deep
+amber/red-brown overlay tint (`#321408`), on the assumption that "warm" is inherently
+soothing for light-sensitive users — the same logic that led f.lux and most consumer
+night-light tools toward warm color temperatures.
+
+That assumption doesn't hold for *migraine photophobia specifically*. Noseda & Burstein,
+["Migraine photophobia originating in cone-driven retinal
+pathways"](https://academic.oup.com/brain/article/139/7/1971/2464334) (*Brain*, 139(7),
+1971-1986, 2016) exposed migraine patients mid-attack to different light colors and measured
+reported pain intensity directly. Finding: **white, blue, amber, and red light all increased
+headache pain; only a narrow band of green light reduced it** — at low intensity, green
+measurably decreased pain rather than just failing to worsen it. This is now a widely-cited
+result (covered by [Harvard Medicine](https://eye.hms.harvard.edu/publications/migraine-photophobia-originating-cone-driven-retinal-pathways),
+[ScienceDaily](https://www.sciencedaily.com/releases/2016/05/160517083042.htm), and the basis
+for commercial FL-41-style migraine glasses from
+[Avulux](https://avulux.com/pages/understanding-the-science-behind-avulux-migraine-glasses)
+and similar). The mechanism is melanopsin-containing ipRGCs (peak sensitivity ~481nm blue,
+~587nm amber/yellow — both aggravating), distinct from the classic rod/cone visual pathway.
+
+Changed `AppSettings.MigraineOverlayColorHex` default to `#173620`, a muted, desaturated
+green — deliberately not a bright/saturated green, since the research is about a narrow
+soothing band, not "more green is more better," and a garish tint would defeat the purpose
+of a comfort feature. Verified live: visibly a muted green now, not amber. Kept
+`MigraineOverlayOpacity` (~0.7) — the research also ties benefit to *low intensity*, and
+overlay opacity is already how this app controls perceived intensity.
+
+Removed the separate `MigraineKelvin` setting (previously a mild warm gamma-ramp shift
+alongside the overlay tint). At the overlay's opacity, it dominates the perceived color
+enough that the gamma layer underneath doesn't need a distinct value — migraine mode's gamma
+now just reuses `NightKelvin`, simplifying the settings surface by one field.
+
+### Normal schedule: added a third "deep night" phase
+
+Cross-checked the existing Day (6500K) / Night (3400K) defaults against f.lux's own
+published defaults ([justgetflux.com FAQ](https://justgetflux.com/faq.html) and
+[coverage](https://www.ghacks.net/2009/04/06/computer-monitor-lighting-software-flux/)):
+day 6500K, sunset/evening 3400K, **bedtime 2700K** — confirming the existing two-point
+schedule already matched f.lux's day/evening stage exactly, but was missing its third,
+warmer bedtime stage.
+
+Circadian/melatonin research supports going warmer still near actual sleep time — evening
+light below 3000K, and commonly-cited guidance of ~1800-2400K in the immediate lead-up to
+sleep, is associated with less melatonin suppression than cooler light (blue-rich light
+above 5000K suppresses it most; see the [Mudita
+summary](https://mudita.com/community/blog/how-light-temperature-affects-melatonin-production/)
+and the broader [systematic review](https://www.tandfonline.com/doi/full/10.1080/07420528.2018.1527773)
+of light exposure and circadian rhythm).
+
+Gamma ramp is already at its hardware-safe floor (~3400K) by the time full night is reached
+(Week 1 finding) — it cannot go to 2700K or lower on this hardware. So the extra bedtime-like
+warmth has to come from the overlay layer instead, the same pattern already established for
+migraine mode. Added:
+
+- `ScheduleCurve.DeepNightThresholdDeg = -12.0` (end of nautical twilight) as a third anchor
+  point, smoothly blended in via `GetDeepNightFactor()` starting at the existing
+  `NightThresholdDeg = -6.0` (end of civil twilight) — reusing the same smoothstep
+  interpolation technique as the existing Day/Night blend, not a new mechanism.
+- `AppSettings.DeepNightBrightness` (0.7, deeper than the existing 0.85 Night value) and
+  `AppSettings.DeepNightOverlayColorHex` (`#190C04`, a very dark warm brown) — the overlay's
+  dim color now blends from plain black toward this warm brown as deep night approaches,
+  approximating the extra warmth a lower color temperature would provide, layered on top of
+  gamma's already-maxed-out 3400K.
+- `OverlayController.ApplyDim` and `App.ComputeScheduleTarget` updated to carry this color
+  through instead of a hardcoded black — `MigraineModeController`'s fade-out was also updated
+  to target this dynamic color (previously hardcoded to fade toward black, which would have
+  been wrong once fading out during deep night).
+
+Verified with synthetic elevation values (`tools/SmokeTest`) rather than waiting for real
+nighttime: civil twilight end (`deepNightFactor=0.00`), a midpoint (`deepNightFactor=0.53`,
+brightness correctly between 0.85 and 0.7), and true midnight (`deepNightFactor=1.00`,
+brightness exactly 0.70) all matched the intended blend exactly. The migraine tint change was
+verified live (visually confirmed green); the deep-night phase could only be verified
+synthetically since it wasn't actually nighttime during this session — **worth a real visual
+check after dark**.
+
+### Settings migration for the existing running instance
+
+The already-populated `settings.json` had an explicit (old amber) value for
+`MigraineOverlayColorHex`, which meant the new C# default wouldn't have taken effect for it
+automatically (JSON deserialization only fills in *missing* keys from defaults). Rather than
+hand-edit the file — the exact mistake that caused the Week 4 silent-JSON-failure bug — wrote
+a one-off migration using the app's own `SettingsStore.Load()`/`Save()` (guarantees correct
+JSON), updating only the tint color and leaving the user's other customizations (hotkey
+rebind, per-monitor dim multipliers) untouched.
 
 ## Change log
 
@@ -341,3 +440,10 @@ manual file edits.
   installer, fixed by changing PrivilegesRequired to admin. Could not verify the installer's
   actual UAC/install flow end-to-end from this session (no reliable interactive UAC in this
   tool environment) — flagged for manual verification.
+- 2026-07-30: Week 5 research pass. Real literature/industry research (Noseda & Burstein,
+  *Brain* 2016; f.lux defaults; circadian/melatonin studies) found the migraine mode's amber
+  tint was actually one of the *aggravating* colors for migraine photophobia, not a soothing
+  one — switched to a research-backed muted green, confirmed live. Added a third "deep night"
+  schedule phase (overlay-assisted extra warmth/dim beyond gamma's floor) to match f.lux's
+  missing third "bedtime" stage and circadian research supporting warmer light near sleep.
+  Verified the new phase's math synthetically; still needs a real visual check after dark.

@@ -5,10 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\src\MonitorWellness\Core\MonitorEnumerator.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\GammaRampController.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ColorTemperature.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AppSettings.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\DebugLog.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
   </ItemGroup>
 </Project>

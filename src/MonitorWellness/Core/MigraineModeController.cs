@@ -1,6 +1,5 @@
 using System.Windows.Threading;
 using Color = System.Windows.Media.Color;
-using Colors = System.Windows.Media.Colors;
 using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace MonitorWellness.Core;
@@ -24,7 +23,7 @@ public sealed class MigraineModeController
     private readonly GammaControllerManager _gammaManager;
     private readonly OverlayController _overlay;
     private readonly AppSettings _settings;
-    private readonly Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice)> _computeScheduleTarget;
+    private readonly Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> _computeScheduleTarget;
 
     private DispatcherTimer? _fadeTimer;
     private DateTime _fadeStartUtc;
@@ -44,7 +43,7 @@ public sealed class MigraineModeController
         GammaControllerManager gammaManager,
         OverlayController overlay,
         AppSettings settings,
-        Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice)> computeScheduleTarget)
+        Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> computeScheduleTarget)
     {
         _gammaManager = gammaManager;
         _overlay = overlay;
@@ -60,7 +59,7 @@ public sealed class MigraineModeController
         IsActive = true;
 
         foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperature(_settings.MigraineKelvin);
+            controller.ApplyColorTemperature(_settings.NightKelvin);
 
         Color color = ParseColor(_settings.MigraineOverlayColorHex);
         double opacity = _settings.MigraineOverlayOpacity;
@@ -78,7 +77,7 @@ public sealed class MigraineModeController
         DebugLog.Write("MigraineMode: Deactivate (starting fade)");
         _fadeFromColor = ParseColor(_settings.MigraineOverlayColorHex);
         _fadeFromOpacity = _settings.MigraineOverlayOpacity;
-        _fadeFromKelvin = _settings.MigraineKelvin;
+        _fadeFromKelvin = _settings.NightKelvin;
 
         IsActive = false;
         IsFadingOut = true;
@@ -100,7 +99,7 @@ public sealed class MigraineModeController
     private void FadeTick()
     {
         double t = Math.Clamp((DateTime.UtcNow - _fadeStartUtc).TotalSeconds / FadeDuration.TotalSeconds, 0.0, 1.0);
-        var (targetKelvin, targetBrightnessByDevice) = _computeScheduleTarget();
+        var (targetKelvin, targetBrightnessByDevice, targetDimColor) = _computeScheduleTarget();
 
         int kelvin = (int)Math.Round(Lerp(_fadeFromKelvin, targetKelvin, t));
         foreach (var controller in _gammaManager.Controllers)
@@ -113,7 +112,10 @@ public sealed class MigraineModeController
             double targetAlpha = 1.0 - targetBrightness;
 
             double alpha = Lerp(_fadeFromOpacity, targetAlpha, t);
-            Color color = LerpColor(_fadeFromColor, Colors.Black, t);
+            // Fades toward whatever the schedule's own dim color currently is (plain black
+            // most of the time, but a warm dark brown during deep night — see
+            // AppSettings.DeepNightOverlayColorHex), not always pure black.
+            Color color = LerpColor(_fadeFromColor, targetDimColor, t);
             byDevice[deviceName] = (color, alpha);
         }
         _overlay.Apply(byDevice);

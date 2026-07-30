@@ -20,6 +20,22 @@ public sealed class AppSettings
     public double DayBrightness { get; set; } = 1.0;
     public double NightBrightness { get; set; } = 0.85;
 
+    /// <summary>
+    /// Brightness once past nautical twilight (ScheduleCurve.DeepNightThresholdDeg), blended
+    /// in on top of NightBrightness as elevation drops further — see ScheduleCurve's doc
+    /// comment for why this exists as a separate, deeper stage (approximating f.lux's
+    /// "bedtime" 2700K/dimmer stage, which gamma ramp can't reach on its own).
+    /// </summary>
+    public double DeepNightBrightness { get; set; } = 0.7;
+
+    /// <summary>
+    /// The overlay's dim color blends from black toward this warm, very dark brown as deep
+    /// night deepens — approximates the extra warmth of a bedtime-level color temperature
+    /// (research commonly cites ~1800-2400K shortly before sleep) that gamma ramp alone
+    /// cannot reach once already at its safe floor (NightKelvin).
+    /// </summary>
+    public string DeepNightOverlayColorHex { get; set; } = "#190C04";
+
     /// <summary>Device names (e.g. "\\.\DISPLAY2") to exclude from all adjustment.</summary>
     public List<string> ExcludedMonitors { get; set; } = new();
 
@@ -34,20 +50,20 @@ public sealed class AppSettings
     public Dictionary<string, double> MonitorDimMultiplier { get; set; } = new();
 
     /// <summary>
-    /// Color temperature applied via gamma ramp during migraine mode. Kept separate from
-    /// NightKelvin even though both currently sit at the same safe floor (~3400K, per the
-    /// Week 1 finding) — migraine mode's real warmth comes from MigraineOverlayColorHex below,
-    /// not from this value, but the two concerns are conceptually distinct and may diverge
-    /// later (e.g. if DDC/CI support in v1.1 allows gamma ramp to go further).
+    /// Migraine mode overlay tint. A muted, desaturated green rather than the amber/red used
+    /// in the original prototype — this is a deliberate research-backed choice, not a
+    /// stylistic one. Noseda &amp; Burstein (Brain, 2016) found that white, blue, amber, and
+    /// red light all *increase* migraine headache pain, while a narrow band of green light
+    /// reduces it. Amber "feels" warm and soothing, but the actual clinical finding is that it
+    /// aggravates migraine photophobia about as much as blue does — only green measurably
+    /// helps. See IMPLEMENTATION.md for the full citation and reasoning.
+    ///
+    /// There's no separate MigraineKelvin setting for the gamma ramp layer underneath this —
+    /// it reuses NightKelvin. At this tint's opacity (~0.7, see MigraineOverlayOpacity below),
+    /// the overlay dominates the perceived color, so the gamma layer only needs its usual safe
+    /// warmth, not a distinct value of its own.
     /// </summary>
-    public int MigraineKelvin { get; set; } = 3400;
-
-    /// <summary>
-    /// Deep warm overlay tint used for migraine mode, carrying the warmth gamma ramp can't
-    /// reach (see Week 1 finding). A dark amber rather than pure black so the screen reads
-    /// as warm, not just dim.
-    /// </summary>
-    public string MigraineOverlayColorHex { get; set; } = "#321408";
+    public string MigraineOverlayColorHex { get; set; } = "#173620";
 
     /// <summary>Overlay opacity during migraine mode — deliberately much stronger than the night dim.</summary>
     public double MigraineOverlayOpacity { get; set; } = 0.72;
