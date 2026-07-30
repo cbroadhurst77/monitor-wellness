@@ -46,6 +46,16 @@ public static class ScheduleCurve
         => SmoothStep(InverseLerpClamped(NightThresholdDeg, DeepNightThresholdDeg, elevationDeg));
 
     /// <summary>
+    /// The same 0.0 (night)-to-1.0 (day) blend factor GetTargetKelvin/GetTargetBrightness
+    /// already compute internally, exposed separately so a caller (the ambient-light-adaptive
+    /// brightness adjustment — see AmbientLightAdapter) can scale its own effect by "how
+    /// daytime is it right now" without duplicating this interpolation. At night, this is 0,
+    /// so an ambient-light adjustment naturally has no effect regardless of room lighting.
+    /// </summary>
+    public static double GetDayFactor(double elevationDeg)
+        => SmoothStep(InverseLerpClamped(NightThresholdDeg, DayThresholdDeg, elevationDeg));
+
+    /// <summary>
     /// An alternative, clock-time-driven path to the same deep-night factor produced by
     /// GetDeepNightFactor. For anyone who goes to bed well before the sun sets deep enough
     /// (winter especially) or wants the wind-down to track their actual routine rather than

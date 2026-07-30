@@ -40,6 +40,29 @@ local in `%AppData%\MonitorWellness\`.
 - "Identify Monitors" — flashes each display's internal name on-screen, since Windows'
   on-screen monitor numbers don't reliably match device enumeration order
 
+## A note on how dimming works
+
+Brightness is reduced entirely via a semi-transparent overlay window, never by lowering the
+monitor's actual backlight. That's not just a workaround for gamma ramp's limits (see
+IMPLEMENTATION.md) — it's arguably better for this app's own audience: most monitor and laptop
+backlights dim using PWM (pulse-width modulation, rapidly strobing the backlight rather than
+truly dimming it), and PWM flicker is a documented migraine/eye-strain trigger in its own right,
+especially at low brightness where PWM frequency is often lowest. The overlay approach has no
+flicker. If a future version adds direct hardware (DDC/CI) brightness control, that mode will be
+opt-in specifically so this flicker-free default isn't lost for anyone who came to this app
+because of light sensitivity.
+
+## Known conflicts with other color-management tools
+
+Color temperature is applied via the same OS-level gamma ramp mechanism Windows Night Light,
+f.lux, and some GPU vendor "night mode"/color utilities also use. Two tools writing to that
+state at once can cause visible flickering or color that "randomly" reverts. Monitor Wellness
+warns you on startup if f.lux appears to be running (a reliable check); it does not attempt to
+detect Windows Night Light's on/off state, since that would require parsing an undocumented,
+unofficial registry format with no way to verify it holds across Windows versions — if your
+screen color seems to fight itself, check Night Light and any GPU vendor color/night-mode
+utility and turn off all but one.
+
 ## Status
 
 Early — first 4-week build cycle just completed. Functional and tested on real hardware

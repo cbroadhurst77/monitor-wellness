@@ -20,7 +20,18 @@ public sealed class GammaControllerManager : IDisposable
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => RebuildControllers();
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        // Same reasoning as OverlayController's identical guard: SystemEvents isn't
+        // guaranteed to raise on the UI thread, and the shared _controllers dictionary isn't
+        // thread-safe against a concurrent read from App's schedule tick. See
+        // INDEPENDENT_REAUDIT.md for why this was named as a risk but never reproduced.
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+            dispatcher.Invoke(RebuildControllers);
+        else
+            RebuildControllers();
+    }
 
     private void RebuildControllers()
     {

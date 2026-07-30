@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,6 +9,8 @@ using MonitorWellness.Core;
 using CheckBox = System.Windows.Controls.CheckBox;
 using TextBox = System.Windows.Controls.TextBox;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace MonitorWellness;
 
@@ -35,6 +38,15 @@ public partial class SettingsWindow : Window
     private uint _pendingHotkeyKey;
     private bool _loaded;
 
+    /// <summary>
+    /// Pairs each slider with an adjacent editable text field, added so a value can be typed
+    /// or pasted directly (e.g. to match a specific Kelvin value from elsewhere) rather than
+    /// only ever dragged — Week 7's slider-only redesign was good for live preview but removed
+    /// exact entry entirely; this restores it alongside the sliders instead of instead of them.
+    /// See TECHNICAL_UX_REVIEW.md §2.3.
+    /// </summary>
+    private readonly List<(TextBox Input, Slider Slider, bool IsPercentage)> _numericInputs = new();
+
     public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved)
     {
         InitializeComponent();
@@ -44,7 +56,53 @@ public partial class SettingsWindow : Window
         _overlay = overlay;
         _onSaved = onSaved;
 
+        _numericInputs.Add((DayKelvinInput, DayKelvinSlider, false));
+        _numericInputs.Add((NightKelvinInput, NightKelvinSlider, false));
+        _numericInputs.Add((DayBrightnessInput, DayBrightnessSlider, true));
+        _numericInputs.Add((NightBrightnessInput, NightBrightnessSlider, true));
+        _numericInputs.Add((MigraineOpacityInput, MigraineOpacitySlider, true));
+        _numericInputs.Add((MigraineContrastInput, MigraineContrastSlider, true));
+
         LoadFromSettings();
+    }
+
+    /// <summary>Commits on losing focus — covers clicking away or Tabbing to the next field.</summary>
+    private void NumericInput_LostFocus(object sender, RoutedEventArgs e) => CommitNumericInput((TextBox)sender);
+
+    /// <summary>Commits on Enter too, without waiting for focus to move elsewhere.</summary>
+    private void NumericInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        CommitNumericInput((TextBox)sender);
+        Keyboard.ClearFocus();
+        e.Handled = true;
+    }
+
+    private void CommitNumericInput(TextBox box)
+    {
+        int index = _numericInputs.FindIndex(x => x.Input == box);
+        if (index < 0) return;
+        var entry = _numericInputs[index];
+
+        if (!double.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double typed))
+        {
+            RefreshNumericInputText(entry); // invalid text — revert to whatever the slider actually holds
+            return;
+        }
+
+        double sliderValue = entry.IsPercentage ? typed / 100.0 : typed;
+        // Setting Slider.Value fires its existing ValueChanged handler (DaySlider_ValueChanged /
+        // NightSlider_ValueChanged / MigrainePreview_Changed), which already previews and calls
+        // UpdateSliderLabels() — no separate preview call needed here.
+        entry.Slider.Value = Math.Clamp(sliderValue, entry.Slider.Minimum, entry.Slider.Maximum);
+    }
+
+    private static void RefreshNumericInputText((TextBox Input, Slider Slider, bool IsPercentage) entry)
+    {
+        if (entry.Input.IsKeyboardFocused) return; // don't clobber what the user is mid-typing
+        entry.Input.Text = entry.IsPercentage
+            ? $"{Math.Round(entry.Slider.Value * 100)}"
+            : $"{(int)entry.Slider.Value}";
     }
 
     private void LoadFromSettings()
@@ -57,11 +115,75 @@ public partial class SettingsWindow : Window
         RefreshProfilesComboBox();
 
         LoadWorldMapImage();
+        HistoryTrackingCheckBox.IsChecked = _settings.HistoryTrackingEnabled;
+        MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
+        BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
+        BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        // HistoryTrackingCheckBox's own Checked/Unchecked handler (fired by setting its
+        // IsChecked above) already set PromptForRatingCheckBox.IsEnabled to match — this just
+        // loads the actual saved value into it.
+        PromptForRatingCheckBox.IsChecked = _settings.PromptForMigraineRating;
+        AmbientLightAvailabilityText.Text = AmbientLightSensor.IsAvailable
+            ? "An ambient light sensor was found on this device."
+            : "No ambient light sensor was found on this device — most desktops don't have one (it's mostly a laptop/tablet feature), so this option will have no effect here even if turned on.";
         _loaded = true;
         UpdateMapMarker();
         UpdateSunTimesDisplay();
         UpdateSliderLabels();
+        RefreshHistorySummary();
         PreviewDay(); // something visible on screen the moment the window opens, matching whichever phase was last touched (day, as the default starting point)
+    }
+
+    /// <summary>
+    /// Live-preview only — like every other control in this window, the actual setting isn't
+    /// committed until Save (see TryParseAll), so Cancel genuinely leaves it untouched. This
+    /// previously saved immediately on toggle, bypassing Cancel entirely — a real bug caught on
+    /// re-review, not by any earlier hand-testing, since a toggle-then-Cancel sequence is easy
+    /// to not think to try. RefreshHistorySummary reads the checkbox's own IsChecked state
+    /// directly (not _settings), so the live summary preview still works with no settings
+    /// mutation needed here.
+    /// </summary>
+    private void HistoryTrackingCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        PromptForRatingCheckBox.IsEnabled = HistoryTrackingCheckBox.IsChecked == true;
+        if (HistoryTrackingCheckBox.IsChecked != true)
+            PromptForRatingCheckBox.IsChecked = false; // the rating prompt only makes sense alongside history tracking — see MigraineModeController.Deactivate
+
+        if (!_loaded) return;
+        RefreshHistorySummary();
+    }
+
+    private void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var result = System.Windows.MessageBox.Show(
+            this,
+            "Delete all locally saved Migraine Mode / pause history? This can't be undone.",
+            "Monitor Wellness",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        HistoryStore.Clear();
+        RefreshHistorySummary();
+    }
+
+    private void RefreshHistorySummary()
+    {
+        if (HistoryTrackingCheckBox.IsChecked != true)
+        {
+            HistorySummaryText.Text = "History tracking is off.";
+            return;
+        }
+
+        var summary = HistorySummarizer.Summarize(HistoryStore.Load(), DateTime.UtcNow);
+        HistorySummaryText.Text = summary.TotalActivations == 0
+            ? "No Migraine Mode activations recorded yet."
+            : $"{summary.TotalActivations} total activation(s) ({summary.FullCount} full, {summary.MildCount} mild) — " +
+              $"{summary.ActivationsLast7Days} in the last 7 days, {summary.ActivationsLast30Days} in the last 30." +
+              (summary.AverageDurationMinutes is double avg ? $" Average duration: {avg:F0} min." : "") +
+              (summary.PauseCount > 0 ? $" Schedule paused {summary.PauseCount} time(s)." : "") +
+              (summary.AverageRating is double avgRating ? $" Average helpfulness: {avgRating:F1}/5 ({summary.RatingCount} rating(s))." : "");
     }
 
     /// <summary>
@@ -90,6 +212,111 @@ public partial class SettingsWindow : Window
         _pendingHotkeyModifiers = source.MigraineHotkeyModifiers;
         _pendingHotkeyKey = source.MigraineHotkeyKey;
         HotkeyBox.Text = FormatHotkey(_pendingHotkeyModifiers, _pendingHotkeyKey);
+    }
+
+    /// <summary>
+    /// Two experiential starting points for the Day/Night schedule as a whole, mirroring the
+    /// existing Migraine Gentle/Strong preset pattern — see TECHNICAL_UX_REVIEW.md §4.3, which
+    /// only ever closed this gap for migraine intensity, not for the schedule most people will
+    /// tune first. Night is set first so Day (previewed last, and the phase shown by default
+    /// when this window opens) is what's left on screen after clicking either button.
+    /// </summary>
+    private void TryCoolerBrighterPreset_Click(object sender, RoutedEventArgs e) => ApplyDayNightPreset(6500, 1.0, 4200, 0.9);
+    private void TryWarmerDimmerPreset_Click(object sender, RoutedEventArgs e) => ApplyDayNightPreset(4500, 0.7, 3400, 0.7);
+
+    private void ApplyDayNightPreset(int dayKelvin, double dayBrightness, int nightKelvin, double nightBrightness)
+    {
+        // Setting .Value fires the sliders' existing ValueChanged handlers, which already
+        // preview live and refresh labels/numeric inputs — no separate preview call needed.
+        NightKelvinSlider.Value = nightKelvin;
+        NightBrightnessSlider.Value = nightBrightness;
+        DayKelvinSlider.Value = dayKelvin;
+        DayBrightnessSlider.Value = dayBrightness;
+    }
+
+    private void ExportSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            FileName = "MonitorWellness-settings.json",
+            Filter = "Monitor Wellness settings (*.json)|*.json|All files (*.*)|*.*",
+            Title = "Export Monitor Wellness Settings",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            // Exports the last-Saved settings, not whatever's mid-edit in this window's
+            // controls right now — consistent with every other control here, nothing is
+            // "real" until Save. If the user has unsaved changes they want in the export,
+            // the dialog text (below, in XAML) says so.
+            SettingsStore.ExportTo(_settings, dialog.FileName);
+            System.Windows.MessageBox.Show(this, $"Settings exported to {dialog.FileName}.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't export settings: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ImportSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Monitor Wellness settings (*.json)|*.json|All files (*.*)|*.*",
+            Title = "Import Monitor Wellness Settings",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        if (!SettingsStore.TryImportFrom(dialog.FileName, out var imported, out string error))
+        {
+            System.Windows.MessageBox.Show(this, error, "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ApplyImportedSettings(imported);
+        System.Windows.MessageBox.Show(this, "Settings imported. Review the values below, then click Save to keep them.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// Populates every control in this window (location, monitor rows, and the Reset/Profile
+    /// "preferences" subset) from an imported AppSettings — the superset LoadFromSettings
+    /// already applies at construction time, repeated here for an arbitrary source instead of
+    /// the real saved settings. Mutates the working _settings copy in place first so
+    /// BuildMonitorRows() (which reads _settings directly) sees the imported values — nothing
+    /// reaches disk until Save, same as every other control in this window.
+    /// </summary>
+    private void ApplyImportedSettings(AppSettings imported)
+    {
+        _settings.Latitude = imported.Latitude;
+        _settings.Longitude = imported.Longitude;
+        _settings.ExcludedMonitors = imported.ExcludedMonitors;
+        _settings.ColorExcludedMonitors = imported.ColorExcludedMonitors;
+        _settings.MonitorDimMultiplier = imported.MonitorDimMultiplier;
+        _settings.MonitorKelvinOffset = imported.MonitorKelvinOffset;
+        _settings.HistoryTrackingEnabled = imported.HistoryTrackingEnabled;
+        _settings.PromptForMigraineRating = imported.PromptForMigraineRating;
+        _settings.MatchAmbientLight = imported.MatchAmbientLight;
+        _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
+        _settings.BreakReminderIntervalMinutes = imported.BreakReminderIntervalMinutes;
+
+        LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
+        LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
+        LoadPreferencesFrom(imported);
+        BuildMonitorRows();
+        HistoryTrackingCheckBox.IsChecked = _settings.HistoryTrackingEnabled;
+        PromptForRatingCheckBox.IsChecked = _settings.PromptForMigraineRating;
+        MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
+        BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
+        BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+
+        UpdateMapMarker();
+        UpdateSunTimesDisplay();
+        UpdateSliderLabels();
+        RefreshHistorySummary();
+        PreviewDay();
     }
 
     private void ResetButton_Click(object sender, RoutedEventArgs e)
@@ -252,16 +479,21 @@ public partial class SettingsWindow : Window
         BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
     }
 
+    private void BreakReminderCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        BreakReminderIntervalSlider.IsEnabled = BreakReminderCheckBox.IsChecked == true;
+    }
+
+    private void BreakReminderIntervalSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        BreakReminderIntervalLabel.Text = $"{(int)BreakReminderIntervalSlider.Value} minutes";
+    }
+
     private void UpdateSliderLabels()
     {
-        DayKelvinLabel.Text = $"{(int)DayKelvinSlider.Value}K";
-        NightKelvinLabel.Text = $"{(int)NightKelvinSlider.Value}K";
-        DayBrightnessLabel.Text = $"{DayBrightnessSlider.Value:P0}";
-        NightBrightnessLabel.Text = $"{NightBrightnessSlider.Value:P0}";
-        MigraineOpacityLabel.Text = $"{MigraineOpacitySlider.Value:P0}";
-        MigraineContrastLabel.Text = MigraineContrastSlider.Value <= 0
-            ? "None"
-            : $"{MigraineContrastSlider.Value:P0}";
+        foreach (var entry in _numericInputs)
+            RefreshNumericInputText(entry);
+
         MigraineAutoRevertLabel.Text = MigraineAutoRevertSlider.Value <= 0
             ? "Never (stays on until you turn it off)"
             : $"{(int)MigraineAutoRevertSlider.Value} minutes";
@@ -288,6 +520,18 @@ public partial class SettingsWindow : Window
     {
         foreach (var controller in _gammaManager.Controllers)
         {
+            // Found on re-review: this previously checked _colorExcludeBoxes but never
+            // _excludeBoxes, so checking "Exclude" and then dragging a slider still changed
+            // that monitor's gamma ramp during preview — and since App.RunScheduleTick's real
+            // path just skips excluded monitors (no reset), a monitor excluded mid-preview
+            // could stay stuck at whatever color the preview last applied for the rest of the
+            // session. Matches RunScheduleTick's real-path semantics: skip entirely, don't
+            // touch this monitor's color at all (unlike Color-accurate exclude, which actively
+            // resets to native).
+            bool excluded = _excludeBoxes.TryGetValue(controller.DeviceName, out var excludeBox) && excludeBox.IsChecked == true;
+            if (excluded)
+                continue;
+
             bool colorExcluded = _colorExcludeBoxes.TryGetValue(controller.DeviceName, out var box) && box.IsChecked == true;
             if (colorExcluded)
             {
@@ -303,6 +547,28 @@ public partial class SettingsWindow : Window
 
         var brightnessByDevice = BuildBrightnessByDeviceForPreview(globalBrightness);
         _overlay.ApplyDim(brightnessByDevice, System.Windows.Media.Colors.Black);
+    }
+
+    /// <summary>
+    /// Two experiential starting points for the migraine tint's intensity, so a user can pick
+    /// "whichever feels more comfortable" rather than needing to interpret a raw opacity/
+    /// contrast percentage cold — see TECHNICAL_UX_REVIEW.md §4.3. Deliberately not a third
+    /// "correct" value: color/hue is already fixed by the evidence-backed default, only
+    /// intensity varies here, and either preset is just a starting point for the sliders below.
+    /// </summary>
+    private const double GentlePresetOpacity = 0.5, GentlePresetContrast = 0.08;
+    private const double StrongPresetOpacity = 0.85, StrongPresetContrast = 0.22;
+
+    private void TryGentlePreset_Click(object sender, RoutedEventArgs e) => ApplyMigrainePreset(GentlePresetOpacity, GentlePresetContrast);
+    private void TryStrongPreset_Click(object sender, RoutedEventArgs e) => ApplyMigrainePreset(StrongPresetOpacity, StrongPresetContrast);
+
+    private void ApplyMigrainePreset(double opacity, double contrast)
+    {
+        // Setting .Value fires the sliders' existing ValueChanged handlers (MigrainePreview_
+        // Changed), which already preview live on the real screen and refresh the numeric
+        // inputs/labels — no separate preview call needed here.
+        MigraineOpacitySlider.Value = Math.Clamp(opacity, MigraineOpacitySlider.Minimum, MigraineOpacitySlider.Maximum);
+        MigraineContrastSlider.Value = Math.Clamp(contrast, MigraineContrastSlider.Minimum, MigraineContrastSlider.Maximum);
     }
 
     private void PreviewMigraine()
@@ -381,6 +647,7 @@ public partial class SettingsWindow : Window
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = "Skip this monitor entirely — no color or brightness adjustment.",
             };
+            System.Windows.Automation.AutomationProperties.SetName(excludeBox, $"Exclude {ShortDeviceName(deviceName)}");
             Grid.SetColumn(excludeBox, 1);
             _excludeBoxes[deviceName] = excludeBox;
 
@@ -392,16 +659,19 @@ public partial class SettingsWindow : Window
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = "Keep this monitor's native color (e.g. a photo/video reference display) — it still dims with the schedule.",
             };
+            System.Windows.Automation.AutomationProperties.SetName(colorExcludeBox, $"Color-accurate {ShortDeviceName(deviceName)}");
             Grid.SetColumn(colorExcludeBox, 2);
             _colorExcludeBoxes[deviceName] = colorExcludeBox;
 
             double multiplier = _settings.MonitorDimMultiplier.TryGetValue(deviceName, out var m) ? m : 1.0;
             var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture), ToolTip = "Dim multiplier (1.0 = follow the global schedule exactly)." };
+            System.Windows.Automation.AutomationProperties.SetName(multiplierBox, $"Dim multiplier for {ShortDeviceName(deviceName)}");
             Grid.SetColumn(multiplierBox, 3);
             _multiplierBoxes[deviceName] = multiplierBox;
 
             int kelvinOffset = _settings.MonitorKelvinOffset.TryGetValue(deviceName, out var k) ? k : 0;
             var kelvinOffsetBox = new TextBox { Text = kelvinOffset.ToString(CultureInfo.InvariantCulture), Margin = new Thickness(4, 0, 0, 0), ToolTip = "Kelvin offset for this monitor only — e.g. -300 if it reads warmer than the others at the same setting." };
+            System.Windows.Automation.AutomationProperties.SetName(kelvinOffsetBox, $"Kelvin offset for {ShortDeviceName(deviceName)}");
             Grid.SetColumn(kelvinOffsetBox, 4);
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
@@ -684,6 +954,11 @@ public partial class SettingsWindow : Window
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
         _settings.MonitorKelvinOffset = kelvinOffsets;
+        _settings.HistoryTrackingEnabled = HistoryTrackingCheckBox.IsChecked == true;
+        _settings.PromptForMigraineRating = PromptForRatingCheckBox.IsChecked == true;
+        _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
+        _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
+        _settings.BreakReminderIntervalMinutes = (int)BreakReminderIntervalSlider.Value;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)
             .Select(kv => kv.Key)

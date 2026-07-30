@@ -29,6 +29,13 @@
     <Compile Include="..\..\src\MonitorWellness\Core\DebugLog.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SchedulePause.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AutoStartManager.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\SingleInstanceGuard.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\NightLightDetector.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\CrashLoopDetector.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\HdrDetector.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\HistoryStore.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\FullscreenHeuristic.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightAdapter.cs" />
   </ItemGroup>
 
 </Project>

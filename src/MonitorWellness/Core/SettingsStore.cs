@@ -58,4 +58,41 @@ public static class SettingsStore
         string json = JsonSerializer.Serialize(settings, JsonOptions);
         File.WriteAllText(SettingsPath, json);
     }
+
+    /// <summary>
+    /// Writes a standalone copy of the given settings to an arbitrary path — for backing up
+    /// before a reinstall, or carrying tuned values to a second machine. ProfileStore already
+    /// covers switching between preference sets on one machine; this covers the "everything,
+    /// to a file I control" case that was previously only possible by knowing to manually copy
+    /// %AppData%\MonitorWellness\settings.json, undocumented anywhere in the app itself.
+    /// </summary>
+    public static void ExportTo(AppSettings settings, string destinationPath)
+    {
+        string json = JsonSerializer.Serialize(settings, JsonOptions);
+        File.WriteAllText(destinationPath, json);
+    }
+
+    /// <summary>Reads settings from an arbitrary path (the counterpart to ExportTo) without touching the real settings.json — the caller decides whether/when to apply and persist it.</summary>
+    public static bool TryImportFrom(string sourcePath, out AppSettings settings, out string error)
+    {
+        settings = new AppSettings();
+        error = "";
+        try
+        {
+            string json = File.ReadAllText(sourcePath);
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+            if (loaded is null)
+            {
+                error = "That file doesn't contain valid Monitor Wellness settings.";
+                return false;
+            }
+            settings = loaded;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            error = $"Couldn't read that file: {ex.Message}";
+            return false;
+        }
+    }
 }

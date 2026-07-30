@@ -82,6 +82,44 @@ public class ScheduleCurveTests
         Assert.Equal(1.0, factor, precision: 6);
     }
 
+    [Fact]
+    public void GetDayFactor_AtDayThreshold_IsOne()
+    {
+        Assert.Equal(1.0, ScheduleCurve.GetDayFactor(ScheduleCurve.DayThresholdDeg), precision: 6);
+    }
+
+    [Fact]
+    public void GetDayFactor_AtNightThreshold_IsZero()
+    {
+        Assert.Equal(0.0, ScheduleCurve.GetDayFactor(ScheduleCurve.NightThresholdDeg), precision: 6);
+    }
+
+    [Fact]
+    public void GetDayFactor_ClampsAboveDayThreshold()
+    {
+        Assert.Equal(1.0, ScheduleCurve.GetDayFactor(50.0), precision: 6);
+    }
+
+    [Fact]
+    public void GetDayFactor_ClampsBelowNightThreshold()
+    {
+        Assert.Equal(0.0, ScheduleCurve.GetDayFactor(ScheduleCurve.NightThresholdDeg - 20), precision: 6);
+    }
+
+    [Fact]
+    public void GetDayFactor_MatchesTheSameBlendUsedByGetTargetBrightness()
+    {
+        // GetDayFactor is meant to expose the exact same 0..1 blend GetTargetBrightness already
+        // uses internally -- verified indirectly here: at the same elevation, the fraction of
+        // the way from NightBrightness to DayBrightness should equal GetDayFactor's value.
+        double midpoint = (ScheduleCurve.DayThresholdDeg + ScheduleCurve.NightThresholdDeg) / 2.0;
+        double dayFactor = ScheduleCurve.GetDayFactor(midpoint);
+        double brightness = ScheduleCurve.GetTargetBrightness(midpoint, DayBrightness, NightBrightness);
+        double impliedFactor = (brightness - NightBrightness) / (DayBrightness - NightBrightness);
+
+        Assert.Equal(dayFactor, impliedFactor, precision: 6);
+    }
+
     private static readonly TimeSpan Bedtime2200 = new(22, 0, 0);
 
     [Fact]

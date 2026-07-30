@@ -23,6 +23,14 @@ Target: shippable v1 in 4 weeks, solo, free/open source, Windows-only.
   *automatic* IP-based geolocation — the user always explicitly searches or clicks, nothing
   happens without that action.
 - **DDC/CI hardware brightness**: deferred to v1.1. v1 relies on gamma ramp + overlay only.
+- **Gamma ramp ceiling applies to every future color/contrast feature, not just today's ones**:
+  the ~3300K safe floor (`ColorTemperature.MinSafeChannelFactor`) is a hardware/driver
+  limitation, not something a smarter formula can work around. Any future feature that touches
+  color temperature or contrast via gamma ramp — an even-warmer bedtime stage, a stronger
+  migraine contrast setting, per-app profiles — inherits this same ceiling. Real dimming and
+  any color/warmth beyond that floor must go through the overlay window layer, as established
+  in the Week 1 finding below. Noted here explicitly (TECHNICAL_UX_REVIEW.md §3.3) so a future
+  contributor doesn't rediscover this by hitting a silently-rejected gamma call again.
 
 ## Deferred to v1.1+
 
@@ -769,6 +777,329 @@ themselves whenever convenient, without needing another coding session for it.
   machine's IT policy blocks installer execution — needs an unmanaged machine or VM); live
   re-theming if Windows' dark/light app mode changes while a window is already open (Week 10,
   item 4 — read once at window construction only).
+
+## Week 11 — Acting on the independent technical/UX review (TECHNICAL_UX_REVIEW.md)
+
+A fresh, independent pass over the whole codebase (not just this project's own prior
+self-assessment) produced `TECHNICAL_UX_REVIEW.md` and identified several concrete gaps this
+project's own docs hadn't caught. This pass closed out the review's "highest-leverage items"
+list plus a few adjacent quick wins, each with automated test coverage where the underlying
+logic is pure enough to test (consistent with this project's established pattern: Win32/WPF-
+dependent code stays manually verified, pure logic gets an xUnit test). Test count grew from 54
+to 75.
+
+### 1. Fixed the onboarding window's remaining overclaim
+
+`OnboardingWindow.xaml`'s "Migraine Mode gives instant relief" line was the exact overclaiming
+language EVALUATION.md already fixed in the README — missed in the one screen every user is
+guaranteed to see on first launch. Reworded to match the README's already-softened language,
+and added the same one-line medical disclaimer EVALUATION.md recommends, directly in the
+onboarding window rather than only in a repo markdown file. No test — this is copy, not logic.
+
+### 2. Single-click tray icon toggle for migraine mode
+
+Migraine mode's fastest activation path was a global hotkey or a right-click through a ~14-item
+menu — a real problem for a feature meant to be used mid-aura. `_trayIcon.MouseClick` now
+toggles migraine mode directly on a left click (checked specifically for the left button, since
+plain `Click` would also fire on the right-click that opens the context menu). Extracted the
+existing hotkey's toggle+balloon+sound feedback into a shared `ToggleMigraineModeWithFeedback()`
+so both paths give identical feedback. No new pure logic to test here beyond what
+`MigraineModeControllerTests`-adjacent coverage already exercises.
+
+### 3. Single-instance guard
+
+Added `Core/SingleInstanceGuard.cs`, a named-Mutex guard checked first thing in `OnStartup`,
+before anything else touches the gamma ramp/overlay/hotkey/tray icon. This app's own portable
+("run the exe directly, no installer") + self-registering auto-start design made an accidental
+double-launch a real scenario, not a hypothetical one — confirmed live this session: launching a
+second copy while the first was running logged "Another instance is already running — exiting,"
+showed an informational message box, and created zero competing gamma/overlay state, exactly as
+designed. The mutex name is injectable specifically so `tests/SingleInstanceGuardTests.cs` (5
+tests) can use a unique name per test run rather than colliding with a real running instance or
+with each other.
+
+### 4. Labeled per-monitor settings rows + numeric entry alongside every slider
+
+The Settings window's per-monitor rows had two unlabeled number boxes distinguished only by a
+hover tooltip; added a static header row above the list instead. Week 7's slider-only redesign
+(good for live preview) had fully removed the ability to type or paste an exact value — added a
+small adjacent `TextBox` next to every Day/Night Kelvin, Day/Night brightness, and migraine
+opacity/contrast slider, two-way-consistent with the slider (`SettingsWindow._numericInputs`),
+so both dragging and typing work. Also added `AutomationProperties.Name` to the sliders, the
+per-monitor row controls, and the new numeric inputs — a first, scoped accessibility pass rather
+than the "larger undertaking" framing the gap previously had. No new Core logic here (this is
+UI wiring, not testable without a Win32/WPF-dependent test layer this project doesn't have —
+same known gap EVALUATION.md already notes), so no new tests for this item specifically.
+
+### 5. f.lux conflict detection (Windows Night Light detection deliberately not attempted)
+
+Added `Core/NightLightDetector.cs`. f.lux detection (a plain running-process check) is reliable
+and shipped — a startup balloon warns if f.lux is still running, since it writes to the exact
+same last-write-wins gamma ramp state this app does. Windows Night Light detection was
+deliberately **not** implemented: it would require parsing an undocumented,
+community-reverse-engineered registry blob, and checking directly on this dev machine found the
+key doesn't exist at all here (Night Light has never been toggled on this account) — meaning
+there's no real sample to verify a parser against. Shipping a confident true/false read of an
+unverified format would be exactly the kind of unverified claim this project's testing
+discipline argues against. `tests/NightLightDetectorTests.cs` (11 cases) cover the pure
+name-matching logic.
+
+### 6. Unhandled-exception handling policy, finally decided
+
+`App.xaml.cs`'s `DispatcherUnhandledException` handler carried a comment since Week 4 marking
+"diagnostic build only — revisit before v1 ships," and never was. Decision: keep the app alive
+(a full crash could freeze migraine mode's tint on screen with nothing left to fade it back),
+but stop swallowing silently forever. Added `Core/CrashLoopDetector.cs` (a rolling
+count-within-a-window, injectable `nowUtc` for testability — `tests/CrashLoopDetectorTests.cs`,
+5 tests): a single/rare exception now attempts the same recovery already used for sleep/resume
+(rebuild gamma controllers, reapply the current target); repeated exceptions in a short window
+instead show a visible error balloon pointing at the debug log, rather than continuing to pretend
+nothing's wrong.
+
+### 7. Evidence-quality summary surfaced in-app
+
+EVALUATION.md's careful "mechanism evidence vs. direct-intervention evidence" reasoning
+previously lived only in a repo markdown file no real user would open. Added a collapsible
+"Why these colors? (evidence summary)" `Expander` under both the Day/Night Schedule and
+Migraine Mode sections in Settings, condensing the same honest three-tier framing (green tint:
+best-supported; evening warming: solid mechanism, unproven specific intervention; daytime
+dimming: comfort feature, not a proven eye-strain fix) to two or three sentences each, with a
+pointer to EVALUATION.md for full citations.
+
+### 8. Help/About menu item, Open Logs Folder, in-app privacy statement, tray menu mnemonics
+
+- Onboarding previously showed exactly once with no way back; the tray menu now has "Help /
+  About..." which reopens the same window (`App.ShowOnboarding`, shared between the real
+  first-run path and manual reopens — `markCompletedOnClose` only persists on the former).
+- Added "Open Logs Folder" to the tray menu — a bug report previously required telling a user
+  the exact `%AppData%` path and having them find it manually.
+- Added a one-line privacy statement directly in Settings, next to the one actual network call
+  (location search) — the honest "no telemetry, local-only" story was previously only in the
+  README.
+- Added `&` mnemonics to every top-level tray context menu item.
+
+### Outstanding from TECHNICAL_UX_REVIEW.md after this pass
+
+Not attempted this session (left for a follow-up pass): the ambient-light-adaptive brightness
+feature (§1.1), fullscreen-exclusive-app awareness for migraine mode's overlay (§1.3), the
+local opt-in usage diary (§1.5), the documentation-only/calibration-UX items §4.2/§4.3, and the
+GPU-vendor-color-tool conflict note (§5.2). All still tracked in TECHNICAL_UX_REVIEW.md, none
+newly discovered this session.
+
+## Week 12 — Closing out the rest of TECHNICAL_UX_REVIEW.md
+
+Continued straight through the remaining items from the independent review: everything left
+"outstanding" at the end of Week 11, plus the HDR detection item that hadn't been attempted yet
+either. Same discipline as every prior week: real verification before calling anything done,
+not just a clean compile — this pass in particular touched raw Win32 struct marshaling and a
+project-wide target framework change, both higher-risk than typical changes, and both were
+verified live rather than trusted on inspection alone. Test count grew from 75 to 107.
+
+### HDR detection (§5.3)
+
+Added `Core/HdrDetector.cs` using the fully documented, public `QueryDisplayConfig`/
+`DisplayConfigGetDeviceInfo` Win32 APIs (`DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO`) —
+unlike Windows Night Light's undocumented registry format, this is safe to trust a confident
+answer from. Every struct layout (`DISPLAYCONFIG_PATH_INFO`, `_PATH_SOURCE_INFO`,
+`_PATH_TARGET_INFO`, `_MODE_INFO`, `_DEVICE_INFO_HEADER`, `_GET_ADVANCED_COLOR_INFO`) was
+transcribed directly from Microsoft's published documentation rather than guessed, specifically
+because a marshaling mistake here risks a crash on every single startup. Verified live on this
+project's own 3-monitor desktop: no crash, all three (non-HDR) displays correctly report
+advanced color as unsupported/disabled. Startup now warns if any active display has HDR on,
+since EVALUATION.md already flags this app's gamma ramp approach as untested against it.
+
+### Local opt-in usage history (§1.5/§7.1)
+
+Added `Core/HistoryStore.cs` (a local JSONL event log — migraine activations/deactivations with
+duration, schedule pauses) and `HistorySummarizer` (pure aggregation: total/mild/full counts,
+last-7/30-day counts, average duration). Opt-in via new `AppSettings.HistoryTrackingEnabled`
+(default false), wired into `MigraineModeController.Activate`/`Deactivate` and `App
+.PauseScheduleFor`. New Settings section shows a plain-language summary and a Clear button.
+Verified live via a throwaway harness (mirroring this project's own `tools/GammaCheck`/
+`SmokeTest` pattern): append/load/summarize round-tripped correctly, then confirmed Clear()
+actually empties it.
+
+### Fullscreen-exclusive-app awareness for Migraine Mode (§1.3)
+
+Added `Core/FullscreenHeuristic.cs` (pure decision: borderless + covers the monitor bounds) and
+`Core/FullscreenDetector.cs` (the live `GetForegroundWindow`/`GetWindowRect`/`GetWindowLong`
+wrapper around it) — split into two files specifically so the pure logic could be included in
+the test project, which targets plain `net8.0` without the WinForms reference the live wrapper
+needs. There is no fully reliable way to detect true exclusive fullscreen in general; this is
+an accepted-false-positive heuristic, not a certainty. Wired into `MigraineModeController
+.Activate` via a new `PossibleFullscreenConflict` event — App shows a tray warning rather than
+letting the overlay silently fail to render over a fullscreen surface with no explanation.
+Verified live: the check ran against a real foreground window (a terminal, correctly identified
+as not fullscreen) with no crash.
+
+### Ambient-light-adaptive brightness (§1.1) — the largest item, and the riskiest change
+
+This is the one piece of ergonomics guidance EVALUATION.md's own science review actually
+supports (matching screen brightness to ambient light), and it was 100% fixed-schedule before
+this pass. Required a real architecture decision: `Windows.Devices.Sensors.LightSensor` is a
+WinRT API, and `MonitorWellness.csproj`'s `TargetFramework` was changed from `net8.0-windows` to
+`net8.0-windows10.0.19041.0` to get its projection with no extra NuGet package — verified this
+alone still builds, publishes, and runs correctly before adding any sensor code. (A different
+WinRT path considered first, `Windows.Graphics.Display.DisplayInformation` for the HDR check
+above, was rejected because it needs a CoreWindow/UWP view and would have pulled in the Windows
+App SDK — too heavy a dependency for this app's portable, no-runtime-install story;
+`LightSensor.GetDefault()` has no such requirement, confirmed against Microsoft's own docs
+before committing to the TFM change.)
+
+Added `Core/AmbientLightAdapter.cs` (pure: maps a lux reading to a bounded ±15% brightness
+adjustment, smoothstep-interpolated like `ScheduleCurve`'s existing curves) and
+`Core/AmbientLightSensor.cs` (the live WinRT wrapper, deliberately broad-catch since WinRT/COM
+exception surfaces are less predictable than this app's other well-documented Win32 P/Invoke
+error paths). New `ScheduleCurve.GetDayFactor` exposes the same day/night blend factor
+`GetTargetBrightness` already computes internally, so `App.ComputeScheduleTarget` can scale the
+ambient adjustment by "how daytime is it right now" — zero effect at night regardless of room
+lighting, by design. New `AppSettings.MatchAmbientLight` (opt-in, default false) with a Settings
+checkbox that also reports whether a sensor was actually found.
+
+**Verified live, twice**: once with the TFM change alone (confirmed the app still starts and
+runs normally — needed a little extra time on first run for the new WinRT assemblies to load,
+not a bug), and again with `MatchAmbientLight` force-enabled via settings.json — confirmed
+`LightSensor.GetDefault()` returns null cleanly on this sensor-less desktop (the expected,
+common case — ambient light sensors are mostly a laptop/tablet feature) with no exception and
+no behavior change. **Not verified**: the actual adjustment being applied on hardware that has
+a sensor, since this dev machine doesn't have one — an honest, stated limitation, not a gap
+papered over.
+
+Also re-ran the full self-contained single-file publish (`dotnet publish ... -p:PublishSingleFile
+=true`) after the TFM change and launched the actual published exe — this is exactly the
+packaging step that broke once before (Week 4's embedded-resources finding), so it specifically
+was not assumed to still work just because a normal Debug build did. It launched cleanly.
+
+### Documentation-only items closed out
+
+- **§1.2**: added a README section stating plainly that overlay-based dimming avoids the
+  backlight PWM flicker most hardware/DDC-CI dimming has — a genuine, previously-unstated
+  advantage for this app's specific audience, and a reason to gate any future DDC/CI brightness
+  feature behind an explicit opt-in rather than making it the default.
+- **§3.3**: added a note to this file's own "Locked decisions" that the gamma ramp ceiling
+  applies to every future color/contrast feature, not just today's, so a future contributor
+  doesn't rediscover the Week 1 finding by hitting a silently-rejected gamma call again.
+- **§4.2**: documented in `MigraineModeController`'s doc comment why activation/deactivation are
+  already seizure-safe by design (instant step change, never a strobe; a smooth 20s fade) —
+  no code change needed, since the existing behavior was already correct, just previously
+  unstated next to the (already-documented) sound-sensitivity reasoning.
+- **§5.2**: added a README section on GPU vendor color-management tool conflicts, alongside the
+  existing Night Light/f.lux note.
+- **§6.2**: added `CHANGELOG.md` — user-facing release notes, distinct from this developer-facing
+  log.
+- **§4.3**: added two "Try Gentle (A)" / "Try Strong (B)" preset buttons next to Migraine Mode's
+  sliders, so a user can experience two starting intensities live rather than needing to
+  interpret a raw opacity/contrast percentage cold.
+
+### The one item left genuinely open: §3.4 (untested hardware surfaces)
+
+Remote Desktop/virtual displays and laptop hybrid-GPU switching remain unverified — not a gap
+that was skipped, but one that genuinely cannot be closed from this dev machine (a static
+3-monitor desktop). Stated here plainly rather than left ambiguous: this is the one item from
+the whole review that needs different hardware to ever move past "acknowledged limitation."
+
+## Week 13 — Independent re-audit found three real defects; all fixed
+
+Requested: re-run the full review from scratch, independently, specifically to check whether
+the Week 11/12 implementation work introduced any defects. Done via a separate agent invocation
+with no memory of writing the code, instructed to read source fresh and form independent
+judgments before checking any of this project's own docs. See `INDEPENDENT_REAUDIT.md` for the
+full write-up; summarized here.
+
+**Three real defects found, all fixed, test count 107 → 115:**
+
+1. **`HdrDetector`'s struct layout was wrong** — `DISPLAYCONFIG_RATIONAL` (two `UINT32`s) had
+   been represented as a single `ulong`, which forces 8-byte alignment .NET's default layout
+   doesn't give the native 4-byte-aligned original, silently misaligning every field after it
+   and — critically — `DISPLAYCONFIG_PATH_INFO.targetInfo` itself. Confirmed by direct
+   measurement (`Marshal.SizeOf`/`OffsetOf`): the broken version computed 56 bytes instead of
+   48, with `targetInfo` at offset 24 instead of 20. The Week 12 entry's own "verified live: no
+   crash, reports disabled" check could not have caught this — that observation is exactly what
+   a silently-corrupted read would also produce, since every non-HDR display should report
+   "disabled" either way. Fixed by using two explicit `uint` fields instead of `ulong`, and
+   added `tests/HdrDetectorStructLayoutTests.cs` (8 tests, using reflection against the private
+   nested structs) so this exact class of mistake — in this struct or any other raw P/Invoke
+   struct in this codebase — gets caught by the test suite going forward, not by another
+   external audit.
+2. **Two Settings-window checkboxes bypassed Cancel** — `HistoryTrackingCheckBox_Changed` and
+   `MatchAmbientLightCheckBox_Changed` (both added in Week 12) saved immediately on toggle,
+   contradicting the window's own stated "Cancel leaves everything untouched" contract. A
+   regression from Week 12, not pre-existing. Fixed by deferring both to the existing
+   `TryParseAll` commit block like every other control in the window.
+3. **Excluding a monitor during live preview didn't stop its color from changing** —
+   `SettingsWindow.ApplySchedulePreview` checked `_colorExcludeBoxes` but never `_excludeBoxes`
+   before applying a color-temperature preview. Confirmed via `git show` against the initial
+   commit that this predates any work from this review — a real, pre-existing bug, not
+   introduced recently. Fixed to skip excluded monitors entirely during preview, matching
+   `RunScheduleTick`'s real-path behavior.
+
+**The methodological point worth keeping**: for raw struct marshaling specifically, "the app
+didn't crash and returned a plausible-looking answer" is not sufficient verification — only
+checking the actual computed layout (`Marshal.SizeOf`/`OffsetOf`) against hand-derived native
+values proves it. This project now has a demonstrated, reusable pattern for that, applied here
+and worth applying to any future raw P/Invoke struct work.
+
+---
+
+## Week 14 — Acting on a fourth independent review
+
+A fresh technical/UX review (chat-based, not saved as a repo file this time) covered the same
+seven dimensions as the prior three passes. Most prior findings were already closed; this pass
+surfaced a handful of genuinely new gaps and implemented the ones that were pure code changes
+(not blocked on access to different hardware or a real reboot).
+
+One scoping correction worth recording: the review initially flagged "installer never verified
+end-to-end" as a top-3 priority, then downgraded it on follow-up — this app's primary,
+documented path is the portable exe (no installer needed), so the Inno Setup installer's
+unverified UAC/install/uninstall flow matters far less than it would if it were the only way to
+get the app running. The auto-start-survives-a-real-reboot gap (tracked since Week 10) is the
+one that actually matters regardless of portable-vs-installer, and it's unchanged by this pass
+— still needs an actual reboot to close, which no coding session can trigger.
+
+Implemented this pass, each verified by build + the full test suite (116 passing, up from 115):
+
+- **`Dispatcher.Invoke` guards around every `SystemEvents` handler**
+  (`OverlayController.OnDisplaySettingsChanged`, `GammaControllerManager
+  .OnDisplaySettingsChanged`, `App.OnPowerModeChanged`) — closes a risk `INDEPENDENT_REAUDIT.md`
+  named but never reproduced (SystemEvents isn't guaranteed to raise on the UI thread; these
+  handlers touch WPF Window objects and a non-thread-safe dictionary). Still unverified against
+  a real sleep/resume or hot-plug cycle, same as before — this removes a plausible crash cause
+  without being able to prove the crash it prevents ever would have fired.
+- **Windows High Contrast mode support** (`ThemeDetector.ApplyDarkThemeIfNeeded`) — when
+  `SystemParameters.HighContrast` is on, this app's own dark-theme resource dictionary now steps
+  aside entirely rather than overriding the system's own accessible palette. Named as a gap in
+  two prior reviews, never previously acted on.
+- **Settings Export/Import** (`SettingsStore.ExportTo`/`TryImportFrom`, wired into
+  `SettingsWindow`) — closes the "how do I back this up or move it to a second PC" gap; previously
+  only possible by knowing to manually copy `%AppData%\MonitorWellness\settings.json`.
+- **Day/Night "Try Cooler & Brighter (A)" / "Try Warmer & Dimmer (B)" presets** — extends the
+  existing Migraine Mode Gentle/Strong preset pattern (Week 12, §4.3) to the schedule most users
+  will actually tune first, which that pass never covered.
+- **Opt-in break reminder** (`AppSettings.BreakReminderEnabled`/`BreakReminderIntervalMinutes`,
+  a `DispatcherTimer` in `App.xaml.cs`) — the 20-20-20 rule. Worth stating plainly: this is the
+  one eye-strain intervention with real ergonomics backing per this app's own `EVALUATION.md`
+  (unlike blue-light filtering, which the 2023 Cochrane review doesn't support for eye strain
+  specifically), and it was completely absent until now despite two prior reviews naming the gap.
+  Skips its balloon (but keeps ticking on schedule) while Migraine Mode is active.
+- **Migraine-mode effectiveness rating** (`HistoryEvent.Rating`, `AppSettings
+  .PromptForMigraineRating`, new `MigraineRatingWindow`, `HistorySummarizer` extended with
+  `AverageRating`/`RatingCount`) — the existing local history log (Week 12) could say how often
+  and how long Migraine Mode was used, but never whether it helped. A small, skippable,
+  auto-dismissing 1-5 prompt after deactivation closes that, gated behind both
+  `HistoryTrackingEnabled` and this new opt-in separately, kept fully local like everything else
+  `HistoryStore` already does.
+- **`AutomationProperties` on `OnboardingWindow` and `ProfileNameDialog`** — previously only
+  `SettingsWindow` had these; the other two user-facing windows had none. Structural fix only —
+  this still hasn't been run through an actual screen reader (Narrator/NVDA), which remains the
+  one accessibility claim in this codebase never verified against real assistive tech, unlike
+  everything else here that follows a "verify against reality" discipline.
+
+**Not attempted this pass, with reasoning**: relaxing the migraine hotkey to allow a
+modifier-free binding for a safe key allow-list (Pause/Scroll Lock/F13-24), to reduce the
+4-key-chord motor-coordination burden during an aura — judged too easy to get wrong (a bad
+default could turn into a hotkey that fires while typing) to implement without live testing this
+session can't do. Testing on additional hardware (laptop, dGPU, HDR) and the installer's
+end-to-end flow remain blocked on access, not code, same as every prior pass.
 
 ## Change log
 

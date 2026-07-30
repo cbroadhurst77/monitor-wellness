@@ -14,6 +14,17 @@ namespace MonitorWellness.Core;
 /// Migraine mode intentionally ignores ExcludedMonitors and per-monitor dim multipliers:
 /// those are day/night preferences, and this is a distinct, user-triggered emergency
 /// override that should affect every screen for full relief.
+///
+/// Photosensitive epilepsy overlaps with migraine with aura in some patients — the same
+/// population this feature serves — so the *rate* of any visual change matters, not just its
+/// color (the same reasoning that already led to PlaySoundOnMigraineToggle defaulting off for
+/// phonophobia). This is deliberately safe by design, not just accidentally so: activation is
+/// a single instantaneous step change (never a strobe/flash), and deactivation is a smooth
+/// 20-second fade (FadeDuration) — both well clear of any flicker/strobe frequency that could
+/// be a seizure trigger. Documented explicitly here (TECHNICAL_UX_REVIEW.md §4.2) so this
+/// reasoning is as visible as the sound-sensitivity reasoning already is, rather than being an
+/// unstated assumption a future change could accidentally break (e.g. a "pulse" or "flash to
+/// get attention" feature would need to re-examine this).
 /// </summary>
 public sealed class MigraineModeController
 {
@@ -32,6 +43,7 @@ public sealed class MigraineModeController
     private readonly OverlayController _overlay;
     private readonly AppSettings _settings;
     private readonly Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> _computeScheduleTarget;
+    private readonly Func<bool>? _isForegroundFullscreenLikely;
 
     private DispatcherTimer? _fadeTimer;
     private DateTime _fadeStartUtc;
@@ -42,6 +54,7 @@ public sealed class MigraineModeController
 
     private DispatcherTimer? _autoRevertTimer;
     private bool _activeIsMild;
+    private DateTime? _activatedAtUtc;
 
     /// <summary>UTC time the current activation will auto-revert at, or null if auto-revert is off or migraine mode isn't active.</summary>
     public DateTime? AutoRevertAtUtc { get; private set; }
@@ -57,16 +70,35 @@ public sealed class MigraineModeController
 
     public event Action? StateChanged;
 
+    /// <summary>
+    /// Raised right after activation if the foreground window looks like it's probably covering
+    /// the whole screen with no border (FullscreenDetector's heuristic) — the overlay's
+    /// tint/dim may not actually be visible over a true exclusive-fullscreen surface, and this
+    /// is the one signal that can exist to say so instead of failing invisibly. See
+    /// TECHNICAL_UX_REVIEW.md §1.3.
+    /// </summary>
+    public event Action? PossibleFullscreenConflict;
+
+    /// <summary>
+    /// Raised right after Deactivate() records its history event, if the user has opted into
+    /// both HistoryTrackingEnabled and PromptForMigraineRating — the caller (App) owns showing
+    /// any actual UI for this, keeping this class free of a WPF window dependency it doesn't
+    /// otherwise have.
+    /// </summary>
+    public event Action? RatingRequested;
+
     public MigraineModeController(
         GammaControllerManager gammaManager,
         OverlayController overlay,
         AppSettings settings,
-        Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> computeScheduleTarget)
+        Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> computeScheduleTarget,
+        Func<bool>? isForegroundFullscreenLikely = null)
     {
         _gammaManager = gammaManager;
         _overlay = overlay;
         _settings = settings;
         _computeScheduleTarget = computeScheduleTarget;
+        _isForegroundFullscreenLikely = isForegroundFullscreenLikely;
     }
 
     /// <summary>
@@ -81,6 +113,10 @@ public sealed class MigraineModeController
         IsFadingOut = false;
         IsActive = true;
         _activeIsMild = mild;
+        _activatedAtUtc = DateTime.UtcNow;
+
+        if (_settings.HistoryTrackingEnabled)
+            HistoryStore.Append(new HistoryEvent(_activatedAtUtc.Value, "MigraineActivated", mild, null));
 
         double intensity = mild ? MildIntensityMultiplier : 1.0;
 
@@ -113,6 +149,12 @@ public sealed class MigraineModeController
         }
 
         StateChanged?.Invoke();
+
+        if (_isForegroundFullscreenLikely?.Invoke() == true)
+        {
+            DebugLog.Write("MigraineMode: activated while the foreground window looks fullscreen — overlay may not be visible over it");
+            PossibleFullscreenConflict?.Invoke();
+        }
     }
 
     public void Deactivate()
@@ -124,6 +166,19 @@ public sealed class MigraineModeController
         _autoRevertTimer?.Stop();
         _autoRevertTimer = null;
         AutoRevertAtUtc = null;
+
+        if (_settings.HistoryTrackingEnabled && _activatedAtUtc.HasValue)
+        {
+            // Recorded at the moment deactivation is chosen, not when the 20s fade finishes —
+            // that's the more meaningful "how long was this actually on" duration for a user
+            // reviewing their own history later.
+            int durationSeconds = (int)(DateTime.UtcNow - _activatedAtUtc.Value).TotalSeconds;
+            HistoryStore.Append(new HistoryEvent(DateTime.UtcNow, "MigraineDeactivated", _activeIsMild, durationSeconds));
+
+            if (_settings.PromptForMigraineRating)
+                RatingRequested?.Invoke();
+        }
+        _activatedAtUtc = null;
 
         double intensity = _activeIsMild ? MildIntensityMultiplier : 1.0;
         _fadeFromColor = ParseColor(_settings.MigraineOverlayColorHex);

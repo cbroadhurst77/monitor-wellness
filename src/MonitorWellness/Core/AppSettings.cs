@@ -145,4 +145,46 @@ public sealed class AppSettings
     /// so this is really just "is this the very first launch."
     /// </summary>
     public bool HasCompletedOnboarding { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in, defaults false: whether migraine-mode activations and schedule pauses get
+    /// logged locally (HistoryStore) so a user can see their own patterns over time. Off by
+    /// default so this app's "no telemetry" story stays true out of the box even though this
+    /// particular log never leaves the PC either way — see TECHNICAL_UX_REVIEW.md §1.5/§7.1.
+    /// </summary>
+    public bool HistoryTrackingEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in, defaults false, only meaningful alongside HistoryTrackingEnabled: after each
+    /// Migraine Mode deactivation, briefly ask how helpful it was (1-5, or skip) and log the
+    /// answer. Frequency/duration alone (what HistoryTrackingEnabled already logs) can answer
+    /// "how often do I use this," but not "is it actually helping" — the more useful half of
+    /// "insights to help users understand what helps them specifically." Separate from
+    /// HistoryTrackingEnabled since counting usage and being asked to rate it are different
+    /// levels of opt-in.
+    /// </summary>
+    public bool PromptForMigraineRating { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in, defaults false: nudge daytime brightness up/down (within
+    /// AmbientLightAdapter.MaxAdjustment) based on a real ambient-light sensor reading, on top
+    /// of the existing solar-based schedule. Off by default, and a no-op with no user-visible
+    /// difference on the (common) majority of machines with no ambient light sensor at all —
+    /// see TECHNICAL_UX_REVIEW.md §1.1.
+    /// </summary>
+    public bool MatchAmbientLight { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in, defaults false: a periodic reminder to look away from the screen (the 20-20-20
+    /// rule — every 20 minutes, look at something ~20 feet away for ~20 seconds). Unlike this
+    /// app's color/brightness features, break-taking is the one eye-strain intervention this
+    /// app's own EVALUATION.md notes actually has ergonomics backing (the AAO's position is
+    /// that blue-light filtering specifically does not demonstrably reduce eye strain) — it was
+    /// previously entirely absent despite that. Off by default, consistent with every other
+    /// comfort feature in this app being opt-in rather than assumed wanted.
+    /// </summary>
+    public bool BreakReminderEnabled { get; set; } = false;
+
+    /// <summary>Minutes between break reminders when BreakReminderEnabled is true. 20 matches the 20-20-20 rule this feature is based on.</summary>
+    public int BreakReminderIntervalMinutes { get; set; } = 20;
 }

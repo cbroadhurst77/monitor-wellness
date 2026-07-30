@@ -21,7 +21,21 @@ public sealed class OverlayController : IDisposable
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => RebuildWindows();
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        // SystemEvents can raise this off the thread that subscribed (documented Windows
+        // Forms/SystemEvents behavior, not guaranteed to always fire on the UI thread) —
+        // RebuildWindows constructs/closes WPF Window objects, which throw if touched from a
+        // non-owning thread. Confirmed as a real, plausible risk by INDEPENDENT_REAUDIT.md
+        // (never reproduced, since a real sleep/resume or hot-plug cycle can't be triggered
+        // from this dev session, but named there as a concrete hypothesis worth closing
+        // proactively rather than waiting to reproduce a crash first).
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+            dispatcher.Invoke(RebuildWindows);
+        else
+            RebuildWindows();
+    }
 
     private void RebuildWindows()
     {

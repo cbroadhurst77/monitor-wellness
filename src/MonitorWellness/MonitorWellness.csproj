@@ -2,7 +2,12 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- windows10.0.19041.0, not plain net8.0-windows, specifically to get the WinRT
+         projection for Windows.Devices.Sensors.LightSensor (ambient-light-adaptive
+         brightness) without adding any NuGet or Windows App SDK dependency: the .NET SDK
+         generates that projection automatically for this TFM. Still runs fine on the same
+         Windows versions as before; this only changes what APIs are visible to the compiler. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>

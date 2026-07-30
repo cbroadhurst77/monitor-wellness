@@ -12,7 +12,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Welcome to Monitor Wellness" FontWeight="Bold" FontSize="18" Margin="0,0,0,12"/>
+        <TextBlock Grid.Row="0" Text="Welcome to Monitor Wellness" FontWeight="Bold" FontSize="18" Margin="0,0,0,12"
+                   AutomationProperties.HeadingLevel="Level1"/>
 
         <StackPanel Grid.Row="1">
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
@@ -21,9 +22,16 @@
                 to f.lux, tuned with eye-strain and circadian research.
             </TextBlock>
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                <Run Text="Migraine Mode"/> gives instant relief with a research-backed muted
-                green tint. Trigger it from the tray icon menu, or the
+                <Run Text="Migraine Mode"/> instantly switches to a muted green tint, based on
+                published research on light and migraine photophobia — see Settings for what
+                that research does and doesn't show. Trigger it with a single click on the tray
+                icon, from the tray menu, or the
                 <Run Text="Ctrl+Alt+Shift+M" FontWeight="SemiBold"/> hotkey (changeable in Settings).
+            </TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10" FontStyle="Italic" Foreground="DimGray">
+                This is not a medical device and is not a substitute for professional medical
+                care. If you experience migraines, please talk to a doctor about treatment —
+                use this as one comfort tool alongside that, not instead of it.
             </TextBlock>
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
                 Everything is controlled from the tray icon near your clock — right-click it
@@ -37,8 +45,10 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button Content="Got it, maybe later" Width="130" Padding="4" Margin="0,0,8,0" Click="Dismiss_Click"/>
-            <Button Content="Open Settings Now" Width="130" Padding="4" IsDefault="True" Click="OpenSettings_Click"/>
+            <Button Content="Got it, maybe later" Width="130" Padding="4" Margin="0,0,8,0" Click="Dismiss_Click"
+                    AutomationProperties.Name="Dismiss welcome screen"/>
+            <Button Content="Open Settings Now" Width="130" Padding="4" IsDefault="True" Click="OpenSettings_Click"
+                    AutomationProperties.Name="Dismiss welcome screen and open Settings"/>
         </StackPanel>
     </Grid>
 </Window>

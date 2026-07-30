@@ -27,9 +27,25 @@ public static class ThemeDetector
         return false;
     }
 
-    /// <summary>Merges Theme/DarkTheme.xaml into the window's own Resources if Windows is set to dark mode. No-op otherwise.</summary>
+    /// <summary>
+    /// Merges Theme/DarkTheme.xaml into the window's own Resources if Windows is set to dark
+    /// mode. No-op otherwise — including when Windows High Contrast mode is on. High Contrast
+    /// is a distinct, accessibility-specific mode (SystemParameters.HighContrast) serving a
+    /// different population (low vision) than the dark/light theme preference; it ships its
+    /// own carefully-chosen system palette, and this app's own explicit Background/Foreground
+    /// brush overrides (see below) would fight it rather than help — WPF's standard controls
+    /// already pick up High Contrast's system colors automatically as long as nothing here
+    /// overrides them. Previously unaddressed (named in EVALUATION.md/TECHNICAL_UX_REVIEW.md's
+    /// accessibility gap, never actually acted on).
+    /// </summary>
     public static void ApplyDarkThemeIfNeeded(Window window)
     {
+        if (System.Windows.SystemParameters.HighContrast)
+        {
+            DebugLog.Write("ThemeDetector: Windows High Contrast is on — leaving system colors untouched, not applying dark theme");
+            return;
+        }
+
         if (!IsSystemDarkTheme())
             return;
 

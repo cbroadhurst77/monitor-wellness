@@ -28,6 +28,7 @@ public partial class App : Application
     private System.Drawing.Icon? _iconOff;
     private System.Drawing.Icon? _iconOn;
     private DispatcherTimer? _timer;
+    private DispatcherTimer? _breakReminderTimer;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private MigraineModeController? _migraine;
@@ -35,24 +36,83 @@ public partial class App : Application
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
     private DateTime? _pauseUntilUtc;
+    private SingleInstanceGuard? _singleInstanceGuard;
+    private readonly CrashLoopDetector _crashLoopDetector = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         DebugLog.Write("App starting up");
+
+        // Checked first, before anything else touches the gamma ramp/overlay/hotkey/tray icon:
+        // a second instance racing the first would otherwise register a competing schedule
+        // timer and a hotkey that silently fails (see TECHNICAL_UX_REVIEW.md §3.1) — this app's
+        // own portable + auto-start design makes an accidental double-launch a real scenario,
+        // not just a hypothetical one.
+        _singleInstanceGuard = new SingleInstanceGuard();
+        if (!_singleInstanceGuard.IsPrimaryInstance)
+        {
+            DebugLog.Write("Another instance is already running — exiting");
+            System.Windows.MessageBox.Show(
+                "Monitor Wellness is already running — check your system tray (near the clock) for its icon.",
+                "Monitor Wellness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
+        // Decision (TECHNICAL_UX_REVIEW.md §3.2, closing out a gap this code previously left
+        // open in its own comment): keep the app alive on an unhandled exception — a full
+        // crash could leave migraine mode's tint/dim frozen on screen with no controller left
+        // running to fade it back, which is worse than a logged, recovered hiccup. But don't
+        // swallow forever with no signal: a single/rare exception attempts the same recovery
+        // already used for sleep/resume (rebuild gamma controllers, reapply the current
+        // target), since an unhandled exception mid-tick is exactly the kind of moment that
+        // could leave gamma ramp state stale. If exceptions keep recurring in a short window
+        // (CrashLoopDetector), stop pretending everything's fine and tell the user visibly.
         DispatcherUnhandledException += (_, args) =>
         {
             DebugLog.Write($"UNHANDLED DISPATCHER EXCEPTION: {args.Exception}");
-            args.Handled = true; // diagnostic build only — keep the app alive so the log is useful; revisit before v1 ships
+            args.Handled = true;
+
+            if (_crashLoopDetector.RecordAndCheckIsLooping(DateTime.UtcNow))
+            {
+                _trayIcon?.ShowBalloonTip(
+                    15_000,
+                    "Monitor Wellness",
+                    "Monitor Wellness has hit repeated internal errors and may not be working correctly. Check the log in %AppData%\\MonitorWellness\\debug.log, or restart the app.",
+                    ToolTipIcon.Error);
+                return;
+            }
+
+            try
+            {
+                _gammaManager?.ReapplyAfterWake();
+                if (_migraine?.IsActive == true)
+                    _migraine.Activate(); // idempotent — reapplies in case gamma ramp/overlay state was left stale
+                else if (!_settingsPreviewActive && !_pauseUntilUtc.HasValue)
+                    RunScheduleTick();
+            }
+            catch (Exception recoveryEx)
+            {
+                DebugLog.Write($"Recovery attempt after unhandled exception also failed: {recoveryEx}");
+            }
         };
 
         _settings = SettingsStore.Load();
 
         _gammaManager = new GammaControllerManager();
         _overlay = new OverlayController();
-        _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, ComputeScheduleTarget);
+        _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, ComputeScheduleTarget, FullscreenDetector.IsForegroundWindowLikelyFullscreen);
         _migraine.StateChanged += OnMigraineStateChanged;
+        _migraine.PossibleFullscreenConflict += () => _trayIcon?.ShowBalloonTip(
+            10_000,
+            "Monitor Wellness",
+            "Migraine Mode applied color/contrast, but a fullscreen app may be blocking the dim overlay — Alt+Tab out or switch to windowed mode to see the full effect.",
+            ToolTipIcon.Warning);
+        _migraine.RatingRequested += ShowMigraineRatingPrompt;
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
@@ -66,15 +126,56 @@ public partial class App : Application
             Text = "Monitor Wellness"
         };
 
+        if (HdrDetector.IsAnyDisplayHdrEnabled())
+        {
+            // EVALUATION.md already flags HDR as untested; this app's gamma-ramp approach is
+            // documented to interact unpredictably with Windows' HDR tone-mapping pipeline.
+            // See TECHNICAL_UX_REVIEW.md §5.3.
+            DebugLog.Write("An active display has Windows HDR (advanced color) enabled — gamma ramp behavior here is unverified");
+            _trayIcon.ShowBalloonTip(
+                10_000,
+                "Monitor Wellness",
+                "One of your displays has Windows HDR turned on. Color/brightness adjustments haven't been tested against HDR displays and may not look right — if something seems off, try turning HDR off for this monitor.",
+                ToolTipIcon.Warning);
+        }
+
+        if (NightLightDetector.IsFluxRunning())
+        {
+            // f.lux is this app's own predecessor (README) and writes to the exact same
+            // last-write-wins gamma ramp state — a real, likely-to-occur conflict for anyone
+            // who migrated from it without uninstalling. See TECHNICAL_UX_REVIEW.md §1.4/§5.1.
+            DebugLog.Write("f.lux appears to be running — likely gamma ramp conflict");
+            _trayIcon.ShowBalloonTip(
+                10_000,
+                "Monitor Wellness",
+                "f.lux also appears to be running. Two tools adjusting your screen color at once can cause flickering or color that keeps reverting — consider closing one of them.",
+                ToolTipIcon.Warning);
+        }
+
         RebuildHotkey();
 
+        // A single left-click on the tray icon toggles migraine mode directly — the hotkey and
+        // the right-click menu both still work, but this is the fastest possible path for the
+        // moment this feature exists for: someone mid-aura who doesn't want to hunt through a
+        // ~14-item context menu (see TECHNICAL_UX_REVIEW.md §2.1). MouseClick (not Click) is
+        // used specifically so this only fires for the left button — Click alone would also
+        // fire on the right-click that opens ContextMenuStrip, double-triggering a toggle.
+        _trayIcon.MouseClick += (_, args) =>
+        {
+            if (args.Button == System.Windows.Forms.MouseButtons.Left)
+            {
+                DebugLog.Write("Tray icon left-clicked: toggling migraine mode");
+                ToggleMigraineModeWithFeedback();
+            }
+        };
+
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Toggle Migraine Mode", null, (_, _) => _migraine.Toggle());
-        menu.Items.Add("Activate Migraine Mode (Full)", null, (_, _) => _migraine.Activate(mild: false));
-        menu.Items.Add("Activate Migraine Mode (Mild)", null, (_, _) => _migraine.Activate(mild: true));
-        menu.Items.Add("Deactivate Migraine Mode", null, (_, _) => _migraine.Deactivate());
+        menu.Items.Add("&Toggle Migraine Mode", null, (_, _) => _migraine.Toggle());
+        menu.Items.Add("Activate Migraine Mode (&Full)", null, (_, _) => _migraine.Activate(mild: false));
+        menu.Items.Add("Activate Migraine Mode (Mi&ld)", null, (_, _) => _migraine.Activate(mild: true));
+        menu.Items.Add("&Deactivate Migraine Mode", null, (_, _) => _migraine.Deactivate());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Identify Monitors", null, (_, _) =>
+        menu.Items.Add("&Identify Monitors", null, (_, _) =>
         {
             DebugLog.Write("Tray menu: Identify Monitors clicked");
             try
@@ -87,14 +188,14 @@ public partial class App : Application
             }
         });
         menu.Items.Add(new ToolStripSeparator());
-        var pauseMenu = new ToolStripMenuItem("Pause Schedule");
+        var pauseMenu = new ToolStripMenuItem("&Pause Schedule");
         pauseMenu.DropDownItems.Add("30 minutes", null, (_, _) => PauseScheduleFor(TimeSpan.FromMinutes(30)));
         pauseMenu.DropDownItems.Add("1 hour", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(1)));
         pauseMenu.DropDownItems.Add("2 hours", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(2)));
         pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
             PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
         menu.Items.Add(pauseMenu);
-        _resumeScheduleMenuItem = new ToolStripMenuItem("Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
+        _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         bool autoStartCurrentlyRegistered = AutoStartManager.IsRegistered();
@@ -111,7 +212,7 @@ public partial class App : Application
                 ToolTipIcon.Warning);
         }
 
-        var autoStartItem = new ToolStripMenuItem("Start with Windows") { Checked = autoStartCurrentlyRegistered };
+        var autoStartItem = new ToolStripMenuItem("Start with &Windows") { Checked = autoStartCurrentlyRegistered };
         autoStartItem.Click += (_, _) =>
         {
             bool wasOn = autoStartItem.Checked;
@@ -134,11 +235,13 @@ public partial class App : Application
             }
         };
         menu.Items.Add(autoStartItem);
-        menu.Items.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
+        menu.Items.Add("&Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
+        menu.Items.Add("&Open Logs Folder", null, (_, _) => OpenLogsFolder());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Settings...", null, (_, _) => OpenSettingsWindow());
+        menu.Items.Add("&Settings...", null, (_, _) => OpenSettingsWindow());
+        menu.Items.Add("&Help / About...", null, (_, _) => ShowOnboarding(markCompletedOnClose: false));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => Shutdown());
+        menu.Items.Add("E&xit", null, (_, _) => Shutdown());
         _trayIcon.ContextMenuStrip = menu;
 
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
@@ -146,16 +249,47 @@ public partial class App : Application
         _timer.Start();
 
         RunScheduleTick();
+        RebuildBreakReminderTimer();
 
         if (!_settings.HasCompletedOnboarding)
+            ShowOnboarding(markCompletedOnClose: true);
+    }
+
+    /// <summary>
+    /// Shows the onboarding window — either the real first-run flow (markCompletedOnClose:
+    /// true, the only path that persists HasCompletedOnboarding) or a manual reopen from the
+    /// tray menu's "Help / About..." item, which previously had no way back to this content
+    /// at all once dismissed once (see TECHNICAL_UX_REVIEW.md §2.4).
+    /// </summary>
+    private void ShowOnboarding(bool markCompletedOnClose)
+    {
+        var onboarding = new OnboardingWindow(OpenSettingsWindow);
+        if (markCompletedOnClose)
         {
-            var onboarding = new OnboardingWindow(OpenSettingsWindow);
             onboarding.Closed += (_, _) =>
             {
                 _settings.HasCompletedOnboarding = true;
                 SettingsStore.Save(_settings);
             };
-            onboarding.Show();
+        }
+        onboarding.Show();
+        onboarding.Activate();
+    }
+
+    /// <summary>Opens %AppData%\MonitorWellness\ in Explorer — closes the gap where a user filing a bug report had to be told the exact path and find it manually (TECHNICAL_UX_REVIEW.md §7.2).</summary>
+    private static void OpenLogsFolder()
+    {
+        string folder = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MonitorWellness");
+        System.IO.Directory.CreateDirectory(folder); // in case nothing has been logged/saved yet
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"OpenLogsFolder failed: {ex.Message}");
         }
     }
 
@@ -196,10 +330,88 @@ public partial class App : Application
     {
         DebugLog.Write("Settings saved from settings window — rebuilding hotkey");
         RebuildHotkey();
+        RebuildBreakReminderTimer();
         // Deliberately not calling RunScheduleTick() here: the settings window's own preview
         // already has the correct saved values on screen right now (that's the whole point
         // of previewing before Save), and the window is about to close anyway, which reapplies
         // the schedule fresh from the just-saved settings.
+    }
+
+    /// <summary>
+    /// Opt-in 20-20-20 reminder (AppSettings.BreakReminderEnabled) — the one eye-strain
+    /// intervention this app's own EVALUATION.md notes actually has ergonomics backing
+    /// (unlike blue-light filtering itself, per the AAO position cited there), previously
+    /// entirely absent from the app. Called at startup and again after Settings saves, since
+    /// the interval or on/off state may have just changed.
+    /// </summary>
+    private void RebuildBreakReminderTimer()
+    {
+        _breakReminderTimer?.Stop();
+        _breakReminderTimer = null;
+
+        if (!_settings.BreakReminderEnabled)
+            return;
+
+        _breakReminderTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Math.Max(1, _settings.BreakReminderIntervalMinutes)) };
+        _breakReminderTimer.Tick += (_, _) =>
+        {
+            // Skip while migraine mode is active -- someone already dealing with that doesn't
+            // need an unrelated interruption layered on top. The timer keeps running on its
+            // normal interval rather than resetting, so it resumes nudging once migraine mode
+            // ends rather than needing a full interval to elapse again.
+            if (_migraine?.IsActive != true)
+            {
+                _trayIcon?.ShowBalloonTip(
+                    8_000,
+                    "Monitor Wellness",
+                    "Time for a break — look at something about 20 feet away for 20 seconds (the 20-20-20 rule).",
+                    ToolTipIcon.Info);
+            }
+        };
+        _breakReminderTimer.Start();
+    }
+
+    /// <summary>
+    /// Toggles migraine mode and gives feedback — shared by both the global hotkey and the
+    /// tray icon's single-click shortcut, since both are meant to be equally fast emergency
+    /// activation paths. A visual confirmation matters specifically here: this is most likely
+    /// to be used mid-aura, when vision may already be compromised, so relying on noticing the
+    /// screen change alone is less reliable than it should be. Sound is opt-in, not default —
+    /// see AppSettings.PlaySoundOnMigraineToggle for why.
+    /// </summary>
+    private void ToggleMigraineModeWithFeedback()
+    {
+        bool wasActive = _migraine?.IsActive == true;
+        _migraine?.Toggle();
+
+        bool nowActive = !wasActive;
+        _trayIcon?.ShowBalloonTip(
+            4_000,
+            "Monitor Wellness",
+            nowActive ? "Migraine Mode ON" : "Migraine Mode OFF — fading back to normal",
+            ToolTipIcon.None);
+
+        if (_settings.PlaySoundOnMigraineToggle)
+        {
+            try { (nowActive ? System.Media.SystemSounds.Exclamation : System.Media.SystemSounds.Asterisk).Play(); }
+            catch (Exception ex) { DebugLog.Write($"PlaySoundOnMigraineToggle failed: {ex.Message}"); }
+        }
+    }
+
+    /// <summary>
+    /// Shows the "how helpful was that?" prompt (AppSettings.PromptForMigraineRating) — kept
+    /// here rather than in MigraineModeController so that class stays free of a WPF window
+    /// dependency it doesn't otherwise have; only appends a history event if the user actually
+    /// answers (a skipped/auto-dismissed prompt leaves no trace).
+    /// </summary>
+    private void ShowMigraineRatingPrompt()
+    {
+        var window = new MigraineRatingWindow(rating =>
+        {
+            if (rating.HasValue)
+                HistoryStore.Append(new HistoryEvent(DateTime.UtcNow, "MigraineRating", null, null, rating));
+        });
+        window.Show();
     }
 
     /// <summary>Disposes any existing hotkey and registers one from the current settings. Called at startup and again after the settings window saves a rebind.</summary>
@@ -211,25 +423,7 @@ public partial class App : Application
         _hotkey.Pressed += () =>
         {
             DebugLog.Write("Global hotkey pressed: toggling migraine mode");
-            bool wasActive = _migraine?.IsActive == true;
-            _migraine?.Toggle();
-
-            // A visual confirmation matters specifically here: the hotkey is the path most
-            // likely to be used mid-aura, when vision may already be compromised, so relying
-            // on noticing the screen change alone is less reliable than it should be. Sound
-            // is opt-in, not default — see AppSettings.PlaySoundOnMigraineToggle for why.
-            bool nowActive = !wasActive;
-            _trayIcon?.ShowBalloonTip(
-                4_000,
-                "Monitor Wellness",
-                nowActive ? "Migraine Mode ON" : "Migraine Mode OFF — fading back to normal",
-                ToolTipIcon.None);
-
-            if (_settings.PlaySoundOnMigraineToggle)
-            {
-                try { (nowActive ? System.Media.SystemSounds.Exclamation : System.Media.SystemSounds.Asterisk).Play(); }
-                catch (Exception ex) { DebugLog.Write($"PlaySoundOnMigraineToggle failed: {ex.Message}"); }
-            }
+            ToggleMigraineModeWithFeedback();
         };
 
         if (!_hotkey.IsRegistered && _trayIcon is not null)
@@ -272,6 +466,16 @@ public partial class App : Application
     {
         if (e.Mode != PowerModes.Resume)
             return;
+
+        // SystemEvents isn't guaranteed to raise on the UI thread (see the identical guard in
+        // OverlayController/GammaControllerManager) — everything this handler touches
+        // (gamma controllers, migraine state, the overlay via RunScheduleTick) is owned by
+        // this app's single Dispatcher thread.
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnPowerModeChanged(sender, e));
+            return;
+        }
 
         DebugLog.Write("System resumed from sleep — reapplying current state");
         _gammaManager?.ReapplyAfterWake();
@@ -319,6 +523,21 @@ public partial class App : Application
         }
         double globalBrightness = Lerp(nightBrightness, _settings.DeepNightBrightness, deepNightFactor);
 
+        if (_settings.MatchAmbientLight)
+        {
+            // Scaled by dayFactor so this has zero effect at night regardless of room
+            // lighting — a lamp-lit bedroom shouldn't fight the night schedule. Any failure to
+            // read the sensor (including simply not having one, the common case) leaves
+            // globalBrightness untouched.
+            double? lux = AmbientLightSensor.TryGetCurrentLux();
+            if (lux.HasValue)
+            {
+                double dayFactor = ScheduleCurve.GetDayFactor(elevation);
+                double adjustment = AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor;
+                globalBrightness = Math.Clamp(globalBrightness + adjustment, 0.0, 1.0);
+            }
+        }
+
         var dimColor = LerpColor(
             System.Windows.Media.Colors.Black,
             ParseColor(_settings.DeepNightOverlayColorHex),
@@ -352,6 +571,9 @@ public partial class App : Application
     {
         _pauseUntilUtc = DateTime.UtcNow + duration;
         DebugLog.Write($"Schedule paused until {_pauseUntilUtc:yyyy-MM-dd HH:mm} UTC");
+
+        if (_settings.HistoryTrackingEnabled)
+            HistoryStore.Append(new HistoryEvent(DateTime.UtcNow, "SchedulePaused", null, (int)duration.TotalSeconds));
 
         _pauseTimer?.Stop();
         _pauseTimer = new DispatcherTimer { Interval = duration };
@@ -440,12 +662,14 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        _breakReminderTimer?.Stop();
         _hotkey?.Dispose();
         _gammaManager?.Dispose();
         _overlay?.Dispose();
         _trayIcon?.Dispose();
         _iconOn?.Dispose();
         _iconOff?.Dispose();
+        _singleInstanceGuard?.Dispose();
         base.OnExit(e);
     }
 }
