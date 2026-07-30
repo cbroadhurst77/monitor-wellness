@@ -21,6 +21,7 @@ namespace MonitorWellness;
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
+    private readonly GammaControllerManager _gammaManager;
     private readonly OverlayController _overlay;
     private readonly Action _onSaved;
     private readonly GeocodingService _geocoding = new();
@@ -32,10 +33,11 @@ public partial class SettingsWindow : Window
     private uint _pendingHotkeyKey;
     private bool _loaded;
 
-    public SettingsWindow(AppSettings settings, OverlayController overlay, Action onSaved)
+    public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved)
     {
         InitializeComponent();
         _settings = settings;
+        _gammaManager = gammaManager;
         _overlay = overlay;
         _onSaved = onSaved;
 
@@ -46,12 +48,14 @@ public partial class SettingsWindow : Window
     {
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
-        DayKelvinBox.Text = _settings.DayKelvin.ToString(CultureInfo.InvariantCulture);
-        NightKelvinBox.Text = _settings.NightKelvin.ToString(CultureInfo.InvariantCulture);
-        DayBrightnessBox.Text = _settings.DayBrightness.ToString(CultureInfo.InvariantCulture);
-        NightBrightnessBox.Text = _settings.NightBrightness.ToString(CultureInfo.InvariantCulture);
+        DayKelvinSlider.Value = _settings.DayKelvin;
+        NightKelvinSlider.Value = _settings.NightKelvin;
+        DayBrightnessSlider.Value = _settings.DayBrightness;
+        NightBrightnessSlider.Value = _settings.NightBrightness;
         MigraineColorBox.Text = _settings.MigraineOverlayColorHex;
-        MigraineOpacityBox.Text = _settings.MigraineOverlayOpacity.ToString(CultureInfo.InvariantCulture);
+        MigraineOpacitySlider.Value = _settings.MigraineOverlayOpacity;
+        MigraineContrastSlider.Value = _settings.MigraineContrastReduction;
+        MigraineAutoRevertSlider.Value = _settings.MigraineAutoRevertMinutes;
 
         _pendingHotkeyModifiers = _settings.MigraineHotkeyModifiers;
         _pendingHotkeyKey = _settings.MigraineHotkeyKey;
@@ -62,6 +66,9 @@ public partial class SettingsWindow : Window
         LoadWorldMapImage();
         _loaded = true;
         UpdateMapMarker();
+        UpdateSunTimesDisplay();
+        UpdateSliderLabels();
+        PreviewDay(); // something visible on screen the moment the window opens, matching whichever phase was last touched (day, as the default starting point)
     }
 
     private void LoadWorldMapImage()
@@ -105,8 +112,31 @@ public partial class SettingsWindow : Window
 
     private void LatLongBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_loaded)
-            UpdateMapMarker();
+        if (!_loaded) return;
+        UpdateMapMarker();
+        UpdateSunTimesDisplay();
+    }
+
+    private void UpdateSunTimesDisplay()
+    {
+        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat)
+            || !double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon))
+        {
+            SunTimesText.Text = "";
+            return;
+        }
+
+        var today = DateTime.UtcNow;
+        var sunrise = SolarCalculator.FindSunriseUtc(today, lat, lon);
+        var sunset = SolarCalculator.FindSunsetUtc(today, lat, lon);
+
+        SunTimesText.Text = (sunrise, sunset) switch
+        {
+            (null, null) => "No sunrise or sunset today at this location (polar day or night).",
+            (null, not null) => $"Today: no sunrise (polar day), sunset {sunset.Value.ToLocalTime():HH:mm}",
+            (not null, null) => $"Today: sunrise {sunrise.Value.ToLocalTime():HH:mm}, no sunset (polar day)",
+            _ => $"Today: sunrise {sunrise!.Value.ToLocalTime():HH:mm}, sunset {sunset!.Value.ToLocalTime():HH:mm} (local time) — this is what drives the schedule below."
+        };
     }
 
     private void MapContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -143,6 +173,130 @@ public partial class SettingsWindow : Window
         LatitudeBox.Text = result.Latitude.ToString("F4", CultureInfo.InvariantCulture);
         LongitudeBox.Text = result.Longitude.ToString("F4", CultureInfo.InvariantCulture);
         LocationSearchStatus.Text = $"Found: {result.DisplayName}";
+    }
+
+    // --- Live preview -------------------------------------------------------------------
+    // Dragging any Day/Night/migraine slider applies it directly to the real gamma
+    // ramp/overlay right now, so the effect can be judged before Save commits anything.
+    // App suspends the normal 30s schedule tick for as long as this window is open
+    // (App._settingsPreviewActive) so the two don't fight over the same monitors — see
+    // App.xaml.cs's OpenSettingsWindow/RunScheduleTick. Cancel needs no special revert
+    // logic: closing this window (Save or Cancel) just lets the real schedule resume,
+    // which naturally shows whatever is actually saved.
+
+    private void DaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_loaded) return;
+        UpdateSliderLabels();
+        PreviewDay();
+    }
+
+    private void NightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_loaded) return;
+        UpdateSliderLabels();
+        PreviewNight();
+    }
+
+    private void MigrainePreview_Changed(object sender, EventArgs e)
+    {
+        if (!_loaded) return;
+        UpdateSliderLabels();
+        PreviewMigraine();
+    }
+
+    private void MigraineAutoRevertSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_loaded) UpdateSliderLabels();
+    }
+
+    private void UpdateSliderLabels()
+    {
+        DayKelvinLabel.Text = $"{(int)DayKelvinSlider.Value}K";
+        NightKelvinLabel.Text = $"{(int)NightKelvinSlider.Value}K";
+        DayBrightnessLabel.Text = $"{DayBrightnessSlider.Value:P0}";
+        NightBrightnessLabel.Text = $"{NightBrightnessSlider.Value:P0}";
+        MigraineOpacityLabel.Text = $"{MigraineOpacitySlider.Value:P0}";
+        MigraineContrastLabel.Text = MigraineContrastSlider.Value <= 0
+            ? "None"
+            : $"{MigraineContrastSlider.Value:P0}";
+        MigraineAutoRevertLabel.Text = MigraineAutoRevertSlider.Value <= 0
+            ? "Never (stays on until you turn it off)"
+            : $"{(int)MigraineAutoRevertSlider.Value} minutes";
+
+        bool dayUnsafe = !ColorTemperature.IsSafeForGammaRamp((int)DayKelvinSlider.Value);
+        bool nightUnsafe = !ColorTemperature.IsSafeForGammaRamp((int)NightKelvinSlider.Value);
+        if (dayUnsafe || nightUnsafe)
+        {
+            string which = dayUnsafe && nightUnsafe ? "Day and Night" : dayUnsafe ? "Day" : "Night";
+            KelvinSafetyWarning.Text = $"{which} color temp is too warm for this hardware's gamma ramp — confirmed directly, values below roughly 3300K are silently rejected. The preview below won't reflect this until you pick a higher value.";
+            KelvinSafetyWarning.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            KelvinSafetyWarning.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void PreviewDay() => ApplySchedulePreview((int)DayKelvinSlider.Value, DayBrightnessSlider.Value);
+
+    private void PreviewNight() => ApplySchedulePreview((int)NightKelvinSlider.Value, NightBrightnessSlider.Value);
+
+    private void ApplySchedulePreview(int kelvin, double globalBrightness)
+    {
+        foreach (var controller in _gammaManager.Controllers)
+            controller.ApplyColorTemperature(kelvin); // silently no-ops on this monitor if the value is unsafe — see KelvinSafetyWarning
+
+        var brightnessByDevice = BuildBrightnessByDeviceForPreview(globalBrightness);
+        _overlay.ApplyDim(brightnessByDevice, System.Windows.Media.Colors.Black);
+    }
+
+    private void PreviewMigraine()
+    {
+        System.Windows.Media.Color color;
+        try
+        {
+            color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(MigraineColorBox.Text.Trim())!;
+        }
+        catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidOperationException)
+        {
+            return; // invalid hex mid-typing — just skip preview until it's valid again, Save will still validate properly
+        }
+
+        double opacity = MigraineOpacitySlider.Value;
+        var byDevice = _overlay.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
+        _overlay.Apply(byDevice);
+
+        foreach (var controller in _gammaManager.Controllers)
+            controller.ApplyColorTemperatureWithContrast(_settings.NightKelvin, MigraineContrastSlider.Value);
+    }
+
+    /// <summary>
+    /// Mirrors App.ComputeScheduleTarget's per-monitor multiplier logic using this window's
+    /// own live (unsaved) exclude/multiplier controls, so the preview matches what Save would
+    /// actually produce. Parse failures fall back to "no effect from this monitor's override"
+    /// rather than throwing mid-drag.
+    /// </summary>
+    private Dictionary<string, double> BuildBrightnessByDeviceForPreview(double globalBrightness)
+    {
+        var result = new Dictionary<string, double>();
+        foreach (var deviceName in _overlay.DeviceNames)
+        {
+            bool excluded = _excludeBoxes.TryGetValue(deviceName, out var box) && box.IsChecked == true;
+            if (excluded)
+            {
+                result[deviceName] = 1.0;
+                continue;
+            }
+
+            double multiplier = 1.0;
+            if (_multiplierBoxes.TryGetValue(deviceName, out var multiplierBox))
+                double.TryParse(multiplierBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out multiplier);
+
+            double dimAmount = (1.0 - globalBrightness) * multiplier;
+            result[deviceName] = Math.Clamp(1.0 - dimAmount, 0.0, 1.0);
+        }
+        return result;
     }
 
     private void BuildMonitorRows()
@@ -260,16 +414,8 @@ public partial class SettingsWindow : Window
             error = "Longitude must be a number between -180 and 180.";
             return false;
         }
-        if (!int.TryParse(DayKelvinBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dayKelvin))
-        {
-            error = "Day color temp must be a whole number.";
-            return false;
-        }
-        if (!int.TryParse(NightKelvinBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int nightKelvin))
-        {
-            error = "Night color temp must be a whole number.";
-            return false;
-        }
+        int dayKelvin = (int)DayKelvinSlider.Value;
+        int nightKelvin = (int)NightKelvinSlider.Value;
         if (!ColorTemperature.IsSafeForGammaRamp(dayKelvin))
         {
             error = $"Day color temp of {dayKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value.";
@@ -280,21 +426,11 @@ public partial class SettingsWindow : Window
             error = $"Night color temp of {nightKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value (3400K is the safe floor found during testing).";
             return false;
         }
-        if (!double.TryParse(DayBrightnessBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double dayBrightness) || dayBrightness < 0 || dayBrightness > 1)
-        {
-            error = "Day brightness must be between 0 and 1.";
-            return false;
-        }
-        if (!double.TryParse(NightBrightnessBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double nightBrightness) || nightBrightness < 0 || nightBrightness > 1)
-        {
-            error = "Night brightness must be between 0 and 1.";
-            return false;
-        }
-        if (!double.TryParse(MigraineOpacityBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double migraineOpacity) || migraineOpacity < 0 || migraineOpacity > 1)
-        {
-            error = "Migraine overlay opacity must be between 0 and 1.";
-            return false;
-        }
+        // Brightness/opacity sliders are range-locked to 0-1 in XAML (Minimum/Maximum), so
+        // unlike the text boxes they replaced, there's nothing to validate here.
+        double dayBrightness = DayBrightnessSlider.Value;
+        double nightBrightness = NightBrightnessSlider.Value;
+        double migraineOpacity = MigraineOpacitySlider.Value;
 
         string migraineColorHex = MigraineColorBox.Text.Trim();
         try
@@ -327,6 +463,8 @@ public partial class SettingsWindow : Window
         _settings.NightBrightness = nightBrightness;
         _settings.MigraineOverlayColorHex = migraineColorHex;
         _settings.MigraineOverlayOpacity = migraineOpacity;
+        _settings.MigraineContrastReduction = MigraineContrastSlider.Value;
+        _settings.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
         _settings.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;

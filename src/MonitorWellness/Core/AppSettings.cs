@@ -69,6 +69,15 @@ public sealed class AppSettings
     public double MigraineOverlayOpacity { get; set; } = 0.72;
 
     /// <summary>
+    /// Contrast reduction (0.0-0.3) applied via gamma ramp during migraine mode — a distinct
+    /// photophobia comfort lever from color/brightness. Confirmed directly on real hardware
+    /// (tools/GammaCheck) that raising the ramp floor this way is safe up to 0.30 even at this
+    /// app's warmest color temp, as long as it's not combined with gamma-level brightness
+    /// scaling (which this app doesn't do anyway — dimming is always the overlay's job).
+    /// </summary>
+    public double MigraineContrastReduction { get; set; } = 0.15;
+
+    /// <summary>
     /// GlobalHotkey modifier flags (MOD_CONTROL|MOD_ALT|MOD_SHIFT etc.) for toggling migraine
     /// mode. Default is Ctrl+Alt+Shift+M rather than the old prototype's Ctrl+Alt+M, since
     /// that combination was found to conflict with another app during Week 3 testing.
@@ -77,4 +86,12 @@ public sealed class AppSettings
 
     /// <summary>Win32 virtual-key code for the migraine hotkey. Default 0x4D ('M').</summary>
     public uint MigraineHotkeyKey { get; set; } = 0x4D;
+
+    /// <summary>
+    /// If greater than 0, migraine mode automatically fades back to normal after this many
+    /// minutes — a safety net for forgetting to turn it off. Defaults to disabled (0): a real
+    /// migraine can last many hours, and auto-reverting on a fixed timer could be actively
+    /// unwelcome if someone's genuinely still mid-migraine when it fires. Opt-in, not default-on.
+    /// </summary>
+    public int MigraineAutoRevertMinutes { get; set; } = 0;
 }

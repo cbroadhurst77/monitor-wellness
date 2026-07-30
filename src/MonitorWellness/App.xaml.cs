@@ -32,6 +32,9 @@ public partial class App : Application
     private OverlayController? _overlay;
     private MigraineModeController? _migraine;
     private GlobalHotkey? _hotkey;
+    private ToolStripMenuItem? _resumeScheduleMenuItem;
+    private DispatcherTimer? _pauseTimer;
+    private DateTime? _pauseUntilUtc;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -83,6 +86,38 @@ public partial class App : Application
             }
         });
         menu.Items.Add(new ToolStripSeparator());
+        var pauseMenu = new ToolStripMenuItem("Pause Schedule");
+        pauseMenu.DropDownItems.Add("30 minutes", null, (_, _) => PauseScheduleFor(TimeSpan.FromMinutes(30)));
+        pauseMenu.DropDownItems.Add("1 hour", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(1)));
+        pauseMenu.DropDownItems.Add("2 hours", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(2)));
+        pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
+            PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
+        menu.Items.Add(pauseMenu);
+        _resumeScheduleMenuItem = new ToolStripMenuItem("Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
+        menu.Items.Add(_resumeScheduleMenuItem);
+        menu.Items.Add(new ToolStripSeparator());
+        var autoStartItem = new ToolStripMenuItem("Start with Windows") { Checked = AutoStartManager.IsRegistered() };
+        autoStartItem.Click += (_, _) =>
+        {
+            bool wasOn = autoStartItem.Checked;
+            bool success = wasOn ? AutoStartManager.Unregister() : AutoStartManager.Register();
+            if (success)
+            {
+                autoStartItem.Checked = !wasOn;
+            }
+            else if (_trayIcon is not null)
+            {
+                _trayIcon.ShowBalloonTip(
+                    10_000,
+                    "Monitor Wellness",
+                    wasOn
+                        ? "Couldn't remove the auto-start entry — the UAC prompt may have been cancelled."
+                        : "Couldn't set up auto-start — this needs administrator approval (UAC prompt), which may have been cancelled or blocked by IT policy.",
+                    ToolTipIcon.Warning);
+            }
+        };
+        menu.Items.Add(autoStartItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Settings...", null, (_, _) => OpenSettingsWindow());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Shutdown());
@@ -97,6 +132,17 @@ public partial class App : Application
 
     private SettingsWindow? _settingsWindow;
 
+    /// <summary>
+    /// True while the settings window is open. The normal schedule tick is suspended for the
+    /// same reason migraine mode suspends it — the settings window drives live previews
+    /// directly to the gamma ramp/overlay while sliders are being dragged, and a 30s tick
+    /// firing mid-drag would fight with that. Cleared (and the schedule immediately
+    /// reapplied) the moment the window closes, whether via Save or Cancel — Cancel doesn't
+    /// need to explicitly "revert" anything, it just stops overriding and lets the real
+    /// schedule take back over.
+    /// </summary>
+    private bool _settingsPreviewActive;
+
     private void OpenSettingsWindow()
     {
         if (_settingsWindow is not null)
@@ -105,17 +151,26 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_settings, _overlay!, OnSettingsSaved);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsPreviewActive = true;
+        _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved);
+        _settingsWindow.Closed += (_, _) =>
+        {
+            _settingsWindow = null;
+            _settingsPreviewActive = false;
+            RunScheduleTick(); // clears any live preview left on screen the instant the window closes
+        };
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
 
     private void OnSettingsSaved()
     {
-        DebugLog.Write("Settings saved from settings window — rebuilding hotkey and reapplying schedule");
+        DebugLog.Write("Settings saved from settings window — rebuilding hotkey");
         RebuildHotkey();
-        RunScheduleTick();
+        // Deliberately not calling RunScheduleTick() here: the settings window's own preview
+        // already has the correct saved values on screen right now (that's the whole point
+        // of previewing before Save), and the window is about to close anyway, which reapplies
+        // the schedule fresh from the just-saved settings.
     }
 
     /// <summary>Disposes any existing hotkey and registers one from the current settings. Called at startup and again after the settings window saves a rebind.</summary>
@@ -162,7 +217,9 @@ public partial class App : Application
 
         _trayIcon.Icon = _migraine.IsActive ? _iconOn : _iconOff;
         _trayIcon.Text = _migraine.IsActive
-            ? "Monitor Wellness — Migraine Mode ON"
+            ? _migraine.AutoRevertAtUtc is DateTime revertAt
+                ? $"Monitor Wellness — Migraine Mode ON (auto-off {revertAt.ToLocalTime():HH:mm})"
+                : "Monitor Wellness — Migraine Mode ON"
             : _migraine.IsFadingOut
                 ? "Monitor Wellness — fading back to normal"
                 : "Monitor Wellness";
@@ -207,10 +264,46 @@ public partial class App : Application
         return (kelvin, brightnessByDevice, dimColor);
     }
 
+    /// <summary>
+    /// Suspends the normal schedule for the given duration — e.g. for color-sensitive work
+    /// (photo/video editing) that needs a neutral screen temporarily. Deliberately does not
+    /// touch the gamma ramp/overlay itself; it just stops the tick from updating them, so
+    /// whatever was already on screen stays there (a genuinely neutral pause, not a forced
+    /// reset to some other state).
+    /// </summary>
+    private void PauseScheduleFor(TimeSpan duration)
+    {
+        _pauseUntilUtc = DateTime.UtcNow + duration;
+        DebugLog.Write($"Schedule paused until {_pauseUntilUtc:yyyy-MM-dd HH:mm} UTC");
+
+        _pauseTimer?.Stop();
+        _pauseTimer = new DispatcherTimer { Interval = duration };
+        _pauseTimer.Tick += (_, _) => ResumeSchedule();
+        _pauseTimer.Start();
+
+        if (_resumeScheduleMenuItem is not null)
+            _resumeScheduleMenuItem.Enabled = true;
+        if (_trayIcon is not null)
+            _trayIcon.Text = $"Monitor Wellness — paused until {_pauseUntilUtc.Value.ToLocalTime():HH:mm}";
+    }
+
+    private void ResumeSchedule()
+    {
+        _pauseTimer?.Stop();
+        _pauseTimer = null;
+        _pauseUntilUtc = null;
+        DebugLog.Write("Schedule resumed");
+
+        if (_resumeScheduleMenuItem is not null)
+            _resumeScheduleMenuItem.Enabled = false;
+
+        RunScheduleTick();
+    }
+
     private void RunScheduleTick()
     {
-        if (_migraine?.SuspendsNormalSchedule == true)
-            return; // migraine mode owns the gamma ramp + overlay right now
+        if (_migraine?.SuspendsNormalSchedule == true || _settingsPreviewActive || _pauseUntilUtc.HasValue)
+            return; // migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now
 
         var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget();
 

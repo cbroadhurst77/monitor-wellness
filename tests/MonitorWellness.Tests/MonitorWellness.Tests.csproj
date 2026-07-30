@@ -27,6 +27,8 @@
     <Compile Include="..\..\src\MonitorWellness\Core\ColorTemperature.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\GeocodingService.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\DebugLog.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\SchedulePause.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AutoStartManager.cs" />
   </ItemGroup>
 
 </Project>

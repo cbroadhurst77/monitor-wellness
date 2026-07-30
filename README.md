@@ -20,14 +20,23 @@ local in `%AppData%\MonitorWellness\`.
 ## Features
 
 - Smooth day/night color temperature and brightness scheduling based on your location's
-  actual sunrise/sunset (not a fixed clock time)
+  actual sunrise/sunset (not a fixed clock time), with today's sunrise/sunset times shown
+  right in the settings window
+- Find your location by searching a town/postcode, clicking a world map, or entering exact
+  coordinates — whichever's easiest
 - Per-monitor overrides — exclude a monitor entirely, or scale how much it dims relative to
   the others
-- **Migraine mode**: instant activation (a muted green tint + heavy dim, no fade-in delay —
-  green rather than the warm tint you might expect, based on research on light and migraine
-  photophobia; see [EVALUATION.md](EVALUATION.md)) via a global hotkey or the tray menu, with
-  a gradual fade back to normal on deactivation
-- Settings window for location, schedule bounds, migraine appearance, and hotkey rebinding
+- **Migraine mode**: instant activation (a muted green tint, heavy dim, and contrast
+  reduction, no fade-in delay — green rather than the warm tint you might expect, based on
+  research on light and migraine photophobia; see [EVALUATION.md](EVALUATION.md)) via a
+  global hotkey or the tray menu, with a gradual fade back to normal on deactivation, and an
+  optional auto-off timer (disabled by default — a real migraine can last hours)
+- **Pause the schedule** for 30 min / 1 hour / 2 hours / until tomorrow — useful for
+  color-sensitive work like photo/video editing
+- Settings window with live sliders — color/brightness/contrast changes preview directly on
+  your real screens before you commit to saving them
+- **Portable**: run the downloaded exe directly with no installer, and optionally enable
+  "Start with Windows" from the tray menu — no admin install required to try it
 - "Identify Monitors" — flashes each display's internal name on-screen, since Windows'
   on-screen monitor numbers don't reliably match device enumeration order
 
@@ -58,6 +67,11 @@ dotnet publish src/MonitorWellness/MonitorWellness.csproj -c Release -r win-x64 
   --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
   -o publish
 ```
+
+That output is fully portable — copy `MonitorWellness.exe` anywhere and run it directly, no
+installer or admin rights needed. Use the "Start with Windows" tray menu item afterward if you
+want it to launch automatically (that one step does need administrator approval, since it
+registers a Task Scheduler entry — everything else about running the app doesn't).
 
 ## Building the installer
 

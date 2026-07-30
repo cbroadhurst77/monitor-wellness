@@ -28,6 +28,22 @@ public static class ColorTemperature
         return Math.Min(r, Math.Min(g, b)) >= MinSafeChannelFactor;
     }
 
+    /// <summary>
+    /// Maps a normalized ramp input (0.0-1.0) to a contrast-reduced output, raising the black
+    /// floor toward the white ceiling by <paramref name="contrastReduction"/> while leaving
+    /// the ceiling itself untouched. 0 = no reduction (identity), higher = flatter/lower
+    /// contrast. Confirmed directly against real hardware (tools/GammaCheck) that this is a
+    /// genuinely different safety mechanism than MinSafeChannelFactor above: raising the
+    /// floor alone stays accepted by the driver up to at least 0.30, even at 3400K where the
+    /// blue channel's resulting floor factor drops as low as ~0.05 — nowhere close to the
+    /// ~0.5 boundary that governs uniform brightness scaling. The two must not be combined in
+    /// the same gamma call, though (a raised floor plus a scaled-down ceiling together were
+    /// confirmed to fail) — this app's architecture already keeps them separate: gamma only
+    /// ever carries color temperature and (now) contrast, real dimming is the overlay's job.
+    /// </summary>
+    public static double ApplyContrastCompression(double normalizedValue, double contrastReduction)
+        => contrastReduction + (1.0 - contrastReduction) * normalizedValue;
+
     public static (double R, double G, double B) KelvinToRgbFactors(int kelvin)
     {
         double temp = Math.Clamp(kelvin, 1000, 40000) / 100.0;

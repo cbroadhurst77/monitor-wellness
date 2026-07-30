@@ -30,6 +30,12 @@ public sealed class MigraineModeController
     private Color _fadeFromColor;
     private double _fadeFromOpacity;
     private int _fadeFromKelvin;
+    private double _fadeFromContrast;
+
+    private DispatcherTimer? _autoRevertTimer;
+
+    /// <summary>UTC time the current activation will auto-revert at, or null if auto-revert is off or migraine mode isn't active.</summary>
+    public DateTime? AutoRevertAtUtc { get; private set; }
 
     public bool IsActive { get; private set; }
     public bool IsFadingOut { get; private set; }
@@ -59,12 +65,32 @@ public sealed class MigraineModeController
         IsActive = true;
 
         foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperature(_settings.NightKelvin);
+            controller.ApplyColorTemperatureWithContrast(_settings.NightKelvin, _settings.MigraineContrastReduction);
 
         Color color = ParseColor(_settings.MigraineOverlayColorHex);
         double opacity = _settings.MigraineOverlayOpacity;
         var byDevice = _overlay.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
         _overlay.Apply(byDevice);
+
+        _autoRevertTimer?.Stop();
+        if (_settings.MigraineAutoRevertMinutes > 0)
+        {
+            var duration = TimeSpan.FromMinutes(_settings.MigraineAutoRevertMinutes);
+            AutoRevertAtUtc = DateTime.UtcNow + duration;
+            DebugLog.Write($"MigraineMode: auto-revert armed for {AutoRevertAtUtc:HH:mm} UTC");
+
+            _autoRevertTimer = new DispatcherTimer { Interval = duration };
+            _autoRevertTimer.Tick += (_, _) =>
+            {
+                DebugLog.Write("MigraineMode: auto-revert timer fired");
+                Deactivate();
+            };
+            _autoRevertTimer.Start();
+        }
+        else
+        {
+            AutoRevertAtUtc = null;
+        }
 
         StateChanged?.Invoke();
     }
@@ -75,9 +101,14 @@ public sealed class MigraineModeController
             return;
 
         DebugLog.Write("MigraineMode: Deactivate (starting fade)");
+        _autoRevertTimer?.Stop();
+        _autoRevertTimer = null;
+        AutoRevertAtUtc = null;
+
         _fadeFromColor = ParseColor(_settings.MigraineOverlayColorHex);
         _fadeFromOpacity = _settings.MigraineOverlayOpacity;
         _fadeFromKelvin = _settings.NightKelvin;
+        _fadeFromContrast = _settings.MigraineContrastReduction;
 
         IsActive = false;
         IsFadingOut = true;
@@ -102,8 +133,11 @@ public sealed class MigraineModeController
         var (targetKelvin, targetBrightnessByDevice, targetDimColor) = _computeScheduleTarget();
 
         int kelvin = (int)Math.Round(Lerp(_fadeFromKelvin, targetKelvin, t));
+        // Normal schedule never uses contrast reduction, so the fade target is always 0 —
+        // fading contrast back to identity at the same pace as everything else.
+        double contrast = Lerp(_fadeFromContrast, 0.0, t);
         foreach (var controller in _gammaManager.Controllers)
-            controller.ApplyColorTemperature(kelvin);
+            controller.ApplyColorTemperatureWithContrast(kelvin, contrast);
 
         var byDevice = new Dictionary<string, (Color, double)>();
         foreach (var deviceName in _overlay.DeviceNames)

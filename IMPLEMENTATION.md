@@ -471,6 +471,141 @@ the coordinates for.
 Both features verified live: geocoding search and map click both correctly updated the
 schedule's location.
 
+---
+
+## Week 7 — Slider-based settings with live preview
+
+Replaced the Day/Night Kelvin, Day/Night brightness, and migraine opacity text boxes with
+sliders that apply directly to the real gamma ramp/overlay as they're dragged — the point
+being to let a value be *judged on screen* before committing to it, not just typed and hoped
+for. Save persists whatever the sliders currently show; Cancel needs no explicit revert logic
+at all, since closing the window (either way) just stops the preview from overriding the
+normal schedule tick, which then naturally displays whatever's actually saved.
+
+Mechanically: `App._settingsPreviewActive` suspends `RunScheduleTick()` for as long as the
+settings window is open (mirroring how migraine mode already suspends it), and the window's
+`Closed` handler clears that flag and calls `RunScheduleTick()` immediately so nothing stays
+stuck showing a preview after the window goes away. `MigraineModeController`'s fade-out was
+updated to fade toward whatever the *live* schedule target's dim color actually is rather
+than a hardcoded black, since that could now be a warm brown (deep night) depending on when
+the fade happens to run.
+
+A live "this Kelvin value won't work on this hardware" warning was added to the Day/Night
+sliders, reusing `ColorTemperature.IsSafeForGammaRamp` — dragging into unsafe territory during
+preview just silently doesn't change anything on screen without this, which would otherwise
+look like a bug rather than a hardware limit.
+
+Verified live: dragging sliders visibly changes the screen in real time, and Cancel correctly
+leaves everything as it was before opening Settings.
+
+## Week 8 — Five feature additions from a broader improvement brainstorm
+
+After a wider "what would make this all-singing-and-dancing" discussion, implemented five of
+the higher-value items, each verified against real hardware/behavior before considering it
+done, consistent with this project's testing discipline throughout. Automated test count grew
+from 24 to 40 in this pass.
+
+### 1. Sunrise/sunset time display
+
+Added `SolarCalculator.FindSunriseUtc`/`FindSunsetUtc` — a coarse 5-minute scan across the day
+to bracket the crossing of the standard -0.833° sunrise/sunset threshold (accounting for solar
+radius + atmospheric refraction), then bisected for sub-second precision. Displayed in the
+settings window, recomputed live as location changes (via map click, search, or manual entry).
+Tested against plausible London late-July ranges and a polar-location edge case (should return
+null for "no sunset," not throw or loop forever) — `tests/SunriseSunsetTests.cs`.
+
+### 2. Pause schedule for N hours
+
+Tray menu submenu (30 min / 1 hour / 2 hours / Until tomorrow) plus a "Resume Schedule" item
+enabled only while paused. Deliberately does *not* touch the gamma ramp/overlay when pausing —
+whatever's already on screen just stays there untouched, which is the actually-useful behavior
+for its intended use case (temporarily neutral screen for color-sensitive work). "Until
+tomorrow" resolves to 08:00 the next calendar day regardless of current time — simpler and
+more predictable than trying to guess a wake time; extracted as `SchedulePause
+.ComputeUntilTomorrowLocal` specifically so this one non-trivial calculation has test coverage
+(`tests/SchedulePauseTests.cs`) rather than being buried in App.xaml.cs untested.
+
+### 3. Migraine mode auto-revert timeout
+
+`AppSettings.MigraineAutoRevertMinutes`, default **0 (disabled)** — a real migraine can last
+many hours, so auto-reverting on a fixed timer by default could be actively unwelcome if
+someone's genuinely still mid-migraine when it fires. Opt-in via a settings slider (0-240
+min). The timer itself (armed on `Activate()`, cancelled on manual `Deactivate()`) has no
+automated test — it's Win32/WPF-timer-dependent, consistent with the known gap EVALUATION.md
+already notes for that layer.
+
+### 4. Portable mode: in-app "Start with Windows" toggle
+
+The bigger point of this one: it directly solves the exact problem hit earlier this session
+(IT-managed machine blocking installer execution). `Core/AutoStartManager.cs` lets the running
+exe register/unregister its own Task Scheduler auto-start entry from a tray menu toggle — no
+installer required, works from a portable, unzipped copy of the self-contained publish output.
+
+Registering an onlogon-triggered task needs elevation (confirmed directly during Week 4:
+`schtasks /create /sc onlogon` fails under a standard token). Implemented via
+`Process.Start` with `Verb = "runas"` on just the `schtasks.exe` call, not the whole app.
+**Finding**: on this specific machine, that elevation happened with no visible UAC prompt at
+all — the call simply succeeded (confirmed both by the logged exit code and independently via
+`schtasks /query` showing a correctly-configured task, "Run As User: chris", "At logon time").
+This is consistent with the deny-only Administrators token and other managed-machine
+behaviors already noted in IMPLEMENTATION.md/EVALUATION.md — some corporate UAC policies
+auto-elevate admin accounts without prompting rather than disabling UAC outright. **On a
+machine with normal UAC prompting behavior, a real consent dialog should appear** — this
+hasn't been observed directly since this machine doesn't produce one. Removal (`Unregister`)
+verified working the same way, confirmed via `schtasks /query` returning "not found" afterward.
+Argument-string construction is unit tested (`tests/AutoStartManagerTests.cs`); the actual
+elevated process launch is not (same Win32-dependent-layer gap as above).
+
+### 5. Contrast reduction for migraine mode
+
+The one item here that needed real investigation before writing any production code, per this
+project's established discipline of not assuming hardware behavior. Built a throwaway
+`tools/GammaCheck` harness applying a floor-raised ("contrast-compressed") gamma ramp —
+`output = (contrastReduction + (1 - contrastReduction) * normalizedInput) * ceiling`, i.e.
+raising the black point toward the white point while leaving the ceiling untouched — and
+tested it directly against this hardware.
+
+**Finding**: this is a genuinely different safety mechanism than the factor-of-2 rule
+characterized in Week 1. Contrast reduction *alone* (no brightness-assist scaling in the same
+call) stays accepted by the driver up to at least 30%, even at 3400K where the resulting blue
+channel floor factor drops to ~0.05 — nowhere near the ~0.5 boundary that governs uniform
+brightness scaling. Combining it with brightness-assist scaling in the same gamma call *does*
+reproduce the old rejection failure — but this app's architecture already keeps brightness
+dimming entirely on the overlay layer, so gamma only ever needs to carry color temperature and
+now contrast together, never combined with a scaled-down ceiling.
+
+Implemented as `GammaRampController.ApplyColorTemperatureWithContrast` (deliberately has no
+brightness parameter at all, enforcing the separation at the API level) and
+`ColorTemperature.ApplyContrastCompression` (the pure formula, unit tested). Wired into
+`MigraineModeController` (new `AppSettings.MigraineContrastReduction`, default 0.15, fades
+back to 0 during deactivation alongside everything else) and the settings window (slider,
+0-30%, live preview).
+
+### Outstanding from the broader improvement brainstorm
+
+The Week 8 discussion surfaced about a dozen candidate improvements; five were built this
+pass (above). Explicitly **not** done, so this doesn't quietly read as "the list is finished":
+
+- **Per-monitor color temp override** — currently only the dim *multiplier* is per-monitor;
+  Kelvin is still global across all monitors.
+- **Bedtime-aware deep night** — the deep-night phase (Week 5) is purely solar-elevation-
+  driven; asking for an actual bedtime would let it align with real sleep timing instead of
+  astronomical darkness.
+- **Migraine intensity presets** (mild/severe) — currently one configured migraine
+  appearance, not a quick pick between a couple of pre-tuned levels.
+- **Confirmation feedback on hotkey trigger** (toast/sound) — useful specifically because
+  migraine mode is most likely to be triggered when vision is already compromised (aura),
+  making a purely visual confirmation less reliable than it should be.
+- **Verify auto-start actually worked after a real reboot** — the new toggle (#4 above)
+  confirms the Task Scheduler entry was created, but nothing checks that it actually fired
+  and the app is running after an actual logon, or warns if not.
+- **Saved profiles**, **first-run onboarding**, **reset-to-defaults button**, **dark mode for
+  the settings window** — straightforward UX polish, not attempted.
+- Already tracked elsewhere, still open: DDC/CI hardware brightness, HDR display handling,
+  ambient light sensor support, auto-update checker, code signing (all in "Deferred to
+  v1.1+" near the top of this file); accessibility — screen reader, high-contrast mode,
+  keyboard-only navigation (tracked in EVALUATION.md, untouched by this pass).
+
 ## Change log
 
 - 2026-07-30: Initial plan created from architecture discussion.
@@ -524,3 +659,15 @@ schedule's location.
   rejected the app's own NightKelvin default). Added town/postcode search (Nominatim) and a
   clickable world map to the settings window for easier location entry, closing the "manual
   lat/long only" limitation without adding automatic IP-based geolocation.
+- 2026-07-30: Week 7. Replaced Day/Night/migraine text-box settings with sliders that preview
+  live on real hardware before Save commits anything; Cancel needs no revert logic since it
+  just lets the normal schedule resume.
+- 2026-07-30: Week 8. Implemented 5 of ~12 items from a broader improvement brainstorm:
+  sunrise/sunset display, pause-schedule-for-N-hours, migraine auto-revert timeout, an in-app
+  portable-mode auto-start toggle (directly solving the IT-blocked-installer problem from
+  Week 4), and migraine contrast reduction. The contrast reduction and auto-start elevation
+  both needed real verification before shipping — contrast reduction turned out to be a
+  genuinely different, more permissive safety mechanism than the Week 1 brightness-scaling
+  rule; auto-start elevation succeeded with no visible UAC prompt on this machine, consistent
+  with its already-unusual UAC/token behavior. Test count: 24 -> 40. Outstanding items from
+  the brainstorm are listed explicitly rather than left implicit.

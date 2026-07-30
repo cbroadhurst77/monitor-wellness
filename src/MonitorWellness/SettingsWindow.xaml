@@ -52,22 +52,29 @@
                         <TextBox x:Name="LongitudeBox" TextChanged="LatLongBox_TextChanged"/>
                     </StackPanel>
                 </Grid>
+                <TextBlock x:Name="SunTimesText" FontSize="11" Foreground="DimGray" Margin="0,0,0,12"/>
 
                 <TextBlock Text="Day / Night Schedule" FontWeight="Bold" Margin="0,0,0,4"/>
-                <Grid Margin="0,0,0,4">
+                <TextBlock Text="Dragging a slider previews it on your real screens right now — nothing is saved until you click Save, and Cancel leaves everything untouched." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Day color temp (K)"/>
-                        <TextBox x:Name="DayKelvinBox"/>
+                        <TextBlock Text="Day color temp"/>
+                        <Slider x:Name="DayKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
+                                IsSnapToTickEnabled="True" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock x:Name="DayKelvinLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="Night color temp (K)"/>
-                        <TextBox x:Name="NightKelvinBox"/>
+                        <TextBlock Text="Night color temp"/>
+                        <Slider x:Name="NightKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
+                                IsSnapToTickEnabled="True" ValueChanged="NightSlider_ValueChanged"/>
+                        <TextBlock x:Name="NightKelvinLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                     </StackPanel>
                 </Grid>
+                <TextBlock x:Name="KelvinSafetyWarning" FontSize="10" Foreground="#FFB03030" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
                 <TextBlock Text="Gamma ramp is only reliable in the ~3300K-6500K range on most hardware — see IMPLEMENTATION.md." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
@@ -75,23 +82,37 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Day brightness (0-1)"/>
-                        <TextBox x:Name="DayBrightnessBox"/>
+                        <TextBlock Text="Day brightness"/>
+                        <Slider x:Name="DayBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock x:Name="DayBrightnessLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="Night brightness (0-1)"/>
-                        <TextBox x:Name="NightBrightnessBox"/>
+                        <TextBlock Text="Night brightness"/>
+                        <Slider x:Name="NightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="NightSlider_ValueChanged"/>
+                        <TextBlock x:Name="NightBrightnessLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                     </StackPanel>
                 </Grid>
 
                 <TextBlock Text="Migraine Mode" FontWeight="Bold" Margin="0,0,0,4"/>
                 <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Overlay color (hex, e.g. #321408)"/>
-                    <TextBox x:Name="MigraineColorBox"/>
+                    <TextBlock Text="Overlay color (hex, e.g. #173620)"/>
+                    <TextBox x:Name="MigraineColorBox" TextChanged="MigrainePreview_Changed"/>
                 </StackPanel>
+                <StackPanel Margin="0,0,0,8">
+                    <TextBlock Text="Overlay opacity"/>
+                    <Slider x:Name="MigraineOpacitySlider" Minimum="0" Maximum="1" ValueChanged="MigrainePreview_Changed"/>
+                    <TextBlock x:Name="MigraineOpacityLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8">
+                    <TextBlock Text="Contrast reduction (a distinct comfort lever from color/brightness)"/>
+                    <Slider x:Name="MigraineContrastSlider" Minimum="0" Maximum="0.3" ValueChanged="MigrainePreview_Changed"/>
+                    <TextBlock x:Name="MigraineContrastLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
+                </StackPanel>
+                <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Overlay opacity (0-1)"/>
-                    <TextBox x:Name="MigraineOpacityBox"/>
+                    <TextBlock Text="Auto-off after (minutes, 0 = never — a real migraine can last hours, so this is off by default)"/>
+                    <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
+                    <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
                 </StackPanel>
                 <StackPanel Margin="0,0,0,4">
                     <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>

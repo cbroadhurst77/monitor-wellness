@@ -53,4 +53,38 @@ public class ColorTemperatureTests
     {
         Assert.Equal(expectedSafe, ColorTemperature.IsSafeForGammaRamp(kelvin));
     }
+
+    [Fact]
+    public void ApplyContrastCompression_ZeroReduction_IsIdentity()
+    {
+        Assert.Equal(0.0, ColorTemperature.ApplyContrastCompression(0.0, 0.0), precision: 6);
+        Assert.Equal(0.5, ColorTemperature.ApplyContrastCompression(0.5, 0.0), precision: 6);
+        Assert.Equal(1.0, ColorTemperature.ApplyContrastCompression(1.0, 0.0), precision: 6);
+    }
+
+    [Fact]
+    public void ApplyContrastCompression_RaisesFloorWithoutTouchingCeiling()
+    {
+        // At any reduction amount, input 0 should rise to exactly the reduction fraction,
+        // while input 1 (the ceiling) should stay untouched at 1 -- confirmed on real
+        // hardware (tools/GammaCheck) that this specific shape is what the driver accepts,
+        // as opposed to uniformly scaling the whole range down.
+        foreach (double reduction in new[] { 0.1, 0.15, 0.2, 0.3 })
+        {
+            Assert.Equal(reduction, ColorTemperature.ApplyContrastCompression(0.0, reduction), precision: 6);
+            Assert.Equal(1.0, ColorTemperature.ApplyContrastCompression(1.0, reduction), precision: 6);
+        }
+    }
+
+    [Fact]
+    public void ApplyContrastCompression_IsMonotonicIncreasing()
+    {
+        double previous = ColorTemperature.ApplyContrastCompression(0.0, 0.2);
+        for (double n = 0.1; n <= 1.0; n += 0.1)
+        {
+            double value = ColorTemperature.ApplyContrastCompression(n, 0.2);
+            Assert.True(value > previous, "Contrast-compressed ramp must stay monotonically increasing");
+            previous = value;
+        }
+    }
 }

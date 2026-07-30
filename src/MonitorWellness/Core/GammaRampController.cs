@@ -92,6 +92,35 @@ public sealed class GammaRampController : IDisposable
         return SetDeviceGammaRamp(_hdc, ref ramp);
     }
 
+    /// <summary>
+    /// Sets this monitor's gamma ramp to the given color temperature with contrast reduction
+    /// (raising the black floor toward the white ceiling by contrastReduction, 0.0-1.0) —
+    /// used by migraine mode. Deliberately does not accept a brightnessAssist parameter:
+    /// confirmed on real hardware (tools/GammaCheck) that a raised floor alone is safe up to
+    /// at least 0.30 even at this app's warmest safe Kelvin, but combining it with a scaled-
+    /// down ceiling (brightness assist) reintroduces the old rejection failure. Keeping this
+    /// method contrast-only enforces that separation at the API level rather than relying on
+    /// callers to remember not to combine them.
+    /// </summary>
+    public bool ApplyColorTemperatureWithContrast(int kelvin, double contrastReduction)
+    {
+        var (rFactor, gFactor, bFactor) = ColorTemperature.KelvinToRgbFactors(kelvin);
+        double clampedReduction = Math.Clamp(contrastReduction, 0.0, 1.0);
+
+        var ramp = new RAMP { Red = new ushort[256], Green = new ushort[256], Blue = new ushort[256] };
+
+        for (int i = 0; i < 256; i++)
+        {
+            double compressed = ColorTemperature.ApplyContrastCompression(i / 255.0, clampedReduction);
+            double baseValue = compressed * 65535.0;
+            ramp.Red[i] = ClampToUShort(baseValue * rFactor);
+            ramp.Green[i] = ClampToUShort(baseValue * gFactor);
+            ramp.Blue[i] = ClampToUShort(baseValue * bFactor);
+        }
+
+        return SetDeviceGammaRamp(_hdc, ref ramp);
+    }
+
     /// <summary>Restores the monitor's default (identity, 6500K, full brightness) gamma ramp.</summary>
     public bool ResetToIdentity()
     {
