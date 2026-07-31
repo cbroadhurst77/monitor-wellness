@@ -35,6 +35,8 @@ public partial class OverlayWindow : Window
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
 
     public OverlayWindow()
     {
@@ -60,6 +62,20 @@ public partial class OverlayWindow : Window
     public void SetTint(System.Windows.Media.Color color, double opacity)
     {
         TintLayer.Background = new SolidColorBrush(color) { Opacity = Math.Clamp(opacity, 0.0, 1.0) };
+
+        // Win32 "topmost" is a one-time z-order placement, not a persistent window style --
+        // PositionOver's HWND_TOPMOST call at window creation only put this window at the top
+        // of the topmost band at that instant. Any later window that also requests topmost
+        // placement (a volume/brightness OSD, a notification toast, another always-on-top
+        // utility, a UAC prompt, Game Bar, etc. -- all common during normal use) can end up
+        // stacked above it, silently pushing the dim overlay behind other content even though
+        // SetTint's own values are still logically correct -- reported live as "the dimmer
+        // seems to disappear after a while." Reasserting HWND_TOPMOST on every tint update
+        // (already called on every ~30s schedule tick, migraine fade tick, and Settings live
+        // preview) self-heals this within one tick instead of only fixing it when Settings
+        // happens to be reopened. NOMOVE/NOSIZE make this a cheap re-stack, not a resize.
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }
 
     /// <summary>
