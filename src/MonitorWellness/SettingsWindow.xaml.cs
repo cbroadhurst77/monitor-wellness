@@ -560,7 +560,14 @@ public partial class SettingsWindow : Window
         if (_previewThrottleTimer is not null)
             return;
 
-        _previewThrottleTimer = new DispatcherTimer { Interval = PreviewThrottleInterval };
+        // DispatcherPriority.Render, not the DispatcherTimer default (Background) -- confirmed
+        // that a Background-priority timer never got a turn to fire for as long as the mouse
+        // kept dragging a slider, since the continuous stream of Input/Render/Normal-priority
+        // drag events monopolized the dispatcher queue ahead of it. The whole point of this
+        // timer is to update the on-screen preview WHILE dragging, so it needs a priority that
+        // can actually interleave with that drag traffic instead of only ever running once the
+        // drag stops and the queue finally idles down to Background.
+        _previewThrottleTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = PreviewThrottleInterval };
         _previewThrottleTimer.Tick += (_, _) => FlushPendingPreviews();
         _previewThrottleTimer.Start();
     }

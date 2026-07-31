@@ -10,10 +10,13 @@ namespace MonitorWellness.Core;
 /// App SDK — too heavy a dependency for this app's portable, no-runtime-install story), the
 /// device/sensor APIs work directly from a classic desktop app with no such requirement.
 ///
-/// Most desktops — including this project's own 3-monitor dev machine — have no ambient light
-/// sensor at all; ALS is mostly a laptop/tablet feature. GetDefault() returning null is the
-/// expected, common case, not a failure, and this gracefully falls back to the existing fixed
-/// schedule with zero user-visible difference — verified live on this machine.
+/// Many desktops have no ambient light sensor at all -- ALS is mostly a laptop/tablet feature --
+/// but that's not universal: confirmed live that a machine with an Intel Sensor Hub (HID
+/// VID_8087, seen in this project's own dev environment) reports a real, plausible-looking lux
+/// reading through this exact API, not just laptops with a dedicated ALS chip. Don't assume
+/// GetDefault() returning null based on one machine's hardware -- IsAvailable and the first lux
+/// reading are logged once below specifically so this doesn't need to be re-verified by
+/// guesswork again later, on this machine or any other.
 /// </summary>
 public static class AmbientLightSensor
 {
@@ -26,7 +29,11 @@ public static class AmbientLightSensor
     {
         try
         {
-            return LightSensor.GetDefault();
+            var sensor = LightSensor.GetDefault();
+            DebugLog.Write(sensor is not null
+                ? $"AmbientLightSensor: LightSensor.GetDefault() found a sensor (DeviceId={sensor.DeviceId})."
+                : "AmbientLightSensor: LightSensor.GetDefault() returned null — no sensor on this device.");
+            return sensor;
         }
         catch (Exception ex)
         {
@@ -34,6 +41,8 @@ public static class AmbientLightSensor
             return null;
         }
     });
+
+    private static bool _loggedFirstLuxRead;
 
     /// <summary>True if this device reports having an ambient light sensor at all.</summary>
     public static bool IsAvailable => Sensor.Value is not null;
@@ -43,7 +52,15 @@ public static class AmbientLightSensor
     {
         try
         {
-            return Sensor.Value?.GetCurrentReading()?.IlluminanceInLux;
+            double? lux = Sensor.Value?.GetCurrentReading()?.IlluminanceInLux;
+            if (!_loggedFirstLuxRead)
+            {
+                _loggedFirstLuxRead = true;
+                DebugLog.Write(lux.HasValue
+                    ? $"AmbientLightSensor: first reading = {lux.Value:F1} lux."
+                    : "AmbientLightSensor: first reading returned no value (sensor present but GetCurrentReading()/IlluminanceInLux was null).");
+            }
+            return lux;
         }
         catch (Exception ex)
         {
