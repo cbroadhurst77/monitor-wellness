@@ -39,6 +39,15 @@ public partial class App : Application
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
+    // Multiple detection balloons (HDR, f.lux conflict, hotkey conflict, auto-start drift) can
+    // all fire on the very first launch, potentially stacked with the onboarding window itself
+    // — a noisy first impression for a "calm" product. These are queued instead of shown
+    // immediately, then drained one at a time (after onboarding closes, if this is a first run)
+    // with a short gap between each. See MonitorWellness_UX_Accessibility_Audit.html §1/§6 (P0).
+    private static readonly TimeSpan StartupBalloonSpacing = TimeSpan.FromSeconds(6);
+    private readonly Queue<(string Title, string Message, ToolTipIcon Icon)> _pendingStartupBalloons = new();
+    private DispatcherTimer? _startupBalloonTimer;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -82,7 +91,7 @@ public partial class App : Application
                 _trayIcon?.ShowBalloonTip(
                     15_000,
                     "Monitor Wellness",
-                    "Monitor Wellness has hit repeated internal errors and may not be working correctly. Check the log in %AppData%\\MonitorWellness\\debug.log, or restart the app.",
+                    "Something's gone wrong repeatedly. Please restart Monitor Wellness — if it keeps happening, our log file can help us find out why.",
                     ToolTipIcon.Error);
                 return;
             }
@@ -110,7 +119,7 @@ public partial class App : Application
         _migraine.PossibleFullscreenConflict += () => _trayIcon?.ShowBalloonTip(
             10_000,
             "Monitor Wellness",
-            "Migraine Mode applied color/contrast, but a fullscreen app may be blocking the dim overlay — Alt+Tab out or switch to windowed mode to see the full effect.",
+            "Migraine relief turned on, but a full-screen app may be hiding it. Try switching to windowed mode to see the full effect.",
             ToolTipIcon.Warning);
         _migraine.RatingRequested += ShowMigraineRatingPrompt;
 
@@ -128,12 +137,10 @@ public partial class App : Application
 
         if (HdrDetector.IsAnyDisplayHdrEnabled())
         {
-            // EVALUATION.md already flags HDR as untested; this app's gamma-ramp approach is
-            // documented to interact unpredictably with Windows' HDR tone-mapping pipeline.
-            // See TECHNICAL_UX_REVIEW.md §5.3.
+            // This app's gamma-ramp approach is documented to interact unpredictably with
+            // Windows' HDR tone-mapping pipeline — untested against HDR displays.
             DebugLog.Write("An active display has Windows HDR (advanced color) enabled — gamma ramp behavior here is unverified");
-            _trayIcon.ShowBalloonTip(
-                10_000,
+            QueueStartupBalloon(
                 "Monitor Wellness",
                 "One of your displays has Windows HDR turned on. Color/brightness adjustments haven't been tested against HDR displays and may not look right — if something seems off, try turning HDR off for this monitor.",
                 ToolTipIcon.Warning);
@@ -141,18 +148,17 @@ public partial class App : Application
 
         if (NightLightDetector.IsFluxRunning())
         {
-            // f.lux is this app's own predecessor (README) and writes to the exact same
-            // last-write-wins gamma ramp state — a real, likely-to-occur conflict for anyone
-            // who migrated from it without uninstalling. See TECHNICAL_UX_REVIEW.md §1.4/§5.1.
+            // f.lux is this app's own predecessor and writes to the exact same last-write-wins
+            // gamma ramp state — a real, likely-to-occur conflict for anyone who migrated from
+            // it without uninstalling.
             DebugLog.Write("f.lux appears to be running — likely gamma ramp conflict");
-            _trayIcon.ShowBalloonTip(
-                10_000,
+            QueueStartupBalloon(
                 "Monitor Wellness",
-                "f.lux also appears to be running. Two tools adjusting your screen color at once can cause flickering or color that keeps reverting — consider closing one of them.",
+                "Another screen-color app (f.lux) is also running. Using two at once can cause flickering — we'd suggest closing one.",
                 ToolTipIcon.Warning);
         }
 
-        RebuildHotkey();
+        RebuildHotkey(isStartup: true);
 
         // A single left-click on the tray icon toggles migraine mode directly — the hotkey and
         // the right-click menu both still work, but this is the fastest possible path for the
@@ -205,8 +211,7 @@ public partial class App : Application
             // Windows update or IT policy silently removed the Task Scheduler entry. Worth
             // saying so explicitly rather than letting auto-start just quietly stop working.
             DebugLog.Write("Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is missing");
-            _trayIcon.ShowBalloonTip(
-                10_000,
+            QueueStartupBalloon(
                 "Monitor Wellness",
                 "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
                 ToolTipIcon.Warning);
@@ -235,11 +240,21 @@ public partial class App : Application
             }
         };
         menu.Items.Add(autoStartItem);
-        menu.Items.Add("&Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
-        menu.Items.Add("&Open Logs Folder", null, (_, _) => OpenLogsFolder());
+        // Diagnostic-only items nested under one submenu, rather than sitting at the same menu
+        // level as everyday actions (Settings, Migraine Mode) — shortens the list a first-time
+        // user has to scan. See MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P2).
+        var diagnosticsMenu = new ToolStripMenuItem("&Diagnostics");
+        diagnosticsMenu.DropDownItems.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
+        diagnosticsMenu.DropDownItems.Add("Open Logs Folder", null, (_, _) => OpenLogsFolder());
+        menu.Items.Add(diagnosticsMenu);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("&Settings...", null, (_, _) => OpenSettingsWindow());
-        menu.Items.Add("&Help / About...", null, (_, _) => ShowOnboarding(markCompletedOnClose: false));
+        // Split out of the old single "Help / About..." item, which previously just reopened
+        // the first-run onboarding wizard (the wrong voice for someone looking something up
+        // later, rather than seeing it for the first time). See
+        // MonitorWellness_UX_Accessibility_Audit.html §2.1/§2.6/§3.5/§6 (P1).
+        menu.Items.Add("&About Monitor Wellness...", null, (_, _) => ShowAboutWindow());
+        menu.Items.Add("&Troubleshooting...", null, (_, _) => ShowTroubleshootingWindow());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("E&xit", null, (_, _) => Shutdown());
         _trayIcon.ContextMenuStrip = menu;
@@ -251,29 +266,66 @@ public partial class App : Application
         RunScheduleTick();
         RebuildBreakReminderTimer();
 
+        // On a first run, let onboarding take the screen by itself before any detection
+        // balloons start appearing — see the queue/drain pair below.
         if (!_settings.HasCompletedOnboarding)
-            ShowOnboarding(markCompletedOnClose: true);
+            ShowFirstRunOnboarding();
+        else
+            StartDrainingStartupBalloons();
     }
 
-    /// <summary>
-    /// Shows the onboarding window — either the real first-run flow (markCompletedOnClose:
-    /// true, the only path that persists HasCompletedOnboarding) or a manual reopen from the
-    /// tray menu's "Help / About..." item, which previously had no way back to this content
-    /// at all once dismissed once (see TECHNICAL_UX_REVIEW.md §2.4).
-    /// </summary>
-    private void ShowOnboarding(bool markCompletedOnClose)
+    /// <summary>Shows the real first-run onboarding flow — the only path that persists HasCompletedOnboarding. Reopening this content later from the tray menu was replaced by the distinct About/Troubleshooting windows (see ShowAboutWindow/ShowTroubleshootingWindow) rather than resurfacing the welcome-voiced wizard, per MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).</summary>
+    private void ShowFirstRunOnboarding()
     {
         var onboarding = new OnboardingWindow(OpenSettingsWindow);
-        if (markCompletedOnClose)
+        onboarding.Closed += (_, _) =>
         {
-            onboarding.Closed += (_, _) =>
-            {
-                _settings.HasCompletedOnboarding = true;
-                SettingsStore.Save(_settings);
-            };
-        }
+            _settings.HasCompletedOnboarding = true;
+            SettingsStore.Save(_settings);
+            StartDrainingStartupBalloons();
+        };
         onboarding.Show();
         onboarding.Activate();
+    }
+
+    private void ShowAboutWindow()
+    {
+        var window = new AboutWindow();
+        window.Show();
+        window.Activate();
+    }
+
+    private void ShowTroubleshootingWindow()
+    {
+        var window = new TroubleshootingWindow();
+        window.Show();
+        window.Activate();
+    }
+
+    /// <summary>Queues a startup-detection balloon instead of showing it immediately — see the field doc comment on _pendingStartupBalloons for why.</summary>
+    private void QueueStartupBalloon(string title, string message, ToolTipIcon icon) => _pendingStartupBalloons.Enqueue((title, message, icon));
+
+    private void StartDrainingStartupBalloons() => ShowNextStartupBalloon();
+
+    private void ShowNextStartupBalloon()
+    {
+        if (_pendingStartupBalloons.Count == 0)
+            return;
+
+        var (title, message, icon) = _pendingStartupBalloons.Dequeue();
+        _trayIcon?.ShowBalloonTip(10_000, title, message, icon);
+
+        if (_pendingStartupBalloons.Count == 0)
+            return;
+
+        _startupBalloonTimer?.Stop();
+        _startupBalloonTimer = new DispatcherTimer { Interval = StartupBalloonSpacing };
+        _startupBalloonTimer.Tick += (_, _) =>
+        {
+            _startupBalloonTimer!.Stop();
+            ShowNextStartupBalloon();
+        };
+        _startupBalloonTimer.Start();
     }
 
     /// <summary>Opens %AppData%\MonitorWellness\ in Explorer — closes the gap where a user filing a bug report had to be told the exact path and find it manually (TECHNICAL_UX_REVIEW.md §7.2).</summary>
@@ -315,7 +367,7 @@ public partial class App : Application
         }
 
         _settingsPreviewActive = true;
-        _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved);
+        _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved, ComputeStatusText);
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -390,7 +442,7 @@ public partial class App : Application
         _trayIcon?.ShowBalloonTip(
             4_000,
             "Monitor Wellness",
-            nowActive ? "Migraine Mode ON" : "Migraine Mode OFF — fading back to normal",
+            nowActive ? "Migraine relief is on." : "Migraine relief is easing off — back to normal in about 20 seconds.",
             ToolTipIcon.None);
 
         if (_settings.PlaySoundOnMigraineToggle)
@@ -425,8 +477,14 @@ public partial class App : Application
         window.Show();
     }
 
-    /// <summary>Disposes any existing hotkey and registers one from the current settings. Called at startup and again after the settings window saves a rebind.</summary>
-    private void RebuildHotkey()
+    /// <summary>
+    /// Disposes any existing hotkey and registers one from the current settings. Called at
+    /// startup (isStartup: true, so a conflict balloon joins the startup queue instead of
+    /// popping immediately alongside HDR/f.lux/auto-start-drift balloons and onboarding) and
+    /// again after the settings window saves a rebind (isStartup: false — that's a direct
+    /// response to the user's own action, so it should show right away).
+    /// </summary>
+    private void RebuildHotkey(bool isStartup = false)
     {
         _hotkey?.Dispose();
 
@@ -440,12 +498,13 @@ public partial class App : Application
         if (!_hotkey.IsRegistered && _trayIcon is not null)
         {
             // A silently-failed hotkey looks like the app just doesn't work — surface it
-            // visibly rather than only logging it (see Week 3 finding in IMPLEMENTATION.md).
-            _trayIcon.ShowBalloonTip(
-                10_000,
-                "Monitor Wellness",
-                "That migraine mode shortcut is already used by another app. Use the tray menu to trigger Migraine Mode, or pick a different shortcut in Settings.",
-                ToolTipIcon.Warning);
+            // visibly rather than only logging it.
+            const string title = "Monitor Wellness";
+            const string message = "That migraine mode shortcut is already used by another app. Use the tray menu to trigger Migraine Mode, or pick a different shortcut in Settings.";
+            if (isStartup)
+                QueueStartupBalloon(title, message, ToolTipIcon.Warning);
+            else
+                _trayIcon.ShowBalloonTip(10_000, title, message, ToolTipIcon.Warning);
         }
     }
 
@@ -510,6 +569,38 @@ public partial class App : Application
             : _migraine.IsFadingOut
                 ? "Monitor Wellness — fading back to normal"
                 : "Monitor Wellness";
+    }
+
+    /// <summary>
+    /// Plain-language answer to "what is this app doing to my screen right now" — the
+    /// persistent status line pinned at the top of the Settings window (CurrentStatusText)
+    /// reads this on load and on a short refresh timer, so a user isn't limited to hovering the
+    /// tray icon or catching a transient balloon to find out. See
+    /// MonitorWellness_UX_Accessibility_Audit.html §2.1/§2.2/§6 (P0). Underlying state
+    /// (IsActive, AutoRevertAtUtc, _pauseUntilUtc) already existed — this is new UI/plain-
+    /// language surfacing of it, not new state.
+    /// </summary>
+    private string ComputeStatusText()
+    {
+        if (_migraine?.IsActive == true)
+        {
+            string mildSuffix = _migraine.IsMild ? " (mild)" : "";
+            return _migraine.AutoRevertAtUtc is DateTime revertAt
+                ? $"Currently: Migraine relief ON{mildSuffix} — turns off automatically at {revertAt.ToLocalTime():h:mm tt}."
+                : $"Currently: Migraine relief ON{mildSuffix} — stays on until you turn it off.";
+        }
+        if (_migraine?.IsFadingOut == true)
+            return "Currently: Migraine relief easing off — back to normal shortly.";
+
+        if (_pauseUntilUtc is DateTime pauseUntil)
+            return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
+
+        double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
+        string phase = elevation <= ScheduleCurve.DeepNightThresholdDeg ? "Deep Night mode"
+            : elevation <= ScheduleCurve.NightThresholdDeg ? "Night mode"
+            : elevation >= ScheduleCurve.DayThresholdDeg ? "Day mode"
+            : "transitioning between day and night";
+        return $"Currently: {phase}.";
     }
 
     /// <summary>

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Monitor Wellness — UX &amp; Accessibility Audit</title>
+<style>
+:root {
+  --eq-purple: #B09090;
+  --eq-purple-dark: #7a5a5a;
+  --eq-purple-light: #f7f0f0;
+  --eq-purple-mid: #d4b8b8;
+  --eq-accent: #B39494;
+}
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #222; margin: 60px; line-height: 1.5; }
+h1 { font-size: 22pt; color: var(--eq-purple); border-bottom: 3px solid var(--eq-purple); padding-bottom: 6px; margin-bottom: 4px; }
+h2 { font-size: 16pt; color: var(--eq-purple-dark); border-bottom: 1px solid var(--eq-purple-mid); padding-bottom: 4px; margin-top: 32px; }
+h3 { font-size: 13pt; color: var(--eq-purple-dark); margin-top: 24px; }
+h4 { font-size: 11pt; color: var(--eq-purple); margin-top: 16px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 16px 0; font-size: 10.5pt; }
+th { background-color: var(--eq-purple); color: #fff; padding: 7px 10px; text-align: left; }
+td { padding: 6px 10px; border: 1px solid var(--eq-purple-mid); vertical-align: top; }
+tr:nth-child(even) td { background-color: var(--eq-purple-light); }
+code, pre { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; }
+pre { background: var(--eq-purple-light); border: 1px solid var(--eq-purple-mid); border-left: 4px solid var(--eq-purple); padding: 12px 16px; margin: 10px 0; white-space: pre-wrap; word-break: break-word; }
+.note { background: var(--eq-purple-light); border-left: 4px solid var(--eq-accent); padding: 8px 12px; margin: 10px 0; font-size: 10.5pt; }
+.warn { background: #fff8e1; border-left: 4px solid #f0a500; padding: 8px 12px; margin: 10px 0; font-size: 10.5pt; }
+ul, ol { margin: 8px 0 8px 24px; }
+li { margin-bottom: 4px; }
+.toc a { color: var(--eq-purple); text-decoration: none; }
+.toc li { margin-bottom: 3px; }
+.header-block { background: linear-gradient(135deg, #7a5a5a 0%, #B09090 100%); color: white; padding: 28px 40px 22px 40px; margin: -60px -60px 36px -60px; display: flex; align-items: center; gap: 32px; }
+.header-logo { height: 56px; flex-shrink: 0; filter: brightness(0) invert(1); }
+.header-text h1 { color: white; border-bottom: 1px solid rgba(255,255,255,0.25); font-size: 24pt; margin: 0 0 4px 0; padding-bottom: 6px; }
+.header-text .subtitle { color: rgba(255,255,255,0.85); font-size: 13pt; margin: 0 0 4px 0; }
+.header-text .meta { color: #e8d8d8; font-size: 9.5pt; margin: 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9.5pt; font-weight: bold; color: #fff; }
+.badge-p0 { background: #c0392b; }
+.badge-p1 { background: #d68910; }
+.badge-p2 { background: #7a5a5a; }
+.before-after { display: flex; gap: 16px; margin: 12px 0 20px 0; }
+.before-after .col { flex: 1; padding: 12px 14px; border-radius: 4px; }
+.before-after .before { background: #fdf2f2; border: 1px solid #e6b8b8; }
+.before-after .after { background: #f0f7f0; border: 1px solid #b8d9b8; }
+.before-after h4 { margin-top: 0; }
+@media print {
+  .header-block { margin: 0 0 24px 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h2 { page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="header-block">
+  <img class="header-logo"
+       src="https://cdn.prod.website-files.com/6902243f27b2496020764e9e/690238a6ca8b27e5da56298f_Equinox%20Logo%20Hero%20White.svg"
+       alt="Equinox Logo" onerror="this.style.display='none'">
+  <div class="header-text">
+    <h1>Monitor Wellness — UX &amp; Accessibility Audit</h1>
+    <p class="subtitle">Independent usability review for migraine and eye-strain relief interactions</p>
+    <p class="meta">Chris Broadhurst &nbsp;|&nbsp; Equinox Consulting Ltd &nbsp;|&nbsp; Document Version: 1.0 &nbsp;|&nbsp; 31 July 2026</p>
+  </div>
+</div>
+
+<table>
+<tr><th>Ver #</th><th>Date</th><th>Author</th><th>Summary</th></tr>
+<tr><td>1.0</td><td>2026-07-31</td><td>Equinox Consulting (Claude)</td><td>Initial independent audit, based on direct source review of <code>C:\Tools\MonitorWellness</code> (WPF/.NET 8 desktop app). Conducted as a fresh review, not a summary of the repository's own prior review documents (TECHNICAL_UX_REVIEW.md, INDEPENDENT_REAUDIT.md, GAP_ANALYSIS_2026-07.md).</td></tr>
+<tr><td>1.1</td><td>2026-07-31</td><td>Equinox Consulting (Claude)</td><td>Added §7.3 wireframe (before/after) for the Settings window redesign. The redesign itself has since been implemented directly in <code>SettingsWindow.xaml</code> — see the updated status on the §6 backlog row it corresponds to.</td></tr>
+</table>
+
+<div class="note">
+&#8505; <strong>Scope note:</strong> Monitor Wellness is a Windows tray/WPF desktop application, not a web app. "Accessibility" here means WPF UI Automation properties, keyboard/focus behavior, Windows High Contrast and dark-theme handling — not web ARIA/WCAG in the browser sense, though WCAG contrast/text-size principles are applied as best practice throughout. All findings below are grounded in the actual source (XAML + C#) read directly from the repository, not assumptions.
+</div>
+
+<ol class="toc">
+<li><a href="#s1">1. Executive Summary</a></li>
+<li><a href="#s2">2. UI Audit Checklist</a></li>
+<li><a href="#s3">3. User Journey Review</a></li>
+<li><a href="#s4">4. Accessibility &amp; Compliance Notes</a></li>
+<li><a href="#s5">5. Microcopy Improvements</a></li>
+<li><a href="#s6">6. Prioritized Backlog</a></li>
+<li><a href="#s7">7. Concrete Examples (Before → After)</a></li>
+</ol>
+
+<h2 id="s1">1. Executive Summary</h2>
+<ul>
+<li><strong>Strong safety-first foundation.</strong> The engineering already treats this as a photosensitivity-aware, migraine-aware tool: Migraine Mode activates in a single instant step (never a flash/strobe) and always fades out smoothly over 20 seconds; sound feedback is off by default because migraine sufferers often also have sound sensitivity; every comfort feature (history tracking, ambient-light matching, break reminders, ratings) is opt-in, not default-on. This is a genuinely careful base to build the rest of the review on.</li>
+<li><strong>Top risk — jargon leaking into calm-facing copy.</strong> Settings, onboarding, and error text repeatedly surface developer-facing language: "gamma ramp," "Confirmed directly on this hardware," and even direct references to internal files (<code>EVALUATION.md</code>, <code>TECHNICAL_UX_REVIEW.md</code>, <code>IMPLEMENTATION.md</code>) appear in strings the end user actually sees. This conflicts directly with the "patient guidance," first-grade-friendly tone this audience needs.</li>
+<li><strong>Top risk — no glanceable status.</strong> Whether the app is in Day/Night/Deep Night/Migraine/Paused state is only ever visible by hovering the tray icon (tooltip text) or catching a transient 4–15 second balloon notification. Someone mid-migraine, possibly with compromised vision, has no persistent on-screen confirmation of what state they're in.</li>
+<li><strong>Top risk — dense, small print throughout Settings.</strong> The Settings window is a single ~760px scrolling page with 9 stacked sections and pervasive <code>FontSize="10"</code> gray helper text carrying safety-relevant information (gamma-ramp safety warnings, privacy notes, evidence summaries). Small, low-contrast text is a poor fit for a tool explicitly aimed at light/eye-strain-sensitive users.</li>
+<li><strong>Real (not cosmetic) motion-safety gap.</strong> Every scripted transition in the app (schedule changes, migraine fade) is smooth and rate-controlled — except the Settings window's live slider preview, which writes directly to the real screen on every tick with no throttling. A fast drag across a wide Kelvin/brightness range could produce rapid, unthrottled visual change on-screen, which undercuts the app's otherwise-excellent flicker-safety discipline.</li>
+<li><strong>First-run can be noisy.</strong> Depending on hardware/software found at startup, up to three separate balloon notifications (HDR display detected, f.lux conflict, auto-start drift) can appear stacked with the onboarding window on a single first launch — a rocky first impression for a "calm" product.</li>
+<li><strong>Opportunity — most fixes are copy/UI, not re-architecture.</strong> The underlying state machine, safety clamps, and event model are sound and already wired correctly end-to-end (confirmed by reading <code>AppSettings.cs</code>, <code>MigraineModeController.cs</code>, <code>OverlayController.cs</code>, <code>App.xaml.cs</code>). Nearly every P0/P1 item below is a copy rewrite, a style change, or a small amount of new state-surfacing UI — not new backend capability.</li>
+<li><strong>Opportunity — the evidence story is already good, just buried.</strong> The green-tint rationale (Noseda &amp; Burstein, <em>Brain</em>, 2016) and the honest "this is a comfort tool, not a medical device" framing already exist in the app. They're currently hidden inside small, collapsed "Why these colors?" expanders in 10pt gray text — promoting and simplifying this content would turn an already-honest feature into a genuinely reassuring one.</li>
+</ul>
+
+<h2 id="s2">2. UI Audit Checklist</h2>
+
+<h3>2.1 Navigation &amp; Information Architecture</h3>
+<p><strong>Screens/sections identified:</strong> tray icon + context menu (~14 items, the only "home" screen), Onboarding window (first run only, reachable again via "Help / About..."), Settings window (single scrolling window: Location, Profiles, Day/Night Schedule, Deep Night, Migraine Mode, Monitors, Break Reminders, History), Migraine Rating popup (post-use, opt-in), Profile Name dialog, and the invisible per-monitor Overlay window (not user-facing chrome, but the surface all tint/dim effects render on).</p>
+<p><strong>Found issues</strong></p>
+<ul>
+<li>There is no in-app main window or dashboard at all — every interaction after first-run onboarding routes through a single tray icon and its right-click menu.</li>
+<li>Settings is one continuous scroll of 9 stacked sections with no jump links, tabs, or grouping — migraine-relevant controls and long-term history controls sit in the same undifferentiated scroll.</li>
+<li>"Help / About..." reopens the exact first-run onboarding content. That content is written in a "welcome" voice (explaining what the app is), not a "how do I fix X" reference voice — someone reopening it later for help gets the wrong kind of text.</li>
+<li>Diagnostic-only items (Auto-start Diagnostics, Open Logs Folder) sit at the same menu level as the two everyday actions (Settings, Migraine Mode), lengthening the list a first-time user has to scan.</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Add a lightweight status surface beyond the tray tooltip — e.g. a small popover on tray left-click-and-hold, or a "Status" line pinned to the top of the Settings window — that states current mode in plain words ("Currently: Day mode" / "Currently: Migraine relief ON, auto-off 3:45 PM").</li>
+<li>Restructure Settings into grouped sections with a simple left-hand list or tab strip: Schedule, Migraine Mode, Monitors, History &amp; Privacy. <em>UI-only — all underlying settings/fields are unchanged.</em></li>
+<li>Split "Help / About" into two distinct entries: "About" (what this is, safety disclaimer) and a short "Help" panel (troubleshooting the known conflict cases the app already detects).</li>
+<li>Nest diagnostic-only items under a single "Diagnostics" submenu, shortening the everyday menu to roughly 8 visible items.</li>
+</ul>
+
+<h3>2.2 Controls &amp; States</h3>
+<p><strong>Found issues</strong></p>
+<ul>
+<li>Migraine Mode state is communicated only via tray icon swap (<code>migraine_on.ico</code>/<code>migraine_off.ico</code>), tooltip text (hover-only), and a single 4-second balloon on toggle. There is no persistent on-screen confirmation of an armed auto-revert time unless the tray icon is hovered.</li>
+<li>The Pause Schedule submenu (30 min / 1 hour / 2 hours / Until tomorrow) leaves the tray tooltip as the only place remaining pause time is visible; the only other signal is the "Resume Schedule" item becoming enabled, which is easy to miss.</li>
+<li>Every Day/Night/Migraine slider in Settings previews live, directly on the real screen, on every value-changed tick, with no debounce. Dragging quickly across the full Kelvin or brightness range produces rapid, un-throttled real-screen changes.</li>
+<li>Numeric text-box + slider pairs (a good pattern, added specifically to restore exact-value entry after an earlier "slider-only" regression, per the code's own history) are implemented consistently and commit on Enter or focus-loss — this is a genuine strength worth preserving as new controls are added.</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Surface Migraine Mode's auto-revert time (if armed) somewhere more persistent than a tooltip — e.g. in the proposed status popover above. <em>Requires minor new UI; no new backend state (<code>AutoRevertAtUtc</code> already exists on <code>MigraineModeController</code>).</em></li>
+<li>Give Pause Schedule a small confirmation balloon at the moment it's chosen (mirroring the pattern already used for Migraine Mode toggles), not just a tooltip-text change. <em>UI-only.</em></li>
+<li>Add a simple time-based throttle (e.g. apply live preview at most ~10 times/second) around the slider preview calls in <code>SettingsWindow.xaml.cs</code> (<code>DaySlider_ValueChanged</code>, <code>NightSlider_ValueChanged</code>, <code>MigrainePreview_Changed</code>). <em>Small code change, no new feature surface.</em></li>
+</ul>
+
+<h3>2.3 Onboarding &amp; Guidance</h3>
+<p><strong>Found issues</strong></p>
+<ul>
+<li>Onboarding is four dense paragraphs in one modal, mixing feature explanation, a hotkey reference, a medical disclaimer, and a location call-to-action in a single wall of text.</li>
+<li>References a competitor product ("similar to f.lux") and "published research" without simplifying, on the very first screen a new user sees.</li>
+<li>"Got it, maybe later" doesn't say what is being deferred (the location defaults to London) — it reads as a generic dismissal rather than "you still need to do this one thing."</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Break onboarding into short, single-idea steps: what it does → Migraine Mode &amp; the hotkey → the safety note → the location prompt. One or two short sentences per step.</li>
+<li>Rename the two buttons to state the actual choice: "Set my location now" / "Skip for now (uses London times)".</li>
+<li>Keep the medical disclaimer's content and prominence, but give it a proper visual "note" treatment (background + border, not italics/gray alone) so it reads as important rather than as a footnote.</li>
+</ul>
+
+<h3>2.4 Accessibility</h3>
+<p><strong>Found issues</strong></p>
+<ul>
+<li>Automation labelling is genuinely good in several places — <code>AutomationProperties.Name</code> is set on sliders, checkboxes, per-monitor rows, and rating buttons, and <code>AutomationProperties.HeadingLevel="Level1"</code> is set on the onboarding title. This is above-average diligence for a small WPF app.</li>
+<li>That diligence is inconsistent: dynamically-appearing warning text (<code>KelvinSafetyWarning</code>, the "Why these colors?" evidence expanders) has no live-region equivalent, so a screen reader user is not told when a safety warning appears or disappears.</li>
+<li>Most informational and safety-relevant text in Settings is hard-coded to <code>FontSize="10"</code> (roughly 7.5pt) in <code>Gray</code>/<code>DimGray</code> — small and low-contrast, for a tool whose users may be specifically light/text sensitive.</li>
+<li>Dark theme (<code>ThemeDetector.ApplyDarkThemeIfNeeded</code>) is applied once at window construction only; if Windows' theme changes while Settings or Onboarding is already open, the open window will not update. The code's own comments note that WPF's default control chrome (focus glow, drop shadows) still assumes a light theme underneath the override — an acknowledged partial fix, not a full theme.</li>
+<li>Windows High Contrast mode is correctly and deliberately left untouched (a good, considered decision — High Contrast ships its own system palette for a different population). One knock-on effect: the app's own semantic warning color (<code>#FFB03030</code>) has no separately verified High Contrast presentation, since the app doesn't touch colors in that mode at all.</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Raise all currently-10pt gray informational/safety text to at least 11–12pt with higher-contrast foreground colors, consistent with the app's own more careful dark-theme brush choices elsewhere.</li>
+<li>Set <code>AutomationProperties.LiveSetting="Assertive"</code> (or equivalent) on <code>KelvinSafetyWarning</code> and similarly on any other text that appears/disappears in response to user input, so assistive technology announces it.</li>
+<li>Add a <code>SystemEvents.UserPreferenceChanged</code> handler to re-run <code>ApplyDarkThemeIfNeeded</code> on already-open windows, or explicitly document the current limitation in the Settings window itself.</li>
+<li>No action needed on High Contrast handling itself — it's correct as built. Worth a one-line manual check that <code>KelvinSafetyWarning</code>'s text remains legible under a couple of the built-in Windows High Contrast themes, since visibility there depends entirely on the system palette, not this app's styling.</li>
+</ul>
+
+<h3>2.5 Motion / Visual Comfort</h3>
+<p><strong>Found issues (strengths worth preserving)</strong></p>
+<ul>
+<li>Migraine Mode activation is a single instantaneous step change — deliberately, per the code's own documentation, because a fade would delay relief for someone mid-aura, and because a fade risks looking like a "pulse" if implemented carelessly.</li>
+<li>Deactivation always fades over 20 seconds at 5 updates/second (<code>FadeDuration</code>/<code>FadeTickInterval</code> in <code>MigraineModeController.cs</code>) — explicitly chosen and commented as staying well clear of flicker/strobe frequencies relevant to photosensitive epilepsy, which overlaps with migraine-with-aura in some patients. This reasoning is sound and should not be weakened by future feature additions (the code comments flag this risk explicitly — good practice).</li>
+<li>The normal Day/Night/Deep-Night schedule is driven by continuous solar-elevation interpolation, not stepped jumps.</li>
+<li>Sound feedback on Migraine Mode toggle defaults off, specifically because of phonophobia overlap with migraine — a considered, non-obvious default.</li>
+</ul>
+<p><strong>Found issues (real gaps)</strong></p>
+<ul>
+<li>The one place rapid, un-throttled visual change can occur is the Settings window's live slider preview (see 2.2) — this is the single exception to an otherwise consistently flicker-safe design.</li>
+<li>None of the app's transitions currently check the Windows "show animations"/reduced-motion system preference. In practice the fade is fixed-duration regardless, so this is lower risk than most apps, but is worth confirming explicitly rather than leaving implicit.</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Add the slider-preview throttle described in 2.2.</li>
+<li>Surface the "we never flash — activation is instant, and we always fade out slowly" reasoning to the end user (currently only in source comments) as a short, reassuring note near the Migraine Mode settings section — this is a genuine trust-building fact for a photosensitivity-aware audience.</li>
+</ul>
+
+<h3>2.6 Error Handling &amp; Help</h3>
+<p><strong>Found issues</strong></p>
+<ul>
+<li>Validation and warning copy is accurate but developer-voiced: <em>"Windows will silently reject it," "Confirmed directly on this hardware," "below roughly 3300K."</em> Honest and precise, but not calm or patient in tone.</li>
+<li>Save-time validation failures (Kelvin out of range, invalid hex color, malformed bedtime) surface as blocking <code>MessageBox</code> dialogs — functional, but unstyled system dialogs that interrupt flow, versus the inline <code>KelvinSafetyWarning</code> pattern already used successfully elsewhere in the same window.</li>
+<li>"Help / About..." is the only help entry point, and it is not troubleshooting-oriented (see 2.1). Several conflict states the app already detects well (fullscreen-blocks-overlay, f.lux gamma-ramp conflict, hotkey already claimed by another app, HDR display present) each only ever appear once, as a balloon, at the moment they're detected — there's nowhere to go back and re-read them.</li>
+</ul>
+<p><strong>Recommendations</strong></p>
+<ul>
+<li>Rewrite validation/warning strings in plain language first, with technical detail available but secondary — e.g. <em>"That color is too warm for this screen to show smoothly. Try a slightly cooler value."</em> with an optional "why" expander carrying the existing technical explanation.</li>
+<li>Replace the blocking <code>MessageBox</code> validation for hex-color and bedtime fields with the same inline-warning-text pattern already used for <code>KelvinSafetyWarning</code> — consistent, less disruptive, and already proven to work well in this codebase.</li>
+<li>Add one short, plain-language "Troubleshooting" panel consolidating the conflict cases the app already detects, so a user can find that information again without needing to reproduce the original balloon.</li>
+</ul>
+
+<h2 id="s3">3. User Journey Review</h2>
+
+<h3>3.1 Onboarding / first-time launch</h3>
+<p><strong>Current experience:</strong> On first launch, a modal window opens with four dense paragraphs covering what the app does, Migraine Mode and its hotkey, a medical disclaimer, and a nudge to set a real location (defaults to London). Two buttons: "Got it, maybe later" or "Open Settings Now." Either closes the window and marks onboarding complete permanently.</p>
+<p><strong>Expected experience:</strong> A short, reassuring "here's what this does and how to get relief fast" introduction that takes seconds to read, with a clear, low-pressure path to set location later if skipped now.</p>
+<p><strong>Gap/Friction:</strong> Cognitive load is high for a first touch — four paragraphs of continuous prose, plus unfamiliar terms ("Kelvin," "gamma ramp" appears elsewhere but not here specifically — good — though "photophobia," "circadian," and "f.lux" all appear in this first screen). The dismiss button doesn't communicate that anything is still pending.</p>
+<p><strong>Proposed fix:</strong> Convert to short sequential steps (see 2.3); rename buttons to state the real choice; keep but visually elevate the safety disclaimer.</p>
+
+<h3>3.2 Starting a relief mode (Migraine Mode)</h3>
+<p><strong>Current experience:</strong> Triggered via left-click on the tray icon, the global hotkey (default Ctrl+Alt+Shift+M), or the context menu (Toggle / Full / Mild / Deactivate). Activation is instant — tint and gamma shift apply with no fade, tray icon swaps, and a 4-second balloon reads "Migraine Mode ON." An optional sound plays only if explicitly turned on.</p>
+<p><strong>Expected experience:</strong> A near-zero-effort way to get relief immediately, with a clear (not just momentary) confirmation that it worked and for how long.</p>
+<p><strong>Gap/Friction:</strong> The activation path itself is excellent — three redundant, fast triggers, and instant (not delayed) relief is exactly right for someone mid-aura. The gap is entirely in the aftermath: once the 4-second balloon disappears, the only way to check current state is to hover the tray icon or open the menu.</p>
+<p><strong>Proposed fix:</strong> Keep the activation mechanism exactly as-is (it's a strength, not a risk). Add the persistent status surface from 2.1/2.2 so the "still on" state is checkable without hovering.</p>
+
+<h3>3.3 Adjusting intensity/timers</h3>
+<p><strong>Current experience:</strong> In Settings, Day/Night color and brightness, Migraine overlay color/opacity/contrast, and auto-revert timing are all slider-driven with paired numeric entry, live-previewed on the real screen, plus two-click "Try Gentle/Strong" and "Try Cooler/Warmer" presets so a user doesn't have to interpret a raw Kelvin or percentage value.</p>
+<p><strong>Expected experience:</strong> Confidence about what a given value will feel like before committing, without needing to understand units like Kelvin or opacity percentages.</p>
+<p><strong>Gap/Friction:</strong> The preset buttons are a strong pattern already in place and genuinely solve the "don't make me guess a number" problem. The friction is the unthrottled real-screen preview during fast dragging (2.2/2.5), and the fact that the safety-relevant "why these colors" evidence is hidden inside a collapsed, tiny expander rather than being visible by default.</p>
+<p><strong>Proposed fix:</strong> Add slider-preview throttling; promote a one-line summary of the evidence rationale out of the collapsed expander (keep the full detail collapsed, but surface "Backed by 2016 migraine-light research; this is a comfort tool, not a medical treatment" as visible text).</p>
+
+<h3>3.4 Pausing/stopping</h3>
+<p><strong>Current experience:</strong> Migraine Mode: any toggle action starts an automatic, always-smooth 20-second fade back to the normal schedule — there is no separate "hard stop." Day/Night schedule: "Pause Schedule" (30 min/1 hour/2 hours/Until tomorrow) suspends adjustments without resetting anything, with a "Resume Schedule" item that enables once paused.</p>
+<p><strong>Expected experience:</strong> An unambiguous, easy-to-find way to stop any active effect, and clear confirmation that it has actually stopped (or is in the process of stopping).</p>
+<p><strong>Gap/Friction:</strong> The fade-out itself is a genuine safety strength (no sudden brightening). The friction is discoverability of pause/resume state — nothing persistent shows "schedule is paused until 3:00 PM" beyond the tray tooltip.</p>
+<p><strong>Proposed fix:</strong> Persistent status surface (as above); a confirmation balloon the moment Pause is selected, matching the existing Migraine Mode toggle balloon pattern.</p>
+
+<h3>3.5 Understanding "what's happening" / recovering from confusion</h3>
+<p><strong>Current experience:</strong> State lives in tray icon appearance + tooltip text + transient balloons. Help is the onboarding screen. Known conflict states (fullscreen blocking the overlay, f.lux conflict, hotkey conflict, HDR present, auto-start drift) are each detected well and explained in a balloon at the moment they occur, but not persisted anywhere for later reference. An "Auto-start Diagnostics" dialog exists for one specific troubleshooting case and is genuinely well-written and informative.</p>
+<p><strong>Expected experience:</strong> At any moment, a user should be able to answer "what is this app doing to my screen right now, and why" in a few seconds, and find a written explanation of a problem they remember seeing once but can't reproduce.</p>
+<p><strong>Gap/Friction:</strong> No persistent status view; help content is onboarding-voiced rather than troubleshooting-voiced; no consolidated place to re-read a conflict warning after its balloon has disappeared.</p>
+<p><strong>Proposed fix:</strong> Status surface (above) + a dedicated, plain-language Troubleshooting panel consolidating the conflict cases the app already detects reliably.</p>
+
+<h2 id="s4">4. Accessibility &amp; Compliance Notes</h2>
+<ul>
+<li><strong>Keyboard/focus:</strong> Standard WPF tab order (source order) applies throughout; no custom <code>TabIndex</code> overrides were found, which is appropriate given the straightforward, single-column layout of every window. The tray context menu uses <code>&amp;</code> mnemonics throughout (e.g. <code>&amp;Toggle Migraine Mode</code>, <code>&amp;Settings...</code>, <code>E&amp;xit</code>), so it is fully operable via keyboard once focused — a real strength. No focus trap or skip-navigation issues were found in any modal window (Onboarding, Settings, Migraine Rating, Profile Name), all of which are simple enough not to need one.</li>
+<li><strong>Contrast/color:</strong> Primary body text and control chrome rely on WPF/Windows defaults (acceptable). The specific risk is the app's own added helper/warning text, most of which is hard-coded to <code>FontSize="10"</code> in <code>Gray</code>/<code>DimGray</code> — this is the one area actively worth raising to a WCAG-AA-conscious size/contrast, especially since some of this text (the Kelvin safety warning, the privacy note, the medical disclaimer) carries safety- or trust-relevant information, not just cosmetic detail.</li>
+<li><strong>Screen reader labels:</strong> Genuinely above-average for a small WPF app — sliders, checkboxes, per-monitor rows, and rating buttons all carry explicit <code>AutomationProperties.Name</code>, and the onboarding title carries <code>AutomationProperties.HeadingLevel="Level1"</code>. The gap is dynamic content: warning text that appears/disappears (<code>KelvinSafetyWarning</code>) has no live-region equivalent, so screen reader users won't be told when it appears.</li>
+<li><strong>Motion safety:</strong> The core safety-relevant transition (Migraine Mode activate/deactivate) is well-designed and explicitly reasoned about in the code with photosensitive epilepsy specifically in mind — instant activation, smooth 20-second fade, no strobe/pulse anywhere. The only motion-safety gap found is the un-throttled live slider preview in Settings (see 2.2/2.5), which is a genuine, fixable exception rather than a systemic problem.</li>
+<li><strong>Theme handling:</strong> Dark theme correctly and deliberately defers to Windows High Contrast mode (does not override it) — a considered accessibility decision. Dark theme itself only applies at window-open time, not live, which is a minor but real limitation worth documenting or fixing.</li>
+</ul>
+
+<h2 id="s5">5. Microcopy Improvements</h2>
+<table>
+<tr><th style="width:8%">#</th><th style="width:46%">Original</th><th style="width:46%">Improved</th></tr>
+<tr><td>1</td><td>"Monitor Wellness automatically shifts your screens' color temperature and brightness across the day based on sunrise/sunset at your location — similar to f.lux, tuned with eye-strain and circadian research." <em>(Onboarding)</em></td><td>"Monitor Wellness gently warms and dims your screen as the day goes on, following sunrise and sunset where you are."</td></tr>
+<tr><td>2</td><td>"Got it, maybe later" <em>(Onboarding button)</em></td><td>"Skip for now (uses London times)"</td></tr>
+<tr><td>3</td><td>"Day and Night color temp is too warm for this hardware's gamma ramp — confirmed directly, values below roughly 3300K are silently rejected. The preview below won't reflect this until you pick a higher value." <em>(KelvinSafetyWarning)</em></td><td>"That color is a little too warm for this screen to show smoothly. Try a slightly cooler setting — most screens are comfortable from about 3,300K up."</td></tr>
+<tr><td>4</td><td>"Night color temp of 3200K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value (3400K is the safe floor found during testing)." <em>(Save validation error)</em></td><td>"3,200K is a bit too warm for this screen. Please choose 3,400K or higher, then try saving again."</td></tr>
+<tr><td>5</td><td>"1 = not helpful, 5 = very helpful. Stays fully local — see Settings' privacy note." <em>(Migraine Rating window)</em></td><td>"1 = didn't help, 5 = helped a lot. This stays on your computer — nothing is sent anywhere."</td></tr>
+<tr><td>6</td><td>"Delete all locally saved Migraine Mode / pause history? This can't be undone." <em>(Clear History confirmation)</em></td><td>"This will permanently delete your saved history. Are you sure?"</td></tr>
+<tr><td>7</td><td>"Reset color, brightness, and migraine settings to their defaults? Your location and per-monitor setup won't change." <em>(Reset confirmation)</em></td><td>"This resets your color, brightness, and Migraine Mode settings back to the defaults. Your location and monitor setup stay the same. Continue?"</td></tr>
+<tr><td>8</td><td>"Migraine Mode applied color/contrast, but a fullscreen app may be blocking the dim overlay — Alt+Tab out or switch to windowed mode to see the full effect." <em>(Fullscreen conflict balloon)</em></td><td>"Migraine relief turned on, but a full-screen app may be hiding it. Try switching to windowed mode to see the full effect."</td></tr>
+<tr><td>9</td><td>"f.lux also appears to be running. Two tools adjusting your screen color at once can cause flickering or color that keeps reverting — consider closing one of them." <em>(Startup conflict balloon)</em></td><td>"Another screen-color app (f.lux) is also running. Using two at once can cause flickering — we'd suggest closing one."</td></tr>
+<tr><td>10</td><td>"Monitor Wellness has hit repeated internal errors and may not be working correctly. Check the log in %AppData%\MonitorWellness\debug.log, or restart the app." <em>(Crash-loop balloon)</em></td><td>"Something's gone wrong repeatedly. Please restart Monitor Wellness — if it keeps happening, our log file can help us find out why."</td></tr>
+<tr><td>11</td><td>"Dim× = dim multiplier (1.0 follows the schedule exactly); Kelvin± = a per-monitor color temp offset (e.g. -300 if it reads warmer than the others)." <em>(Monitors table header help text)</em></td><td>"Dim amount: how much this screen dims compared to the others (1.0 = normal). Color offset: nudge this screen's warmth up or down if it looks different from the rest."</td></tr>
+<tr><td>12</td><td>"Once the sun (or bedtime clock above) reaches deep night, brightness and overlay color blend further toward these values — a bedtime-level warmth stage beyond what Night color temp's safe gamma-ramp floor can reach on its own." <em>(Deep Night section helper text)</em></td><td>"Later at night (or at your bedtime, if set above), your screen eases even warmer and dimmer than the usual night setting."</td></tr>
+</table>
+
+<h2 id="s6">6. Prioritized Backlog</h2>
+<table>
+<tr><th style="width:5%">Pri.</th><th style="width:18%">Issue</th><th style="width:27%">Recommendation</th><th style="width:14%">Location</th><th style="width:14%">Impact</th><th style="width:8%">Effort</th><th style="width:14%">Notes / Dependencies</th></tr>
+
+<tr><td><span class="badge badge-p0">P0</span></td><td>Developer-facing jargon and internal file references (e.g. "gamma ramp," "EVALUATION.md") appear in user-facing copy</td><td>Rewrite all Settings/Onboarding/error strings in plain, calm language; move technical detail to optional "why" expanders</td><td>Onboarding, Settings (all sections), Save validation dialogs</td><td>High — directly affects the calm/patient tone this audience needs</td><td>Low–Med</td><td>UI-only (copy change); see §5 for worked examples</td></tr>
+
+<tr><td><span class="badge badge-p0">P0</span></td><td>No persistent, glanceable status indicator for current mode/pause/auto-revert</td><td>Add a small status popover (tray click) or a status line pinned at the top of Settings, in plain words</td><td>Tray icon interaction; Settings window header</td><td>High — core to "understanding what's happening" for this audience</td><td>Med</td><td>Requires feature support — new UI surface; underlying state (<code>IsActive</code>, <code>AutoRevertAtUtc</code>, pause timers) already exists in <code>App.xaml.cs</code>/<code>MigraineModeController.cs</code></td></tr>
+
+<tr><td><span class="badge badge-p0">P0</span></td><td>Small, low-contrast (10pt gray) text used for safety-relevant information throughout Settings</td><td>Raise minimum size/contrast for all informational and safety text</td><td>SettingsWindow.xaml (all helper <code>TextBlock</code>s)</td><td>High — accessibility and readability for light/text-sensitive users</td><td>Low</td><td>UI-only (style change)</td></tr>
+
+<tr><td><span class="badge badge-p0">P0</span></td><td>Live slider preview writes to the real screen with no throttling</td><td>Add a ~10x/second throttle to preview updates during drag</td><td>SettingsWindow.xaml.cs — DaySlider_ValueChanged, NightSlider_ValueChanged, MigrainePreview_Changed</td><td>High — the one motion-safety exception in an otherwise flicker-safe app</td><td>Low–Med</td><td>Requires small code change; no new feature surface</td></tr>
+
+<tr><td><span class="badge badge-p0">P0</span></td><td>Multiple balloon notifications can stack on first launch (HDR, f.lux conflict, auto-start drift, plus onboarding)</td><td>Queue/sequence startup balloons instead of firing simultaneously; delay non-critical ones until after onboarding closes</td><td>App.xaml.cs OnStartup</td><td>Med–High — first impression noise for a "calm" product</td><td>Low</td><td>UI-only (sequencing change)</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>Settings is one long undifferentiated scroll (9 sections)</td><td>Group into tabs/sections: Schedule, Migraine Mode, Monitors &amp; Breaks, Profiles &amp; History — see the §7.3 wireframe</td><td>SettingsWindow.xaml</td><td>Med — reduces cognitive load, easier to scan</td><td>Med–High</td><td><strong>Implemented</strong> — SettingsWindow.xaml restructured into a 4-tab layout; every control kept its original x:Name, so SettingsWindow.xaml.cs needed no changes. Not yet build-verified on Windows (this session has no Windows/MSBuild available) — please build once before relying on it.</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>Blocking, technically-worded <code>MessageBox</code> validation errors</td><td>Replace hex-color/bedtime <code>MessageBox</code> validation with inline warning text, matching the existing <code>KelvinSafetyWarning</code> pattern</td><td>SettingsWindow.xaml.cs — TryParseAll, TryValidateHexColor, TryValidateBedtime</td><td>Med — less disruptive, calmer error experience</td><td>Med</td><td>UI-only; pattern to copy already exists in the same file</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>Dark theme does not live-update if Windows theme changes while a window is open</td><td>Add a <code>SystemEvents.UserPreferenceChanged</code> handler to re-apply theme to open windows</td><td>Core/ThemeDetector.cs</td><td>Low–Med — edge case, but a real accessibility gap for users who rely on theme switching</td><td>Low–Med</td><td>Requires feature support (new event handler)</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>Dynamic warning text has no screen-reader live-region equivalent</td><td>Add <code>AutomationProperties.LiveSetting="Assertive"</code> to KelvinSafetyWarning and similar dynamic text</td><td>SettingsWindow.xaml — KelvinSafetyWarning and similar</td><td>Med — screen reader users currently miss these warnings entirely</td><td>Low</td><td>UI-only</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>Onboarding is a single dense wall of text</td><td>Convert to short sequential steps, one idea per step</td><td>OnboardingWindow.xaml</td><td>Med — first impression, cognitive load</td><td>Med</td><td>UI-only</td></tr>
+
+<tr><td><span class="badge badge-p1">P1</span></td><td>"Help / About" reopens onboarding rather than offering troubleshooting content</td><td>Split into a short "About" panel and a distinct "Troubleshooting" panel covering the app's own known conflict cases</td><td>App.xaml.cs — ShowOnboarding, tray menu</td><td>Med — recovery-from-confusion journey currently has no real destination</td><td>Med</td><td>UI-only; conflict-case copy already exists in balloons and can be reused</td></tr>
+
+<tr><td><span class="badge badge-p2">P2</span></td><td>Ambiguous "Got it, maybe later" button label</td><td>Rename to state the real deferred action ("Skip for now (uses London times)")</td><td>OnboardingWindow.xaml</td><td>Low–Med</td><td>Low</td><td>UI-only</td></tr>
+
+<tr><td><span class="badge badge-p2">P2</span></td><td>Tray context menu has ~14 items at one level</td><td>Nest diagnostic-only items (Auto-start Diagnostics, Open Logs Folder) under one "Diagnostics" submenu</td><td>App.xaml.cs — tray ContextMenuStrip construction</td><td>Low–Med</td><td>Low</td><td>UI-only</td></tr>
+
+<tr><td><span class="badge badge-p2">P2</span></td><td>The app's photosensitivity-safe design reasoning is invisible to the end user</td><td>Add one short, visible note near Migraine Mode settings: "We turn this on instantly and always fade it off slowly — sudden brightness changes can be uncomfortable."</td><td>SettingsWindow.xaml — Migraine Mode section</td><td>Low–Med — trust-building, not functional</td><td>Low</td><td>UI-only; reasoning already exists in code comments, just not user-facing</td></tr>
+
+<tr><td><span class="badge badge-p2">P2</span></td><td>Evidence rationale is hidden in a collapsed, tiny expander</td><td>Promote a one-line plain-language summary outside the expander; keep full citation detail collapsed</td><td>SettingsWindow.xaml — "Why these colors?" expanders (Day/Night and Migraine sections)</td><td>Low–Med</td><td>Low</td><td>UI-only</td></tr>
+</table>
+
+<h2 id="s7">7. Concrete Examples (Before → After)</h2>
+
+<h3>7.1 Migraine Mode toggle feedback</h3>
+<div class="before-after">
+<div class="col before">
+<h4>Before (today)</h4>
+<ul>
+<li>Trigger: left-click tray icon, hotkey (Ctrl+Alt+Shift+M), or context menu — fast and redundant, already a strength.</li>
+<li>Feedback: instant screen tint, tray icon swaps to <code>migraine_on.ico</code>, one 4-second balloon reading "Migraine Mode ON."</li>
+<li>Auto-revert time (if set) is visible only by hovering the tray icon.</li>
+<li>Turning off shows "Migraine Mode OFF — fading back to normal" for 4 seconds, then no further confirmation during the 20-second fade.</li>
+</ul>
+</div>
+<div class="col after">
+<h4>After (proposed)</h4>
+<ul>
+<li>Same trigger mechanism — unchanged, it already works well.</li>
+<li>Balloon copy simplified: "Migraine relief is on." / "Migraine relief is easing off — back to normal in about 20 seconds."</li>
+<li>Tray tooltip (already updates today) made more prominent via the new status popover: "Migraine relief: ON · turns off automatically at 3:45 PM" or "Migraine relief: ON · stays on until you turn it off."</li>
+<li>First-use-only note near the settings for this feature: "We turn this on instantly, and always fade it off slowly — sudden brightness changes can be uncomfortable."</li>
+</ul>
+</div>
+</div>
+
+<h3>7.2 Color-temperature safety warning</h3>
+<div class="before-after">
+<div class="col before">
+<h4>Before (today)</h4>
+<p style="font-size:10.5pt;color:#555;">"Night color temp of 3200K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value (3400K is the safe floor found during testing)."</p>
+<p><em>Delivered as a blocking MessageBox at Save time.</em></p>
+</div>
+<div class="col after">
+<h4>After (proposed)</h4>
+<p style="font-size:11pt;">"3,200K is a little too warm for this screen. Please choose 3,400K or higher."</p>
+<p><em>Delivered as inline warning text next to the slider, live as the value changes — matching the pattern the app already uses successfully for <code>KelvinSafetyWarning</code> — with no blocking dialog needed at Save time at all.</em></p>
+</div>
+</div>
+
+<h3>7.3 Settings window: single scroll → grouped tabs <span style="font-size:10pt;font-weight:normal;color:#2a7a3a;">(implemented in SettingsWindow.xaml)</span></h3>
+<p>The wireframes below are a plain-layout reference, not a pixel-accurate mockup — they show information architecture (what's grouped where, how much scrolling remains per topic), not final visual styling.</p>
+<div class="before-after">
+<div class="col before">
+<h4>Before</h4>
+<div style="border:1px solid #ccc;background:#fff;width:100%;max-width:260px;margin:0 auto;font-size:9pt;">
+  <div style="background:#eee;border-bottom:1px solid #ccc;padding:4px 8px;font-weight:bold;">Monitor Wellness Settings</div>
+  <div style="position:relative;height:300px;overflow:hidden;padding:8px;">
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Location</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Profiles</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Day / Night Schedule</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Deep Night</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Migraine Mode</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#aaa;">Monitors &nbsp;⌄</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#aaa;">Break Reminders &nbsp;⌄</div>
+    <div style="padding:4px 0;color:#aaa;">History &nbsp;⌄</div>
+    <div style="position:absolute;top:8px;right:2px;bottom:8px;width:6px;background:#e2e2e2;border-radius:3px;">
+      <div style="position:absolute;top:0;left:0;width:6px;height:70px;background:#aaa;border-radius:3px;"></div>
+    </div>
+  </div>
+  <div style="border-top:1px solid #ccc;padding:6px 8px;text-align:right;color:#555;">Reset &nbsp; Cancel &nbsp; Save</div>
+</div>
+<p style="margin-top:10px;">One continuous scroll, 9 sections deep. To reach History, a user scrolls past Migraine Mode, Monitors, and Break Reminders regardless of which one they came for.</p>
+</div>
+<div class="col after">
+<h4>After</h4>
+<div style="border:1px solid #ccc;background:#fff;width:100%;max-width:260px;margin:0 auto;font-size:9pt;">
+  <div style="background:#eee;border-bottom:1px solid #ccc;padding:4px 8px;font-weight:bold;">Monitor Wellness Settings</div>
+  <div style="display:flex;border-bottom:1px solid #ccc;font-size:8pt;">
+    <div style="flex:1;text-align:center;padding:5px 2px;background:#fff;border-right:1px solid #eee;font-weight:bold;color:var(--eq-purple-dark);border-top:2px solid var(--eq-purple);">Schedule</div>
+    <div style="flex:1;text-align:center;padding:5px 2px;background:#f4f4f4;border-right:1px solid #eee;color:#888;">Migraine Mode</div>
+    <div style="flex:1;text-align:center;padding:5px 2px;background:#f4f4f4;border-right:1px solid #eee;color:#888;">Monitors &amp; Breaks</div>
+    <div style="flex:1;text-align:center;padding:5px 2px;background:#f4f4f4;color:#888;">Profiles &amp; History</div>
+  </div>
+  <div style="height:262px;padding:8px;">
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Location</div>
+    <div style="border-bottom:1px dashed #ccc;padding:4px 0;color:#555;">Day / Night Schedule</div>
+    <div style="padding:4px 0;color:#555;">Deep Night</div>
+  </div>
+  <div style="border-top:1px solid #ccc;padding:6px 8px;text-align:right;color:#555;">Reset &nbsp; Cancel &nbsp; Save</div>
+</div>
+<p style="margin-top:10px;">Four tabs, each its own short scroll: <strong>Schedule</strong> (Location, Day/Night, Deep Night), <strong>Migraine Mode</strong>, <strong>Monitors &amp; Breaks</strong>, <strong>Profiles &amp; History</strong>. A user opening Settings to adjust Migraine Mode never has to see or scroll past Monitors, History, or Location at all.</p>
+</div>
+</div>
+<div class="note">
+&#8505; <strong>Implementation note:</strong> This grouping is now live in <code>SettingsWindow.xaml</code> as a <code>TabControl</code> with four <code>TabItem</code>s, each wrapping its own <code>ScrollViewer</code>. Every control retained its original <code>x:Name</code>, so <code>SettingsWindow.xaml.cs</code> required zero changes — this was a pure layout regrouping, not a rewrite. <code>Theme/DarkTheme.xaml</code> was extended with matching <code>TabControl</code>/<code>TabItem</code> brushes so the tab strip follows dark mode consistently with every other control in the window. This was built and checked for well-formed XAML and for zero dropped/renamed controls, but has not yet been compiled or run on Windows (no Windows/MSBuild toolchain was available in this session) — please do a normal build-and-click-through before relying on it.
+</div>
+
+<div style="margin-top:48px;padding-top:12px;border-top:1px solid var(--eq-purple-mid);font-size:9pt;color:#aaa;text-align:center;">
+  Chris Broadhurst &nbsp;&bull;&nbsp; Equinox Consulting Ltd &nbsp;&bull;&nbsp; Internal Use Only &nbsp;&bull;&nbsp; July 2026
+</div>
+
+</body>
+</html>

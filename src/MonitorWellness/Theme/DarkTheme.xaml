@@ -24,6 +24,21 @@
     <SolidColorBrush x:Key="MW.ControlBackground" Color="#FF2D2D30"/>
     <SolidColorBrush x:Key="MW.ControlBorder" Color="#FF3F3F46"/>
 
+    <!--
+        Dark-mode overrides for the theme-aware helper/safety/warning text brushes defined (with
+        light-mode defaults) in Theme/BaseTheme.xaml, which is always merged first — these win by
+        merge order since both dictionaries are merged as siblings into the same Window.Resources.
+        Without these, text using the light-mode gray values (#FF595959/#FF444444) reads as
+        near-invisible against this dictionary's near-black MW.WindowBackground.
+    -->
+    <SolidColorBrush x:Key="MW.HelperText" Color="#FFB0B0B0"/>
+    <SolidColorBrush x:Key="MW.SafetyText" Color="#FFD8D8D8"/>
+    <SolidColorBrush x:Key="MW.WarningText" Color="#FFFF6B6B"/>
+    <!-- Same color as MW.ControlBackground above, as a separate key (rather than reusing that
+         one directly) so HotkeyBox's read-only background can change independently later
+         without also affecting every other control's background. -->
+    <SolidColorBrush x:Key="MW.ReadOnlyBackground" Color="#FF2D2D30"/>
+
     <Style TargetType="{x:Type TextBox}">
         <Setter Property="Background" Value="{StaticResource MW.ControlBackground}"/>
         <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
@@ -50,6 +65,57 @@
 
     <Style TargetType="{x:Type Border}">
         <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+    </Style>
+
+    <!--
+        Added alongside the tabbed Settings window redesign (MonitorWellness_UX_Accessibility_
+        Audit.html §6/§7) — without these, TabControl/TabItem would keep WPF's default light-
+        themed chrome (white tab strip background) even though every other control in the
+        window follows dark mode, which would look broken rather than merely imperfect.
+    -->
+    <Style TargetType="{x:Type TabControl}">
+        <Setter Property="Background" Value="{StaticResource MW.WindowBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
+    </Style>
+
+    <!--
+        A plain Background/Foreground Style (no Template override) looked right for the
+        UNSELECTED tabs, but the selected tab still rendered white with unreadable text.
+        Confirmed this is because WPF's built-in Aero2 TabItem ControlTemplate (see
+        PresentationFramework.Aero2 in the loaded-assemblies list) hardcodes its own
+        selected-state chrome internally and does not read the TabItem's own Background/
+        Foreground properties for that state. Setters alone can't override template-internal
+        brushes, so this needs a full custom ControlTemplate instead, which we fully control.
+    -->
+    <Style TargetType="{x:Type TabItem}">
+        <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type TabItem}">
+                    <Border x:Name="TabItemBorder"
+                            BorderBrush="{StaticResource MW.ControlBorder}"
+                            BorderThickness="1,1,1,0"
+                            Background="{StaticResource MW.ControlBackground}"
+                            Padding="{TemplateBinding Padding}"
+                            Margin="0,0,2,0">
+                        <ContentPresenter x:Name="ContentSite"
+                                          ContentSource="Header"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="TabItemBorder" Property="Background" Value="{StaticResource MW.WindowBackground}"/>
+                            <Setter Property="Panel.ZIndex" Value="10"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="TabItemBorder" Property="Background" Value="{StaticResource MW.ControlBorder}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>

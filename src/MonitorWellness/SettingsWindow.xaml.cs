@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using MonitorWellness.Core;
 using CheckBox = System.Windows.Controls.CheckBox;
 using TextBox = System.Windows.Controls.TextBox;
@@ -27,7 +28,20 @@ public partial class SettingsWindow : Window
     private readonly GammaControllerManager _gammaManager;
     private readonly OverlayController _overlay;
     private readonly Action _onSaved;
+    private readonly Func<string> _getStatusText;
     private readonly GeocodingService _geocoding = new();
+
+    private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(2);
+    private readonly DispatcherTimer _statusRefreshTimer;
+
+    // Throttles the live slider preview to roughly 10 updates/second so a fast drag across a
+    // wide Kelvin/brightness/opacity range can't write rapid, un-throttled changes straight to
+    // the real screen — the one motion-safety exception in an otherwise flicker-safe app. See
+    // MonitorWellness_UX_Accessibility_Audit.html §2.2/§2.5/§6 (P0). The timer only runs while
+    // a preview is actually pending and stops itself once flushed, so idle time costs nothing.
+    private static readonly TimeSpan PreviewThrottleInterval = TimeSpan.FromMilliseconds(100);
+    private readonly HashSet<string> _pendingPreviews = new();
+    private DispatcherTimer? _previewThrottleTimer;
 
     private readonly Dictionary<string, CheckBox> _excludeBoxes = new();
     private readonly Dictionary<string, CheckBox> _colorExcludeBoxes = new();
@@ -47,14 +61,16 @@ public partial class SettingsWindow : Window
     /// </summary>
     private readonly List<(TextBox Input, Slider Slider, bool IsPercentage)> _numericInputs = new();
 
-    public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved)
+    public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved, Func<string> getStatusText)
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
+        ThemeDetector.EnableLiveThemeUpdates(this);
         _settings = settings;
         _gammaManager = gammaManager;
         _overlay = overlay;
         _onSaved = onSaved;
+        _getStatusText = getStatusText;
 
         _numericInputs.Add((DayKelvinInput, DayKelvinSlider, false));
         _numericInputs.Add((NightKelvinInput, NightKelvinSlider, false));
@@ -65,6 +81,19 @@ public partial class SettingsWindow : Window
         _numericInputs.Add((DeepNightBrightnessInput, DeepNightBrightnessSlider, true));
 
         LoadFromSettings();
+
+        // Refreshed on a short timer (not just once at load) so the status line stays accurate
+        // for as long as this window is left open — e.g. a Migraine Mode auto-revert countdown
+        // ticking down, or a schedule pause expiring, while Settings sits open in the background.
+        CurrentStatusText.Text = _getStatusText();
+        _statusRefreshTimer = new DispatcherTimer { Interval = StatusRefreshInterval };
+        _statusRefreshTimer.Tick += (_, _) => CurrentStatusText.Text = _getStatusText();
+        _statusRefreshTimer.Start();
+        Closed += (_, _) =>
+        {
+            _statusRefreshTimer.Stop();
+            _previewThrottleTimer?.Stop();
+        };
     }
 
     /// <summary>Commits on losing focus — covers clicking away or Tabbing to the next field.</summary>
@@ -158,7 +187,7 @@ public partial class SettingsWindow : Window
     {
         var result = System.Windows.MessageBox.Show(
             this,
-            "Delete all locally saved Migraine Mode / pause history? This can't be undone.",
+            "This will permanently delete your saved history. Are you sure?",
             "Monitor Wellness",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -363,7 +392,7 @@ public partial class SettingsWindow : Window
     {
         var result = System.Windows.MessageBox.Show(
             this,
-            "Reset color, brightness, and migraine settings to their defaults? Your location and per-monitor setup won't change.",
+            "This resets your color, brightness, and Migraine Mode settings back to the defaults. Your location and monitor setup stay the same. Continue?",
             "Monitor Wellness",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -499,21 +528,56 @@ public partial class SettingsWindow : Window
     {
         if (!_loaded) return;
         UpdateSliderLabels();
-        PreviewDay();
+        QueuePreview("day");
     }
 
     private void NightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_loaded) return;
         UpdateSliderLabels();
-        PreviewNight();
+        QueuePreview("night");
     }
 
     private void MigrainePreview_Changed(object sender, EventArgs e)
     {
         if (!_loaded) return;
         UpdateSliderLabels();
-        PreviewMigraine();
+        QueuePreview("migraine");
+    }
+
+    /// <summary>
+    /// Queues a preview kind to be applied on the next throttle tick rather than immediately —
+    /// starts the shared throttle timer on first use and lets it stop itself once nothing is
+    /// pending, so a fast slider drag can only ever write to the real screen at the throttled
+    /// rate (see PreviewThrottleInterval), while a single slow adjustment still applies within
+    /// one tick. Reading the sliders' live .Value inside Preview*() (rather than snapshotting
+    /// here) means the last value before the user stops dragging is always what gets applied,
+    /// even if several ValueChanged events were coalesced into one flush.
+    /// </summary>
+    private void QueuePreview(string kind)
+    {
+        _pendingPreviews.Add(kind);
+        if (_previewThrottleTimer is not null)
+            return;
+
+        _previewThrottleTimer = new DispatcherTimer { Interval = PreviewThrottleInterval };
+        _previewThrottleTimer.Tick += (_, _) => FlushPendingPreviews();
+        _previewThrottleTimer.Start();
+    }
+
+    private void FlushPendingPreviews()
+    {
+        if (_pendingPreviews.Count == 0)
+        {
+            _previewThrottleTimer?.Stop();
+            _previewThrottleTimer = null;
+            return;
+        }
+
+        if (_pendingPreviews.Contains("day")) PreviewDay();
+        if (_pendingPreviews.Contains("night")) PreviewNight();
+        if (_pendingPreviews.Contains("migraine")) PreviewMigraine();
+        _pendingPreviews.Clear();
     }
 
     private void MigraineAutoRevertSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -534,6 +598,42 @@ public partial class SettingsWindow : Window
     private void BedtimeEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
+        if (_loaded) UpdateBedtimeWarning();
+    }
+
+    private void BedtimeBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_loaded) UpdateBedtimeWarning();
+    }
+
+    private void DeepNightColorBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_loaded) UpdateHexColorWarning(DeepNightColorBox, DeepNightColorWarning, "Deep-night overlay color");
+    }
+
+    /// <summary>
+    /// Replaces the previous blocking Save-time MessageBox for hex-color/bedtime validation
+    /// with inline warning text next to the field itself — the same pattern already used
+    /// successfully for KelvinSafetyWarning above, just applied to the other two fields that
+    /// used to only ever surface their errors as a modal dialog at Save time. See
+    /// MonitorWellness_UX_Accessibility_Audit.html §2.6/§6/§7.2 (P1). Returns whether the
+    /// field is currently valid, so TryParseAll can gate Save on it without needing a second,
+    /// separate validation pass.
+    /// </summary>
+    private static bool UpdateHexColorWarning(TextBox box, TextBlock warning, string fieldLabel)
+    {
+        bool valid = TryValidateHexColor(box, fieldLabel, out _, out string error);
+        warning.Text = valid ? "" : error;
+        warning.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        return valid;
+    }
+
+    private bool UpdateBedtimeWarning()
+    {
+        bool valid = TryValidateBedtime(out _, out string error);
+        BedtimeWarning.Text = valid ? "" : error;
+        BedtimeWarning.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
+        return valid;
     }
 
     private void BreakReminderCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -543,6 +643,15 @@ public partial class SettingsWindow : Window
 
     private void BreakReminderIntervalSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        // Fires once during InitializeComponent itself -- setting Minimum="5" in XAML coerces
+        // the slider's not-yet-explicitly-set Value up from its 0 default, raising this event
+        // before BreakReminderIntervalLabel (declared later in the same XAML file) has been
+        // connected to its field yet. Guarding on _loaded (like every other slider handler in
+        // this file) isn't right here specifically, because this is the only place that ever
+        // sets this label's text -- _loaded doesn't flip true until after LoadFromSettings
+        // already assigns BreakReminderIntervalSlider.Value from the real saved setting, and
+        // skipping that assignment's event would leave the label blank until first dragged.
+        if (BreakReminderIntervalLabel is null) return;
         BreakReminderIntervalLabel.Text = $"{(int)BreakReminderIntervalSlider.Value} minutes";
     }
 
@@ -559,14 +668,18 @@ public partial class SettingsWindow : Window
         bool nightUnsafe = !ColorTemperature.IsSafeForGammaRamp((int)NightKelvinSlider.Value);
         if (dayUnsafe || nightUnsafe)
         {
-            string which = dayUnsafe && nightUnsafe ? "Day and Night" : dayUnsafe ? "Day" : "Night";
-            KelvinSafetyWarning.Text = $"{which} color temp is too warm for this hardware's gamma ramp — confirmed directly, values below roughly 3300K are silently rejected. The preview below won't reflect this until you pick a higher value.";
+            string which = dayUnsafe && nightUnsafe ? "Day and Night color temps are" : dayUnsafe ? "Day color temp is" : "Night color temp is";
+            KelvinSafetyWarning.Text = $"That {which} a little too warm for this screen to show smoothly. Try a slightly cooler setting — most screens are comfortable from about 3,300K up.";
             KelvinSafetyWarning.Visibility = Visibility.Visible;
         }
         else
         {
             KelvinSafetyWarning.Visibility = Visibility.Collapsed;
         }
+
+        UpdateHexColorWarning(MigraineColorBox, MigraineColorWarning, "Migraine overlay color");
+        UpdateHexColorWarning(DeepNightColorBox, DeepNightColorWarning, "Deep-night overlay color");
+        UpdateBedtimeWarning();
     }
 
     private void PreviewDay() => ApplySchedulePreview((int)DayKelvinSlider.Value, DayBrightnessSlider.Value);
@@ -935,7 +1048,10 @@ public partial class SettingsWindow : Window
     {
         if (!TryParseAll(out string error))
         {
-            System.Windows.MessageBox.Show(this, error, "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // An empty error means the reason is already showing as inline warning text next
+            // to the offending field (hex color / bedtime) — nothing further to say in a dialog.
+            if (!string.IsNullOrEmpty(error))
+                System.Windows.MessageBox.Show(this, error, "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -962,12 +1078,12 @@ public partial class SettingsWindow : Window
         int nightKelvin = (int)NightKelvinSlider.Value;
         if (!ColorTemperature.IsSafeForGammaRamp(dayKelvin))
         {
-            error = $"Day color temp of {dayKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value.";
+            error = $"{dayKelvin}K is a bit too warm for this screen. Please choose 3,400K or higher, then try saving again.";
             return false;
         }
         if (!ColorTemperature.IsSafeForGammaRamp(nightKelvin))
         {
-            error = $"Night color temp of {nightKelvin}K is too warm for this hardware's gamma ramp — Windows will silently reject it. Confirmed directly on this hardware: values below roughly 3300K fail outright. Try a higher value (3400K is the safe floor found during testing).";
+            error = $"{nightKelvin}K is a bit too warm for this screen. Please choose 3,400K or higher, then try saving again.";
             return false;
         }
         // Brightness/opacity sliders are range-locked to 0-1 in XAML (Minimum/Maximum), so
@@ -976,14 +1092,19 @@ public partial class SettingsWindow : Window
         double nightBrightness = NightBrightnessSlider.Value;
         double migraineOpacity = MigraineOpacitySlider.Value;
 
-        if (!TryValidateMigraineColorHex(out string migraineColorHex, out error))
+        // Hex-color/bedtime problems surface as inline warning text next to the field itself
+        // (UpdateSliderLabels keeps these current on every keystroke/slider move already) —
+        // no blocking MessageBox needed here, just decline to save. See UpdateHexColorWarning/
+        // UpdateBedtimeWarning and MonitorWellness_UX_Accessibility_Audit.html §2.6/§6 (P1).
+        bool migraineHexValid = UpdateHexColorWarning(MigraineColorBox, MigraineColorWarning, "Migraine overlay color");
+        bool deepNightHexValid = UpdateHexColorWarning(DeepNightColorBox, DeepNightColorWarning, "Deep-night overlay color");
+        bool bedtimeValid = UpdateBedtimeWarning();
+        if (!migraineHexValid || !deepNightHexValid || !bedtimeValid)
             return false;
 
-        if (!TryValidateDeepNightColorHex(out string deepNightColorHex, out error))
-            return false;
-
-        if (!TryValidateBedtime(out string? bedtimeLocal, out error))
-            return false;
+        TryValidateMigraineColorHex(out string migraineColorHex, out _);
+        TryValidateDeepNightColorHex(out string deepNightColorHex, out _);
+        TryValidateBedtime(out string? bedtimeLocal, out _);
 
         var multipliers = new Dictionary<string, double>();
         foreach (var (deviceName, box) in _multiplierBoxes)

@@ -2,320 +2,382 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Monitor Wellness Settings"
-        Width="560" Height="760"
+        Width="600" Height="760"
+        MinWidth="520" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize">
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TextBlock Text="Location" FontWeight="Bold" Margin="0,0,0,4"/>
+        <!--
+            Persistent, glanceable status line — states current mode (Day/Night/Deep Night,
+            Migraine relief, or a schedule pause) in plain words, pinned above the tabs so it's
+            visible no matter which tab is open, rather than only ever being discoverable by
+            hovering the tray icon or catching a transient balloon. See
+            MonitorWellness_UX_Accessibility_Audit.html §2.1/§2.2/§6 (P0). Refreshed on load and
+            on a short timer while this window stays open — see SettingsWindow.xaml.cs.
+        -->
+        <Border Grid.Row="0" BorderBrush="#FFAAAAAA" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+            <TextBlock x:Name="CurrentStatusText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite"/>
+        </Border>
 
-                <TextBlock Text="Search for your town or postcode" FontSize="11" Foreground="DimGray" Margin="0,0,0,2"/>
-                <Grid Margin="0,0,0,6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="LocationSearchBox" Grid.Column="0" Margin="0,0,8,0"
-                             VerticalContentAlignment="Center"
-                             ToolTip="Town, city, postcode/zip, or place name"
-                             AutomationProperties.Name="Search for your town, postcode, or place name"/>
-                    <Button x:Name="FindLocationButton" Grid.Column="1" Content="Find" Padding="12,4" Click="FindLocationButton_Click"/>
-                </Grid>
-                <TextBlock x:Name="LocationSearchStatus" FontSize="13" Foreground="DimGray" Margin="0,0,0,6" TextWrapping="Wrap"/>
-                <TextBlock FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8">
-                    Privacy: nothing in Monitor Wellness is sent anywhere except this location
-                    search above, which only runs when you click Find — everything else
-                    (settings, diagnostic logs) stays local on this PC. No telemetry, no
-                    accounts.
-                </TextBlock>
+        <!--
+            Restructured from a single ~9-section scrolling page into four grouped tabs
+            (Schedule / Migraine Mode / Monitors & Breaks / Profiles & History) so a user only
+            ever scrolls through the one topic they came here for, not past every other
+            section on the way — see MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).
+            Every control below keeps its original x:Name and event handler, so
+            SettingsWindow.xaml.cs needs no changes at all — this is a pure layout regrouping.
+        -->
+        <TabControl x:Name="SettingsTabs" Grid.Row="1" Padding="0" Margin="0,0,0,8">
 
-                <Border BorderBrush="#FFAAAAAA" BorderThickness="1" Margin="0,0,0,4" HorizontalAlignment="Left">
-                    <Grid x:Name="MapContainer" Width="440" Height="222" ClipToBounds="True"
-                          MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" Cursor="Hand"
-                          AutomationProperties.Name="Click to set location on the world map">
-                        <Image x:Name="MapImage" Stretch="Fill"/>
-                        <Canvas x:Name="MapMarkerCanvas" IsHitTestVisible="False">
-                            <Ellipse x:Name="MapMarker" Width="10" Height="10" Fill="#FFE84B3C" Stroke="White" StrokeThickness="1.5"/>
-                        </Canvas>
-                    </Grid>
-                </Border>
-                <TextBlock Text="Click the map to set your location. A rough click is fine — sunrise and sunset times barely change over short distances." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <TabItem Header="Schedule">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Location" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
 
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Latitude"/>
-                        <TextBox x:Name="LatitudeBox" TextChanged="LatLongBox_TextChanged"/>
+                        <TextBlock Text="Search for your town or postcode" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,2"/>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="LocationSearchBox" Grid.Column="0" Margin="0,0,8,0"
+                                     VerticalContentAlignment="Center"
+                                     ToolTip="Town, city, postcode/zip, or place name"
+                                     AutomationProperties.Name="Search for your town, postcode, or place name"/>
+                            <Button x:Name="FindLocationButton" Grid.Column="1" Content="Find" Padding="12,4" Click="FindLocationButton_Click"/>
+                        </Grid>
+                        <TextBlock x:Name="LocationSearchStatus" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,6" TextWrapping="Wrap"/>
+                        <TextBlock FontSize="15" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8">
+                            Privacy: nothing in Monitor Wellness is sent anywhere except this location
+                            search above, which only runs when you click Find — everything else
+                            (settings, diagnostic logs) stays local on this PC. No telemetry, no
+                            accounts.
+                        </TextBlock>
+
+                        <Border BorderBrush="#FFAAAAAA" BorderThickness="1" Margin="0,0,0,4" HorizontalAlignment="Left">
+                            <Grid x:Name="MapContainer" Width="440" Height="222" ClipToBounds="True"
+                                  MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" Cursor="Hand"
+                                  AutomationProperties.Name="Click to set location on the world map">
+                                <Image x:Name="MapImage" Stretch="Fill"/>
+                                <Canvas x:Name="MapMarkerCanvas" IsHitTestVisible="False">
+                                    <Ellipse x:Name="MapMarker" Width="10" Height="10" Fill="#FFE84B3C" Stroke="White" StrokeThickness="1.5"/>
+                                </Canvas>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="Click the map to set your location. A rough click is fine — sunrise and sunset times barely change over short distances." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Latitude"/>
+                                <TextBox x:Name="LatitudeBox" TextChanged="LatLongBox_TextChanged"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Longitude"/>
+                                <TextBox x:Name="LongitudeBox" TextChanged="LatLongBox_TextChanged"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="SunTimesText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,16"/>
+
+                        <Separator Margin="0,0,0,16"/>
+
+                        <TextBlock Text="Day / Night Schedule" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <TextBlock FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4">
+                            Try it live: moving a slider changes your screen right away, just to preview
+                            it. Nothing is kept until you press Save. Press Cancel any time to undo
+                            everything and go back to normal.
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Button x:Name="TryCoolerButton" Content="Try Cooler &amp; Brighter (A)" Padding="8,2" Margin="0,0,8,0" Click="TryCoolerBrighterPreset_Click"/>
+                            <Button x:Name="TryWarmerButton" Content="Try Warmer &amp; Dimmer (B)" Padding="8,2" Click="TryWarmerDimmerPreset_Click"/>
+                        </StackPanel>
+                        <TextBlock Text="Not sure which to pick? Try each one on your real screen — both apply to whichever of Day/Night you're currently looking at — then fine-tune with the sliders below." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <TextBlock Text="Backed by circadian-light research on evening warming; daytime dimming is a comfort preference, not a proven eye-strain fix." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <Expander Header="Why these colors? (full evidence detail)" FontSize="13" Margin="0,0,0,8">
+                            <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}" Margin="4,4,4,4" MaxWidth="500">
+                                Evening warming (day → night color temperature) is based on solid, well-
+                                established science that blue light suppresses melatonin — but there
+                                isn't strong direct evidence that a software color filter like this one
+                                (or other similar tools) actually improves sleep; that's a reasonable
+                                extension of the mechanism, not a proven outcome. Daytime dimming/warming
+                                is a comfort feature many users find more pleasant — a 2023 review found
+                                blue-light filtering does not measurably reduce computer eye strain, so
+                                this isn't offered as a scientifically proven eye-strain fix, just a
+                                preference many people share.
+                            </TextBlock>
+                        </Expander>
+                        <Grid Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Day color temp"/>
+                                <Slider x:Name="DayKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
+                                        IsSnapToTickEnabled="True" ValueChanged="DaySlider_ValueChanged"
+                                        AutomationProperties.Name="Day color temperature in Kelvin"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBox x:Name="DayKelvinInput" Width="50" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                             LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                             AutomationProperties.Name="Day color temperature exact value in Kelvin"/>
+                                    <TextBlock Text="K" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Night color temp"/>
+                                <Slider x:Name="NightKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
+                                        IsSnapToTickEnabled="True" ValueChanged="NightSlider_ValueChanged"
+                                        AutomationProperties.Name="Night color temperature in Kelvin"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBox x:Name="NightKelvinInput" Width="50" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                             LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                             AutomationProperties.Name="Night color temperature exact value in Kelvin"/>
+                                    <TextBlock Text="K" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="KelvinSafetyWarning" FontSize="15" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
+                                   AutomationProperties.LiveSetting="Assertive"/>
+                        <TextBlock Text="Most screens show smooth color changes from about 3,300K up to 6,500K." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Day brightness"/>
+                                <Slider x:Name="DayBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DaySlider_ValueChanged"
+                                        AutomationProperties.Name="Day brightness percentage"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBox x:Name="DayBrightnessInput" Width="40" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                             LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                             AutomationProperties.Name="Day brightness exact percentage"/>
+                                    <TextBlock Text="%" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Night brightness"/>
+                                <Slider x:Name="NightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="NightSlider_ValueChanged"
+                                        AutomationProperties.Name="Night brightness percentage"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBox x:Name="NightBrightnessInput" Width="40" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                             LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                             AutomationProperties.Name="Night brightness exact percentage"/>
+                                    <TextBlock Text="%" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <CheckBox x:Name="MatchAmbientLightCheckBox" Content="Nudge daytime brightness to match the room's actual light level (needs an ambient light sensor)" Margin="0,0,0,4"/>
+                        <TextBlock x:Name="AmbientLightAvailabilityText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="BedtimeEnabledCheckBox" Content="Also deepen toward bedtime warmth/dim by a fixed clock time" Margin="0,0,0,4" Checked="BedtimeEnabledCheckBox_Changed" Unchecked="BedtimeEnabledCheckBox_Changed"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Bedtime (HH:mm)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left" TextChanged="BedtimeBox_TextChanged"/>
+                        </Grid>
+                        <TextBlock x:Name="BedtimeWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
+                                   AutomationProperties.LiveSetting="Assertive"/>
+                        <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                        <Separator Margin="0,0,0,16"/>
+
+                        <TextBlock Text="Deep Night" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <TextBlock Text="Later at night (or at your bedtime, if set above), your screen eases even warmer and dimmer than the usual night setting." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Text="Deep-night brightness"/>
+                            <Slider x:Name="DeepNightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DeepNightSlider_ValueChanged"
+                                    AutomationProperties.Name="Deep-night brightness percentage"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBox x:Name="DeepNightBrightnessInput" Width="40" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                         LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                         AutomationProperties.Name="Deep-night brightness exact percentage"/>
+                                <TextBlock Text="%" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Text="Deep-night overlay color (hex, e.g. #190C04)"/>
+                            <TextBox x:Name="DeepNightColorBox" TextChanged="DeepNightColorBox_TextChanged"/>
+                        </StackPanel>
+                        <TextBlock x:Name="DeepNightColorWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
+                                   AutomationProperties.LiveSetting="Assertive"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="Longitude"/>
-                        <TextBox x:Name="LongitudeBox" TextChanged="LatLongBox_TextChanged"/>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Migraine Mode">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Migraine Mode" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Button x:Name="TryGentleButton" Content="Try Gentle (A)" Padding="8,2" Margin="0,0,8,0" Click="TryGentlePreset_Click"/>
+                            <Button x:Name="TryStrongButton" Content="Try Strong (B)" Padding="8,2" Click="TryStrongPreset_Click"/>
+                        </StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,8">
+                            Not sure which to pick? Try each one on your real screen right now.
+                            Fine-tune with the sliders below once you know what feels right.
+                        </TextBlock>
+                        <TextBlock Text="Backed by 2016 migraine-light research; this is a comfort tool, not a medical treatment." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <Expander Header="Why these colors? (full evidence detail)" FontSize="13" Margin="0,0,0,8">
+                            <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}" Margin="4,4,4,4" MaxWidth="500">
+                                The muted green tint is based on Noseda &amp; Burstein (Brain, 2016) and
+                                later independent replications, which found white, blue, amber, and red
+                                light all worsen migraine photophobia while a narrow band of green light
+                                reduces it — the best-supported evidence behind any feature in this app.
+                                One honest gap: that research studied ambient green light in a room, not
+                                a colored screen overlay — applying the same idea to a self-luminous
+                                screen is a reasonable analogy, not a direct reproduction of the studied
+                                intervention. This is not a medical device and is not a substitute for
+                                professional medical care — please talk to a doctor about migraine
+                                treatment, and use this as one comfort tool alongside that care, not
+                                instead of it.
+                            </TextBlock>
+                        </Expander>
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Text="Overlay color (hex, e.g. #173620)"/>
+                            <TextBox x:Name="MigraineColorBox" TextChanged="MigrainePreview_Changed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="MigraineColorWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
+                                   AutomationProperties.LiveSetting="Assertive"/>
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="Overlay opacity"/>
+                            <Slider x:Name="MigraineOpacitySlider" Minimum="0" Maximum="1" ValueChanged="MigrainePreview_Changed"
+                                    AutomationProperties.Name="Migraine overlay opacity percentage"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBox x:Name="MigraineOpacityInput" Width="40" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                         LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                         AutomationProperties.Name="Migraine overlay opacity exact percentage"/>
+                                <TextBlock Text="%" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="Contrast reduction (separate from color and brightness)"/>
+                            <Slider x:Name="MigraineContrastSlider" Minimum="0" Maximum="0.3" ValueChanged="MigrainePreview_Changed"
+                                    AutomationProperties.Name="Migraine contrast reduction percentage"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBox x:Name="MigraineContrastInput" Width="40" TextAlignment="Right" FontSize="12" Padding="2,0"
+                                         LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
+                                         AutomationProperties.Name="Migraine contrast reduction exact percentage"/>
+                                <TextBlock Text="%" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="2,0,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="MigraineContrastNoneHint" HorizontalAlignment="Center" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Text="0% = none"/>
+                        </StackPanel>
+                        <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <TextBlock Text="We turn Migraine Mode on instantly, and always fade it back off slowly over about 20 seconds — sudden brightness changes can themselves be uncomfortable, so we designed around that on purpose." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Text="Turn off automatically after this many minutes"/>
+                            <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
+                            <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}"/>
+                            <TextBlock Text="Set to 0 for never — a real migraine can last hours, so we leave this off by default." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
+                        </StackPanel>
+                        <CheckBox x:Name="PlaySoundCheckBox" Content="Play a sound when the hotkey toggles migraine mode" Margin="0,0,0,4"/>
+                        <TextBlock Text="Off by default — migraine sufferers often also have sound sensitivity during an attack, so an audible confirmation is opt-in, not assumed helpful. A silent visual notification always shows either way." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <StackPanel Margin="0,0,0,4">
+                            <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>
+                            <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="{DynamicResource MW.ReadOnlyBackground}"
+                                     PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
+                        </StackPanel>
+                        <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,4"/>
                     </StackPanel>
-                </Grid>
-                <TextBlock x:Name="SunTimesText" FontSize="13" Foreground="DimGray" Margin="0,0,0,12"/>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Text="Profiles" FontWeight="Bold" Margin="0,0,0,4"/>
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <ComboBox x:Name="ProfilesComboBox" Grid.Column="0" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
-                    <Button Grid.Column="1" Content="Load" Padding="8,2" Margin="0,0,4,0" Click="LoadProfileButton_Click"/>
-                    <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
-                    <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
-                </Grid>
-                <TextBlock Text="A profile remembers your color, brightness, and Migraine Mode settings. It does not remember your location, monitor setup, or break reminders — those stay the same no matter which profile you load. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                    <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
-                    <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>
-                </StackPanel>
-                <TextBlock Text="Export/Import cover everything — location, per-monitor setup, and preferences — as one file, e.g. for a backup or moving to another PC. Import loads values into this window; you still need to click Save below to keep them." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+            <TabItem Header="Monitors &amp; Breaks">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Monitors" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
+                        <TextBlock Text="Dim amount: 1.0 matches the normal schedule exactly. Color offset: shifts just this monitor warmer or cooler than the others (try -300 if it looks too warm)." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1" Text="Exclude" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="2" Text="Color-acc." FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="3" Text="Dim×" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="4" Text="Kelvin±" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" HorizontalAlignment="Center"/>
+                        </Grid>
+                        <ItemsControl x:Name="MonitorsList"/>
 
-                <TextBlock Text="Day / Night Schedule" FontWeight="Bold" Margin="0,0,0,4"/>
-                <TextBlock FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4">
-                    Try it live: moving a slider changes your screen right away, just to preview
-                    it. Nothing is kept until you press Save. Press Cancel any time to undo
-                    everything and go back to normal.
-                </TextBlock>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                    <Button x:Name="TryCoolerButton" Content="Try Cooler &amp; Brighter (A)" Padding="8,2" Margin="0,0,8,0" Click="TryCoolerBrighterPreset_Click"/>
-                    <Button x:Name="TryWarmerButton" Content="Try Warmer &amp; Dimmer (B)" Padding="8,2" Click="TryWarmerDimmerPreset_Click"/>
-                </StackPanel>
-                <TextBlock Text="Not sure which to pick? Try each one on your real screen — both apply to whichever of Day/Night you're currently looking at — then fine-tune with the sliders below." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <Expander Header="Why these colors? (evidence summary)" FontSize="12" Margin="0,0,0,8">
-                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="4,4,4,4" MaxWidth="500">
-                        Evening warming (day → night Kelvin) is based on solid, well-established
-                        science that blue light suppresses melatonin — but there isn't strong
-                        direct evidence that a software color filter like this one (or f.lux, or
-                        Windows Night Light) actually improves sleep; that's a reasonable
-                        extension of the mechanism, not a proven outcome. Daytime dimming/warming
-                        is a comfort feature many users find more pleasant — a 2023 Cochrane
-                        review found blue-light filtering does not measurably reduce computer eye
-                        strain, so this isn't offered as a scientifically proven eye-strain fix,
-                        just a preference many people share. Full detail with citations:
-                        EVALUATION.md in this app's repository.
-                    </TextBlock>
-                </Expander>
-                <Grid Margin="0,0,0,2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Day color temp"/>
-                        <Slider x:Name="DayKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
-                                IsSnapToTickEnabled="True" ValueChanged="DaySlider_ValueChanged"
-                                AutomationProperties.Name="Day color temperature in Kelvin"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBox x:Name="DayKelvinInput" Width="50" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                     LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                     AutomationProperties.Name="Day color temperature exact value in Kelvin"/>
-                            <TextBlock Text="K" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
+                        <Separator Margin="0,16,0,16"/>
+
+                        <TextBlock Text="Break Reminders" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="BreakReminderCheckBox" Content="Remind me to take a break (the 20-20-20 rule)" Margin="0,0,0,4"
+                                  Checked="BreakReminderCheckBox_Changed" Unchecked="BreakReminderCheckBox_Changed"/>
+                        <TextBlock Text="Off by default. Every 20 minutes, look at something about 20 feet away for 20 seconds — this is the one eye-strain habit with solid ergonomics research behind it. Skipped automatically while Migraine Mode is active." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Every" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Slider x:Name="BreakReminderIntervalSlider" Grid.Column="1" Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="BreakReminderIntervalSlider_ValueChanged" AutomationProperties.Name="Break reminder interval in minutes"/>
+                        </Grid>
+                        <TextBlock x:Name="BreakReminderIntervalLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Profiles &amp; History">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Profiles" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="ProfilesComboBox" Grid.Column="0" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Load" Padding="8,2" Margin="0,0,4,0" Click="LoadProfileButton_Click"/>
+                            <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
+                            <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
+                        </Grid>
+                        <TextBlock Text="A profile remembers your color, brightness, and Migraine Mode settings. It does not remember your location, monitor setup, or break reminders — those stay the same no matter which profile you load. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
+                            <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>
+                        </StackPanel>
+                        <TextBlock Text="Export/Import cover everything — location, per-monitor setup, and preferences — as one file, e.g. for a backup or moving to another PC. Import loads values into this window; you still need to click Save below to keep them." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                        <Separator Margin="0,0,0,16"/>
+
+                        <TextBlock Text="History" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="HistoryTrackingCheckBox" Content="Keep a local history of Migraine Mode activations and schedule pauses" Margin="0,0,0,4" Checked="HistoryTrackingCheckBox_Changed" Unchecked="HistoryTrackingCheckBox_Changed"/>
+                        <TextBlock Text="Off by default. This stays on your computer only — it just helps you notice your own patterns over time." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
+                        <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="HistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
+                            <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
                         </StackPanel>
                     </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="Night color temp"/>
-                        <Slider x:Name="NightKelvinSlider" Minimum="2000" Maximum="10000" TickFrequency="50"
-                                IsSnapToTickEnabled="True" ValueChanged="NightSlider_ValueChanged"
-                                AutomationProperties.Name="Night color temperature in Kelvin"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBox x:Name="NightKelvinInput" Width="50" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                     LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                     AutomationProperties.Name="Night color temperature exact value in Kelvin"/>
-                            <TextBlock Text="K" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Grid>
-                <TextBlock x:Name="KelvinSafetyWarning" FontSize="13" Foreground="#FFB03030" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
-                <TextBlock Text="Gamma ramp is only reliable in the ~3300K-6500K range on most hardware — see IMPLEMENTATION.md." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Day brightness"/>
-                        <Slider x:Name="DayBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DaySlider_ValueChanged"
-                                AutomationProperties.Name="Day brightness percentage"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBox x:Name="DayBrightnessInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                     LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                     AutomationProperties.Name="Day brightness exact percentage"/>
-                            <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="Night brightness"/>
-                        <Slider x:Name="NightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="NightSlider_ValueChanged"
-                                AutomationProperties.Name="Night brightness percentage"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBox x:Name="NightBrightnessInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                     LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                     AutomationProperties.Name="Night brightness exact percentage"/>
-                            <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Grid>
+                </ScrollViewer>
+            </TabItem>
 
-                <CheckBox x:Name="MatchAmbientLightCheckBox" Content="Nudge daytime brightness to match the room's actual light level (needs an ambient light sensor)" Margin="0,0,0,4"/>
-                <TextBlock x:Name="AmbientLightAvailabilityText" FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <CheckBox x:Name="BedtimeEnabledCheckBox" Content="Also deepen toward bedtime warmth/dim by a fixed clock time" Margin="0,0,0,4" Checked="BedtimeEnabledCheckBox_Changed" Unchecked="BedtimeEnabledCheckBox_Changed"/>
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Bedtime (HH:mm)" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
-                </Grid>
-                <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+        </TabControl>
 
-                <TextBlock Text="Deep Night" FontWeight="Bold" Margin="0,0,0,4"/>
-                <TextBlock Text="Once the sun (or bedtime clock above) reaches deep night, brightness and overlay color blend further toward these values — a bedtime-level warmth stage beyond what Night color temp's safe gamma-ramp floor can reach on its own." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Deep-night brightness"/>
-                    <Slider x:Name="DeepNightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DeepNightSlider_ValueChanged"
-                            AutomationProperties.Name="Deep-night brightness percentage"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBox x:Name="DeepNightBrightnessInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                 LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                 AutomationProperties.Name="Deep-night brightness exact percentage"/>
-                        <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                    </StackPanel>
-                </StackPanel>
-                <StackPanel Margin="0,0,0,12">
-                    <TextBlock Text="Deep-night overlay color (hex, e.g. #190C04)"/>
-                    <TextBox x:Name="DeepNightColorBox"/>
-                </StackPanel>
-
-                <TextBlock Text="Migraine Mode" FontWeight="Bold" Margin="0,0,0,4"/>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                    <Button x:Name="TryGentleButton" Content="Try Gentle (A)" Padding="8,2" Margin="0,0,8,0" Click="TryGentlePreset_Click"/>
-                    <Button x:Name="TryStrongButton" Content="Try Strong (B)" Padding="8,2" Click="TryStrongPreset_Click"/>
-                </StackPanel>
-                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="0,0,0,8">
-                    Not sure which to pick? Try each one on your real screen right now.
-                    Fine-tune with the sliders below once you know what feels right.
-                </TextBlock>
-                <Expander Header="Why these colors? (evidence summary)" FontSize="12" Margin="0,0,0,8">
-                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="4,4,4,4" MaxWidth="500">
-                        The muted green tint is based on Noseda &amp; Burstein (Brain, 2016) and
-                        later independent replications, which found white, blue, amber, and red
-                        light all worsen migraine photophobia while a narrow band of green light
-                        reduces it — the best-supported evidence behind any feature in this app.
-                        One honest gap: that research studied ambient green light in a room, not
-                        a colored screen overlay — applying the same idea to a self-luminous
-                        screen is a reasonable analogy, not a direct reproduction of the studied
-                        intervention. This is not a medical device and is not a substitute for
-                        professional medical care — please talk to a doctor about migraine
-                        treatment, and use this as one comfort tool alongside that care, not
-                        instead of it. Full detail with citations: EVALUATION.md in this app's
-                        repository.
-                    </TextBlock>
-                </Expander>
-                <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Overlay color (hex, e.g. #173620)"/>
-                    <TextBox x:Name="MigraineColorBox" TextChanged="MigrainePreview_Changed"/>
-                </StackPanel>
-                <StackPanel Margin="0,0,0,8">
-                    <TextBlock Text="Overlay opacity"/>
-                    <Slider x:Name="MigraineOpacitySlider" Minimum="0" Maximum="1" ValueChanged="MigrainePreview_Changed"
-                            AutomationProperties.Name="Migraine overlay opacity percentage"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBox x:Name="MigraineOpacityInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                 LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                 AutomationProperties.Name="Migraine overlay opacity exact percentage"/>
-                        <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                    </StackPanel>
-                </StackPanel>
-                <StackPanel Margin="0,0,0,8">
-                    <TextBlock Text="Contrast reduction (a distinct comfort lever from color/brightness)"/>
-                    <Slider x:Name="MigraineContrastSlider" Minimum="0" Maximum="0.3" ValueChanged="MigrainePreview_Changed"
-                            AutomationProperties.Name="Migraine contrast reduction percentage"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBox x:Name="MigraineContrastInput" Width="40" TextAlignment="Right" FontSize="11" Padding="2,0"
-                                 LostFocus="NumericInput_LostFocus" KeyDown="NumericInput_KeyDown"
-                                 AutomationProperties.Name="Migraine contrast reduction exact percentage"/>
-                        <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
-                    </StackPanel>
-                    <TextBlock x:Name="MigraineContrastNoneHint" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray" Text="0% = none"/>
-                </StackPanel>
-                <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Turn off automatically after this many minutes"/>
-                    <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
-                    <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="12" Foreground="DimGray"/>
-                    <TextBlock Text="Set to 0 for never — a real migraine can last hours, so we leave this off by default." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
-                </StackPanel>
-                <CheckBox x:Name="PlaySoundCheckBox" Content="Play a sound when the hotkey toggles migraine mode" Margin="0,0,0,4"/>
-                <TextBlock Text="Off by default — migraine sufferers often also have sound sensitivity during an attack, so an audible confirmation is opt-in, not assumed helpful. A silent visual notification always shows either way." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>
-                    <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="#FFF0F0F0"
-                             PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
-                </StackPanel>
-                <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="13" Foreground="DimGray" Margin="0,0,0,12"/>
-
-                <TextBlock Text="Monitors" FontWeight="Bold" Margin="0,0,0,4"/>
-                <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
-                <TextBlock Text="Dim amount: 1.0 matches the normal schedule exactly. Color offset: shifts just this monitor warmer or cooler than the others (try -300 if it looks too warm)." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="60"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="1" Text="Exclude" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="2" Text="Color-acc." FontSize="11" FontWeight="SemiBold" Foreground="DimGray" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="3" Text="Dim×" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" HorizontalAlignment="Center"/>
-                    <TextBlock Grid.Column="4" Text="Kelvin±" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" HorizontalAlignment="Center"/>
-                </Grid>
-                <ItemsControl x:Name="MonitorsList"/>
-
-                <TextBlock Text="Break Reminders" FontWeight="Bold" Margin="0,16,0,4"/>
-                <CheckBox x:Name="BreakReminderCheckBox" Content="Remind me to take a break (the 20-20-20 rule)" Margin="0,0,0,4"
-                          Checked="BreakReminderCheckBox_Changed" Unchecked="BreakReminderCheckBox_Changed"/>
-                <TextBlock Text="Off by default. Every 20 minutes, look at something about 20 feet away for 20 seconds — this is the one eye-strain intervention with real ergonomics backing (unlike blue-light filtering itself; see EVALUATION.md). Skipped automatically while Migraine Mode is active." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Every" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Slider x:Name="BreakReminderIntervalSlider" Grid.Column="1" Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True"
-                            ValueChanged="BreakReminderIntervalSlider_ValueChanged" AutomationProperties.Name="Break reminder interval in minutes"/>
-                </Grid>
-                <TextBlock x:Name="BreakReminderIntervalLabel" HorizontalAlignment="Center" FontSize="12" Foreground="DimGray" Margin="0,-10,0,12"/>
-
-                <TextBlock Text="History" FontWeight="Bold" Margin="0,0,0,4"/>
-                <CheckBox x:Name="HistoryTrackingCheckBox" Content="Keep a local history of Migraine Mode activations and schedule pauses" Margin="0,0,0,4" Checked="HistoryTrackingCheckBox_Changed" Unchecked="HistoryTrackingCheckBox_Changed"/>
-                <TextBlock Text="Off by default. This stays on your computer only — it just helps you notice your own patterns over time." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
-                <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="HistorySummaryText" FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
-                    <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
-                </StackPanel>
-
-            </StackPanel>
-        </ScrollViewer>
-
-        <Grid Grid.Row="1" Margin="0,12,0,0">
+        <Grid Grid.Row="2" Margin="0,4,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>

@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Light-mode (default) values for the theme-aware helper/safety/warning text brushes used
+        throughout Settings/Onboarding/About/Troubleshooting. Always merged first, at
+        construction, by ThemeDetector.ApplyDarkThemeIfNeeded — Theme/DarkTheme.xaml is merged
+        afterward (as a sibling, not a child of these keys) only in dark mode, so its same-named
+        keys correctly win by merge order rather than being shadowed by a parent-dictionary
+        definition. Referenced via DynamicResource (not StaticResource) everywhere so a live
+        Windows theme change (see ThemeDetector.EnableLiveThemeUpdates) actually re-colors this
+        text instead of only affecting window chrome.
+
+        Added after the first round of the UX audit's "raise size/contrast of safety text" fix
+        used hardcoded colors (DimGray, #FF444444) directly on TextBlocks — which reads fine in
+        light mode but is illegible in dark mode, since an explicit local Foreground value always
+        wins over an implicit dark-theme style. See
+        MonitorWellness_UX_Accessibility_Audit.html §2.4/§4/§6 (P0/P1).
+    -->
+    <SolidColorBrush x:Key="MW.HelperText" Color="#FF595959"/>
+    <SolidColorBrush x:Key="MW.SafetyText" Color="#FF444444"/>
+    <SolidColorBrush x:Key="MW.WarningText" Color="#FFB03030"/>
+    <SolidColorBrush x:Key="MW.ReadOnlyBackground" Color="#FFF0F0F0"/>
+
+</ResourceDictionary>

@@ -14,7 +14,7 @@
 
         <TextBlock Grid.Row="0" Text="How did that feel?" FontWeight="Bold" Margin="0,0,0,4"
                     AutomationProperties.Name="How did Migraine Mode feel just now?"/>
-        <TextBlock Grid.Row="1" Text="Optional — this helps you track what's working for you. 1 = not helpful, 5 = very helpful. Stays fully local — see Settings' privacy note." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="1" Text="Optional — this helps you track what's working for you. 1 = didn't help, 5 = helped a lot. This stays on your computer — nothing is sent anywhere." FontSize="13" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button x:Name="Rating1Button" Content="1" Width="34" Margin="0,0,4,0" Click="RatingButton_Click" AutomationProperties.Name="Rate 1 out of 5"/>
@@ -27,7 +27,7 @@
 
         <Button x:Name="DontAskAgainButton" Grid.Row="3" Content="Don't ask again" HorizontalAlignment="Center"
                 Margin="0,10,0,0" Padding="4,2" BorderThickness="0" Background="Transparent"
-                Foreground="DimGray" FontSize="12" Cursor="Hand" Click="DontAskAgain_Click"
+                Foreground="{DynamicResource MW.HelperText}" FontSize="12" Cursor="Hand" Click="DontAskAgain_Click"
                 AutomationProperties.Name="Stop asking for a rating after Migraine Mode"/>
     </Grid>
 </Window>
