@@ -38,7 +38,11 @@
         </StackPanel>
 
         <Border Grid.Row="2" Background="#FFFDF3D0" BorderBrush="#FFE0C25A" BorderThickness="1" Padding="12" CornerRadius="3" Margin="0,0,0,12">
-            <TextBlock TextWrapping="Wrap" FontSize="14">
+            <!-- Foreground fixed, not theme-following: this note box's own light yellow
+                 Background never changes with the theme, so its text can't inherit the
+                 window's dark-mode Foreground either, or it goes near-white-on-pale-yellow
+                 and becomes unreadable, exactly as reported live from the tray menu. -->
+            <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="#FF3D3D3D">
                 This is not a medical device and isn't a substitute for professional medical
                 care. If you experience migraines, please talk to a doctor about treatment — use
                 this as one comfort tool alongside that, not instead of it.

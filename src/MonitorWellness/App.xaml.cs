@@ -451,9 +451,14 @@ public partial class App : Application
         _breakReminderTimer = null;
 
         if (!_settings.BreakReminderEnabled)
+        {
+            DebugLog.Write("BreakReminder: disabled, timer not (re)started");
             return;
+        }
 
-        _breakReminderTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Math.Max(1, _settings.BreakReminderIntervalMinutes)) };
+        var interval = TimeSpan.FromMinutes(Math.Max(1, _settings.BreakReminderIntervalMinutes));
+        DebugLog.Write($"BreakReminder: timer (re)started, interval={interval.TotalMinutes} min");
+        _breakReminderTimer = new DispatcherTimer { Interval = interval };
         _breakReminderTimer.Tick += (_, _) =>
         {
             // Skip while migraine mode is active -- someone already dealing with that doesn't
@@ -462,13 +467,20 @@ public partial class App : Application
             // ends rather than needing a full interval to elapse again. Also skip while a
             // fullscreen app (video, game, screen share) likely owns the screen -- reuses the
             // same heuristic MigraineModeController already relies on for its own fullscreen check.
-            if (_migraine?.IsActive != true && !FullscreenDetector.IsForegroundWindowLikelyFullscreen())
+            bool migraineActive = _migraine?.IsActive == true;
+            bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
+            if (!migraineActive && !likelyFullscreen)
             {
+                DebugLog.Write("BreakReminder: tick fired, showing balloon");
                 _trayIcon?.ShowBalloonTip(
                     8_000,
                     "Monitor Wellness",
                     "Time for a break — look at something about 20 feet away for 20 seconds (the 20-20-20 rule).",
                     ToolTipIcon.Info);
+            }
+            else
+            {
+                DebugLog.Write($"BreakReminder: tick fired but skipped (migraineActive={migraineActive}, likelyFullscreen={likelyFullscreen})");
             }
         };
         _breakReminderTimer.Start();
