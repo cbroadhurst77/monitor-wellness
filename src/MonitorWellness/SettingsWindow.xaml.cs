@@ -66,6 +66,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);
+        Icon = AppIconSource.Default;
         _settings = settings;
         _gammaManager = gammaManager;
         _overlay = overlay;

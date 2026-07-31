@@ -29,6 +29,7 @@ public partial class MigraineRatingWindow : Window
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
+        Icon = AppIconSource.Default;
         _onAnswered = onAnswered;
 
         _autoCloseTimer = new DispatcherTimer { Interval = AutoDismiss };

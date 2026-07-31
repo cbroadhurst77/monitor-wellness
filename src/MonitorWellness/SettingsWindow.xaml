@@ -291,7 +291,7 @@
                             <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="{DynamicResource MW.ReadOnlyBackground}"
                                      PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
                         </StackPanel>
-                        <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,4"/>
+                        <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

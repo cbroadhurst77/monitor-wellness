@@ -22,4 +22,71 @@
     <SolidColorBrush x:Key="MW.WarningText" Color="#FFB03030"/>
     <SolidColorBrush x:Key="MW.ReadOnlyBackground" Color="#FFF0F0F0"/>
 
+    <SolidColorBrush x:Key="MW.TabBackground" Color="#FFF0F0F0"/>
+    <SolidColorBrush x:Key="MW.TabSelectedBackground" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="MW.TabHoverBackground" Color="#FFE0E0E0"/>
+    <SolidColorBrush x:Key="MW.TabBorder" Color="#FFAAAAAA"/>
+
+    <!--
+        Always-applied (light-mode-equivalent) TabItem template, so tab headers behave the same
+        way regardless of theme. WPF's default Aero2 TabItem template (what applied here before
+        this existed) doesn't wrap header text either, so long labels ("Monitors &amp; Breaks",
+        "Profiles &amp; History") got visibly clipped in light mode too, not just dark mode.
+        This must stay structurally identical to Theme/DarkTheme.xaml's copy (which overrides
+        this in dark mode via later merge order); only the brush values should ever differ
+        between the two.
+    -->
+    <Style TargetType="{x:Type TabItem}">
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type TabItem}">
+                    <Border x:Name="TabItemBorder"
+                            BorderBrush="{StaticResource MW.TabBorder}"
+                            BorderThickness="1,1,1,0"
+                            Background="{StaticResource MW.TabBackground}"
+                            Padding="{TemplateBinding Padding}"
+                            Margin="0,0,2,0">
+                        <ContentPresenter x:Name="ContentSite"
+                                          ContentSource="Header"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center">
+                            <ContentPresenter.ContentTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="118"/>
+                                </DataTemplate>
+                            </ContentPresenter.ContentTemplate>
+                        </ContentPresenter>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="TabItemBorder" Property="Background" Value="{StaticResource MW.TabSelectedBackground}"/>
+                            <Setter Property="Panel.ZIndex" Value="10"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="TabItemBorder" Property="Background" Value="{StaticResource MW.TabHoverBackground}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Always-applied CheckBox style so long descriptions wrap instead of being cut off at the
+        window edge. CheckBox's own default presentation for a plain string Content doesn't
+        wrap either, the same root cause as the TabItem header fix above. Must stay structurally
+        identical to Theme/DarkTheme.xaml's copy (a dark-mode CheckBox style there completely
+        replaces this one, not merges with it, so both need their own full copy of this fix).
+    -->
+    <Style TargetType="{x:Type CheckBox}">
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

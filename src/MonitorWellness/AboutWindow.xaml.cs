@@ -10,6 +10,7 @@ public partial class AboutWindow : Window
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);
+        Icon = AppIconSource.Default;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

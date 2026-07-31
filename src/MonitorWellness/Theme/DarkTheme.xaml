@@ -59,8 +59,24 @@
         <Setter Property="BorderBrush" Value="{StaticResource MW.ControlBorder}"/>
     </Style>
 
+    <!--
+        ContentTemplate wraps plain-string Content in a wrapping TextBlock. CheckBox's own
+        default presentation for a plain string doesn't wrap, which let long descriptions (e.g.
+        "Nudge daytime brightness to match the room's actual light level...") get cut off at
+        the edge of the window rather than wrapping to a second line. Same root cause and same
+        fix shape as the TabItem header fix elsewhere in this file/Theme/BaseTheme.xaml. Must
+        stay structurally identical to BaseTheme.xaml's light-mode copy of this style, since a
+        dark-mode CheckBox style completely replaces (not merges with) the light one.
+    -->
     <Style TargetType="{x:Type CheckBox}">
         <Setter Property="Foreground" Value="{StaticResource MW.WindowForeground}"/>
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="{x:Type Border}">
@@ -102,7 +118,21 @@
                         <ContentPresenter x:Name="ContentSite"
                                           ContentSource="Header"
                                           HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
+                                          VerticalAlignment="Center">
+                            <!-- Explicit wrapping TextBlock via ContentTemplate, not just an
+                                 implicit TextBlock style: a plain string Header otherwise
+                                 renders through WPF's own default (non-wrapping) content
+                                 template, which is what let longer tab labels ("Monitors &amp;
+                                 Breaks", "Profiles &amp; History") get visibly clipped/cut off
+                                 rather than wrapping to a second line. See the identical fix
+                                 (and reasoning) in Theme/BaseTheme.xaml's light-mode copy of
+                                 this template; both must wrap the same way. -->
+                            <ContentPresenter.ContentTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="118"/>
+                                </DataTemplate>
+                            </ContentPresenter.ContentTemplate>
+                        </ContentPresenter>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsSelected" Value="True">

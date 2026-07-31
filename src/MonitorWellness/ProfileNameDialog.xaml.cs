@@ -11,6 +11,7 @@ public partial class ProfileNameDialog : Window
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
+        Icon = AppIconSource.Default;
         NameBox.Text = initialName;
         Loaded += (_, _) => { NameBox.Focus(); NameBox.SelectAll(); };
     }

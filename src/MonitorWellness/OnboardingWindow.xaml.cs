@@ -30,6 +30,7 @@ public partial class OnboardingWindow : Window
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);
+        Icon = AppIconSource.Default;
         _openSettings = openSettings;
         ShowStep(0);
     }
