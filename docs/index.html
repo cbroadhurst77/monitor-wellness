@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor Wellness — gentle screen color, brightness, and migraine relief for Windows</title>
+<meta name="description" content="A Windows tray app that gently warms and dims your screen through the day, plus an instant, research-informed Migraine Mode for photophobia relief.">
+<style>
+  :root {
+    --purple: #7a5a5a;
+    --purple-light: #B09090;
+    --bg: #ffffff;
+    --bg-alt: #f7f0f0;
+    --text: #262223;
+    --text-muted: #5a5254;
+    --border: #e6d9d9;
+    --card-bg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1616;
+      --bg-alt: #241f20;
+      --text: #ece6e6;
+      --text-muted: #b8adad;
+      --border: #3a3132;
+      --card-bg: #221d1e;
+      --purple-light: #c9a3a3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  a { color: var(--purple-light); }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+  header.hero {
+    background: linear-gradient(135deg, var(--purple) 0%, var(--purple-light) 100%);
+    color: #fff;
+    padding: 64px 0 56px 0;
+  }
+  header.hero .wrap { text-align: center; }
+  header.hero h1 { font-size: clamp(28px, 5vw, 42px); margin: 0 0 12px 0; }
+  header.hero p.tagline { font-size: 18px; color: rgba(255,255,255,0.9); max-width: 560px; margin: 0 auto 28px auto; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: 12px 22px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 15px;
+  }
+  .btn-primary { background: #fff; color: var(--purple); }
+  .btn-secondary { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.5); }
+
+  section { padding: 48px 0; }
+  h2 { font-size: 24px; margin: 0 0 20px 0; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .card h3 { margin: 0 0 8px 0; font-size: 16px; }
+  .card p { margin: 0; color: var(--text-muted); font-size: 14.5px; }
+
+  .note {
+    background: var(--bg-alt);
+    border-left: 4px solid var(--purple-light);
+    padding: 16px 20px;
+    border-radius: 4px;
+    font-size: 14.5px;
+    color: var(--text-muted);
+  }
+  .note strong { color: var(--text); }
+
+  .privacy-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  .privacy-table th, .privacy-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .privacy-table th { color: var(--text-muted); font-weight: 600; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0 48px 0; font-size: 14px; color: var(--text-muted); }
+  footer .links { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+  footer .links a { color: var(--text-muted); }
+
+  ul.plain { margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 14.5px; }
+  ul.plain li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>Monitor Wellness</h1>
+    <p class="tagline">Gently warms and dims your screen through the day, and offers instant, research-informed relief when a migraine hits — for Windows.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/cbroadhurst77/monitor-wellness/releases/latest">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/cbroadhurst77/monitor-wellness">View on GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <h2>What it does</h2>
+    <div class="features">
+      <div class="card">
+        <h3>Day/Night schedule</h3>
+        <p>Color temperature and brightness follow sunrise and sunset at your actual location, smoothly interpolated — not a jarring clock-time cutover.</p>
+      </div>
+      <div class="card">
+        <h3>Migraine Mode</h3>
+        <p>One click, hotkey, or tray-icon press applies an instant, muted green tint based on published migraine-photophobia research — then always fades back off slowly, never abruptly.</p>
+      </div>
+      <div class="card">
+        <h3>Per-monitor control</h3>
+        <p>Exclude a reference display, nudge one panel's color independently, or dim monitors differently — useful for mixed multi-monitor setups.</p>
+      </div>
+      <div class="card">
+        <h3>Ambient light aware</h3>
+        <p>On devices with a light sensor, daytime brightness can nudge to match the room, on top of the schedule — off by default, like every optional feature here.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>A comfort tool, not a medical device</h2>
+    <div class="note">
+      <strong>Monitor Wellness is not a medical device</strong> and is not a substitute for
+      professional medical care. If you experience migraines, please talk to a doctor about
+      treatment — use this as one comfort tool alongside that care, not instead of it. Migraine
+      Mode activates instantly (never a flash or strobe) and always fades back off over about 20
+      seconds by design, since sudden brightness changes can themselves be uncomfortable.
+    </div>
+  </section>
+
+  <section>
+    <h2>Privacy</h2>
+    <p style="color:var(--text-muted); font-size:14.5px;">No accounts, no telemetry, no ads. Settings, history, and logs stay on your PC. There are exactly two network calls in the whole app, and both require you to either click something or opt in first:</p>
+    <table class="privacy-table">
+      <tr><th>Call</th><th>When</th><th>What's sent</th></tr>
+      <tr><td>Location search</td><td>Only when you click "Find" in Settings</td><td>The place name you typed</td></tr>
+      <tr><td>Update check</td><td>Opt-in, off by default, ~once/day</td><td>Nothing identifying — just "what's the latest version?"</td></tr>
+    </table>
+    <p style="color:var(--text-muted); font-size:14.5px; margin-top:12px;">Full detail in the <a href="https://github.com/cbroadhurst77/monitor-wellness/blob/master/PRIVACY.md">Privacy Policy</a>.</p>
+  </section>
+
+  <section>
+    <h2>Requirements</h2>
+    <ul class="plain">
+      <li>Windows 10 (1903+) or Windows 11, 64-bit</li>
+      <li>No .NET runtime install needed — the installer is self-contained</li>
+      <li>Works with any number of monitors</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="links">
+      <a href="https://github.com/cbroadhurst77/monitor-wellness/releases/latest">Download</a>
+      <a href="https://github.com/cbroadhurst77/monitor-wellness/issues">Support / report an issue</a>
+      <a href="https://github.com/cbroadhurst77/monitor-wellness/blob/master/EULA.md">License (EULA)</a>
+      <a href="https://github.com/cbroadhurst77/monitor-wellness/blob/master/PRIVACY.md">Privacy Policy</a>
+      <a href="https://github.com/cbroadhurst77/monitor-wellness">Source</a>
+    </div>
+    <div>© 2026 Equinox Consulting Ltd. Monitor Wellness is a comfort tool, not a medical device.</div>
+  </div>
+</footer>
+
+</body>
+</html>

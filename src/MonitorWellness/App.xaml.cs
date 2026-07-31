@@ -48,6 +48,13 @@ public partial class App : Application
     private readonly Queue<(string Title, string Message, ToolTipIcon Icon)> _pendingStartupBalloons = new();
     private DispatcherTimer? _startupBalloonTimer;
 
+    // NotifyIcon.BalloonTipClicked doesn't say which balloon was clicked -- there's only ever
+    // one visible at a time, so this just remembers what the currently-showing balloon should
+    // do if clicked, and is cleared the moment that balloon closes (clicked or not) so a stale
+    // URL can't get triggered by an unrelated balloon shown much later. See ShowUpdateBalloon.
+    private string? _pendingBalloonClickUrl;
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromDays(1);
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -134,6 +141,14 @@ public partial class App : Application
             Visible = true,
             Text = "Monitor Wellness"
         };
+        _trayIcon.BalloonTipClicked += (_, _) =>
+        {
+            if (_pendingBalloonClickUrl is not string url)
+                return;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { DebugLog.Write($"Opening update URL failed: {ex.Message}"); }
+        };
+        _trayIcon.BalloonTipClosed += (_, _) => _pendingBalloonClickUrl = null;
 
         if (HdrDetector.IsAnyDisplayHdrEnabled())
         {
@@ -272,6 +287,40 @@ public partial class App : Application
             ShowFirstRunOnboarding();
         else
             StartDrainingStartupBalloons();
+
+        _ = CheckForUpdatesIfDueAsync();
+    }
+
+    /// <summary>
+    /// Fire-and-forget: runs the opt-in update check at most once/day (AppSettings.
+    /// LastUpdateCheckUtc), regardless of how often the app is actually launched/restarted in
+    /// between. Deliberately independent of the startup-balloon queue above — this can take a
+    /// few seconds (network round trip) and has nothing time-sensitive about when it shows up,
+    /// unlike the HDR/f.lux/hotkey conflict balloons that matter most right at launch.
+    /// </summary>
+    private async Task CheckForUpdatesIfDueAsync()
+    {
+        if (!_settings.CheckForUpdatesEnabled)
+            return;
+
+        if (_settings.LastUpdateCheckUtc is DateTime last && DateTime.UtcNow - last < UpdateCheckInterval)
+            return;
+
+        var update = await UpdateChecker.CheckForUpdateAsync();
+
+        _settings.LastUpdateCheckUtc = DateTime.UtcNow;
+        SettingsStore.Save(_settings);
+
+        if (update is null || _trayIcon is null)
+            return;
+
+        DebugLog.Write($"UpdateChecker: newer version available ({update.TagName})");
+        _pendingBalloonClickUrl = update.ReleaseUrl.ToString();
+        _trayIcon.ShowBalloonTip(
+            10_000,
+            "Monitor Wellness",
+            $"Monitor Wellness {update.Version.ToString(3)} is available (you have {typeof(App).Assembly.GetName().Version?.ToString(3)}). Click here to open the release page.",
+            ToolTipIcon.Info);
     }
 
     /// <summary>Shows the real first-run onboarding flow — the only path that persists HasCompletedOnboarding. Reopening this content later from the tray menu was replaced by the distinct About/Troubleshooting windows (see ShowAboutWindow/ShowTroubleshootingWindow) rather than resurfacing the welcome-voiced wizard, per MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).</summary>

@@ -32,7 +32,8 @@
             </TextBlock>
             <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}">
                 Nothing is sent anywhere except an optional, one-off location search in
-                Settings — everything else stays on this PC. No telemetry, no accounts.
+                Settings, and an optional check for new versions (both off unless you turn them
+                on) — everything else stays on this PC. No telemetry, no accounts.
             </TextBlock>
         </StackPanel>
 

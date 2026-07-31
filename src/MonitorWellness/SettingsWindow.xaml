@@ -56,7 +56,8 @@
                         <TextBlock x:Name="LocationSearchStatus" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,6" TextWrapping="Wrap"/>
                         <TextBlock FontSize="15" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8">
                             Privacy: nothing in Monitor Wellness is sent anywhere except this location
-                            search above, which only runs when you click Find — everything else
+                            search above (only when you click Find) and, if turned on under Profiles
+                            &amp; History, an occasional check for new versions — everything else
                             (settings, diagnostic logs) stays local on this PC. No telemetry, no
                             accounts.
                         </TextBlock>
@@ -367,10 +368,17 @@
                         <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
                         <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <TextBlock x:Name="HistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                             <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
                         </StackPanel>
+
+                        <Separator Margin="0,0,0,16"/>
+
+                        <TextBlock Text="Updates" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="CheckForUpdatesCheckBox" Content="Check for new versions automatically (about once a day)" Margin="0,0,0,4"/>
+                        <TextBlock Text="Off by default. When on, this only asks GitHub for the latest version number — no personal or usage data is sent. If a newer version exists you'll see a one-time notification with a link to it; nothing downloads or installs automatically." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="CurrentVersionText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

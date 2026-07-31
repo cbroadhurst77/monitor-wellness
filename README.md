@@ -14,8 +14,9 @@ overlay — this app applies the same underlying idea through the best mechanism
 software, not a reproduction of the clinical studies. If you experience migraines, talk to a
 doctor about treatment; use this as one comfort tool alongside that, not instead of it.
 
-No telemetry, no network calls, no accounts — everything (settings, diagnostic logs) stays
-local in `%AppData%\MonitorWellness\`.
+No telemetry, no accounts, no ads. Settings and diagnostic logs stay local in
+`%AppData%\MonitorWellness\`. There are exactly two network calls in the whole app, and both
+require you to either click something or opt in first — see [PRIVACY.md](PRIVACY.md).
 
 ## Features
 
@@ -39,6 +40,9 @@ local in `%AppData%\MonitorWellness\`.
   "Start with Windows" from the tray menu — no admin install required to try it
 - "Identify Monitors" — flashes each display's internal name on-screen, since Windows'
   on-screen monitor numbers don't reliably match device enumeration order
+- Optional update check (Settings → Profiles & History → Updates, **off by default**) —
+  once a day at most, checks for a newer release and links to it; never downloads or
+  installs anything automatically
 
 ## A note on how dimming works
 
@@ -65,14 +69,21 @@ utility and turn off all but one.
 
 ## Status
 
-Early — first 4-week build cycle just completed. Functional and tested on real hardware
-(Windows 11, 3-monitor setup), but not yet signed, not yet published, and the installer's
-full install/uninstall flow needs a manual verification pass. See
-[IMPLEMENTATION.md](IMPLEMENTATION.md) for the full build log, architecture decisions, and
-known issues, and [EVALUATION.md](EVALUATION.md) for an honest assessment of engineering
-maturity and the actual strength of the scientific claims behind the color/brightness
-choices — including where evidence is solid, where it's mixed, and where a design choice is
-a reasonable comfort feature rather than a proven intervention.
+v0.2.0. A full UX/accessibility audit pass has landed (see
+[UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
+built, tested (128 automated tests, all passing), and run for real on one Windows 11 3-monitor
+dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
+machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
+what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not
+legal advice). See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full build log and
+architecture decisions, and [EVALUATION.md](EVALUATION.md) for an honest assessment of
+engineering maturity and the actual strength of the scientific claims behind the
+color/brightness choices — including where evidence is solid, where it's mixed, and where a
+design choice is a reasonable comfort feature rather than a proven intervention.
+
+## Support
+
+Bug reports and questions: [GitHub Issues](https://github.com/cbroadhurst77/monitor-wellness/issues).
 
 ## Building from source
 
@@ -118,5 +129,8 @@ settings live in a JSON file instead of the registry, etc.).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Bundles one third-party asset (the location picker's world
-map) under its own license — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+Proprietary as of v0.2.0 (31 July 2026) — see [LICENSE](LICENSE) and [EULA.md](EULA.md).
+Versions published before that date remain available under the MIT License they were
+originally released under; see LICENSE for the historical MIT text and the exact cutover.
+Bundles one third-party asset (the location picker's world map) under its own license — see
+[ATTRIBUTIONS.md](ATTRIBUTIONS.md).

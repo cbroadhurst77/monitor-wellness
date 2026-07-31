@@ -187,4 +187,16 @@ public sealed class AppSettings
 
     /// <summary>Minutes between break reminders when BreakReminderEnabled is true. 20 matches the 20-20-20 rule this feature is based on.</summary>
     public int BreakReminderIntervalMinutes { get; set; } = 20;
+
+    /// <summary>
+    /// Opt-in, defaults false: once a day at most, check GitHub's public Releases API for a
+    /// newer version and show a balloon linking to it if one exists (see Core/UpdateChecker.cs)
+    /// — never a silent download/install. This is the only other network call in the app
+    /// besides the user-triggered location search, so it follows the same off-by-default
+    /// pattern as every other optional feature rather than silently phoning home.
+    /// </summary>
+    public bool CheckForUpdatesEnabled { get; set; } = false;
+
+    /// <summary>Last time an update check actually ran, so it's throttled to roughly once/day regardless of how often the app is launched/restarted.</summary>
+    public DateTime? LastUpdateCheckUtc { get; set; } = null;
 }

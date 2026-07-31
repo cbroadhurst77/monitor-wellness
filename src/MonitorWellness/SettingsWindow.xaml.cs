@@ -156,6 +156,9 @@ public partial class SettingsWindow : Window
         AmbientLightAvailabilityText.Text = AmbientLightSensor.IsAvailable
             ? "An ambient light sensor was found on this device."
             : "No ambient light sensor was found on this device — most desktops don't have one (it's mostly a laptop/tablet feature), so this option will have no effect here even if turned on.";
+        CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
+        var runningVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        CurrentVersionText.Text = runningVersion is not null ? $"You're running version {runningVersion.ToString(3)}." : "";
         _loaded = true;
         UpdateMapMarker();
         UpdateSunTimesDisplay();
@@ -370,6 +373,7 @@ public partial class SettingsWindow : Window
         _settings.MatchAmbientLight = imported.MatchAmbientLight;
         _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
         _settings.BreakReminderIntervalMinutes = imported.BreakReminderIntervalMinutes;
+        _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
 
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
@@ -380,6 +384,7 @@ public partial class SettingsWindow : Window
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
 
         UpdateMapMarker();
         UpdateSunTimesDisplay();
@@ -1160,6 +1165,7 @@ public partial class SettingsWindow : Window
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
         _settings.BreakReminderIntervalMinutes = (int)BreakReminderIntervalSlider.Value;
+        _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)
             .Select(kv => kv.Key)
