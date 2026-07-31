@@ -15,6 +15,7 @@
             <StackPanel>
                 <TextBlock Text="Location" FontWeight="Bold" Margin="0,0,0,4"/>
 
+                <TextBlock Text="Search for your town or postcode" FontSize="11" Foreground="DimGray" Margin="0,0,0,2"/>
                 <Grid Margin="0,0,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -22,11 +23,12 @@
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="LocationSearchBox" Grid.Column="0" Margin="0,0,8,0"
                              VerticalContentAlignment="Center"
-                             ToolTip="Town, city, postcode/zip, or place name"/>
+                             ToolTip="Town, city, postcode/zip, or place name"
+                             AutomationProperties.Name="Search for your town, postcode, or place name"/>
                     <Button x:Name="FindLocationButton" Grid.Column="1" Content="Find" Padding="12,4" Click="FindLocationButton_Click"/>
                 </Grid>
-                <TextBlock x:Name="LocationSearchStatus" FontSize="10" Foreground="Gray" Margin="0,0,0,6" TextWrapping="Wrap"/>
-                <TextBlock FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8">
+                <TextBlock x:Name="LocationSearchStatus" FontSize="13" Foreground="DimGray" Margin="0,0,0,6" TextWrapping="Wrap"/>
+                <TextBlock FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8">
                     Privacy: nothing in Monitor Wellness is sent anywhere except this location
                     search above, which only runs when you click Find — everything else
                     (settings, diagnostic logs) stays local on this PC. No telemetry, no
@@ -35,14 +37,15 @@
 
                 <Border BorderBrush="#FFAAAAAA" BorderThickness="1" Margin="0,0,0,4" HorizontalAlignment="Left">
                     <Grid x:Name="MapContainer" Width="440" Height="222" ClipToBounds="True"
-                          MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" Cursor="Hand">
+                          MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" Cursor="Hand"
+                          AutomationProperties.Name="Click to set location on the world map">
                         <Image x:Name="MapImage" Stretch="Fill"/>
                         <Canvas x:Name="MapMarkerCanvas" IsHitTestVisible="False">
                             <Ellipse x:Name="MapMarker" Width="10" Height="10" Fill="#FFE84B3C" Stroke="White" StrokeThickness="1.5"/>
                         </Canvas>
                     </Grid>
                 </Border>
-                <TextBlock Text="Click the map to set your location roughly — precise enough for sunrise/sunset timing, which barely changes over tens of km." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Click the map to set your location. A rough click is fine — sunrise and sunset times barely change over short distances." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
@@ -58,7 +61,7 @@
                         <TextBox x:Name="LongitudeBox" TextChanged="LatLongBox_TextChanged"/>
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="SunTimesText" FontSize="11" Foreground="DimGray" Margin="0,0,0,12"/>
+                <TextBlock x:Name="SunTimesText" FontSize="13" Foreground="DimGray" Margin="0,0,0,12"/>
 
                 <TextBlock Text="Profiles" FontWeight="Bold" Margin="0,0,0,4"/>
                 <Grid Margin="0,0,0,4">
@@ -73,22 +76,26 @@
                     <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
                     <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
                 </Grid>
-                <TextBlock Text="Profiles save/restore Day/Night, Deep Night, migraine, and bedtime settings only — not your location, per-monitor setup, break reminders, ambient light matching, or history tracking. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="A profile remembers your color, brightness, and Migraine Mode settings. It does not remember your location, monitor setup, or break reminders — those stay the same no matter which profile you load. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
                     <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>
                 </StackPanel>
-                <TextBlock Text="Export/Import cover everything — location, per-monitor setup, and preferences — as one file, e.g. for a backup or moving to another PC. Import loads values into this window; you still need to click Save below to keep them." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <TextBlock Text="Export/Import cover everything — location, per-monitor setup, and preferences — as one file, e.g. for a backup or moving to another PC. Import loads values into this window; you still need to click Save below to keep them." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
                 <TextBlock Text="Day / Night Schedule" FontWeight="Bold" Margin="0,0,0,4"/>
-                <TextBlock Text="Dragging a slider previews it on your real screens right now — nothing is saved until you click Save, and Cancel leaves everything untouched." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4">
+                    Try it live: moving a slider changes your screen right away, just to preview
+                    it. Nothing is kept until you press Save. Press Cancel any time to undo
+                    everything and go back to normal.
+                </TextBlock>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <Button x:Name="TryCoolerButton" Content="Try Cooler &amp; Brighter (A)" Padding="8,2" Margin="0,0,8,0" Click="TryCoolerBrighterPreset_Click"/>
                     <Button x:Name="TryWarmerButton" Content="Try Warmer &amp; Dimmer (B)" Padding="8,2" Click="TryWarmerDimmerPreset_Click"/>
                 </StackPanel>
-                <TextBlock Text="Not sure what values to pick? Try each on your real screen — both apply to whichever of Day/Night you're currently looking at — then fine-tune with the sliders below." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <Expander Header="Why these colors? (evidence summary)" FontSize="10" Margin="0,0,0,8">
-                    <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="4,4,4,4" MaxWidth="500">
+                <TextBlock Text="Not sure which to pick? Try each one on your real screen — both apply to whichever of Day/Night you're currently looking at — then fine-tune with the sliders below." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <Expander Header="Why these colors? (evidence summary)" FontSize="12" Margin="0,0,0,8">
+                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="4,4,4,4" MaxWidth="500">
                         Evening warming (day → night Kelvin) is based on solid, well-established
                         science that blue light suppresses melatonin — but there isn't strong
                         direct evidence that a software color filter like this one (or f.lux, or
@@ -131,8 +138,8 @@
                         </StackPanel>
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="KelvinSafetyWarning" FontSize="10" Foreground="#FFB03030" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
-                <TextBlock Text="Gamma ramp is only reliable in the ~3300K-6500K range on most hardware — see IMPLEMENTATION.md." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock x:Name="KelvinSafetyWarning" FontSize="13" Foreground="#FFB03030" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
+                <TextBlock Text="Gamma ramp is only reliable in the ~3300K-6500K range on most hardware — see IMPLEMENTATION.md." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -163,7 +170,7 @@
                 </Grid>
 
                 <CheckBox x:Name="MatchAmbientLightCheckBox" Content="Nudge daytime brightness to match the room's actual light level (needs an ambient light sensor)" Margin="0,0,0,4"/>
-                <TextBlock x:Name="AmbientLightAvailabilityText" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock x:Name="AmbientLightAvailabilityText" FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <CheckBox x:Name="BedtimeEnabledCheckBox" Content="Also deepen toward bedtime warmth/dim by a fixed clock time" Margin="0,0,0,4" Checked="BedtimeEnabledCheckBox_Changed" Unchecked="BedtimeEnabledCheckBox_Changed"/>
                 <Grid Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
@@ -173,10 +180,10 @@
                     <TextBlock Grid.Column="0" Text="Bedtime (HH:mm)" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
                 </Grid>
-                <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
                 <TextBlock Text="Deep Night" FontWeight="Bold" Margin="0,0,0,4"/>
-                <TextBlock Text="Once the sun (or bedtime clock above) reaches deep night, brightness and overlay color blend further toward these values — a bedtime-level warmth stage beyond what Night color temp's safe gamma-ramp floor can reach on its own." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="Once the sun (or bedtime clock above) reaches deep night, brightness and overlay color blend further toward these values — a bedtime-level warmth stage beyond what Night color temp's safe gamma-ramp floor can reach on its own." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <StackPanel Margin="0,0,0,4">
                     <TextBlock Text="Deep-night brightness"/>
                     <Slider x:Name="DeepNightBrightnessSlider" Minimum="0" Maximum="1" ValueChanged="DeepNightSlider_ValueChanged"
@@ -198,9 +205,12 @@
                     <Button x:Name="TryGentleButton" Content="Try Gentle (A)" Padding="8,2" Margin="0,0,8,0" Click="TryGentlePreset_Click"/>
                     <Button x:Name="TryStrongButton" Content="Try Strong (B)" Padding="8,2" Click="TryStrongPreset_Click"/>
                 </StackPanel>
-                <TextBlock Text="Not sure what to pick? Try each on your real screen, then fine-tune with the sliders below — no need to guess what a Kelvin or percentage value will feel like." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <Expander Header="Why these colors? (evidence summary)" FontSize="10" Margin="0,0,0,8">
-                    <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="4,4,4,4" MaxWidth="500">
+                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="0,0,0,8">
+                    Not sure which to pick? Try each one on your real screen right now.
+                    Fine-tune with the sliders below once you know what feels right.
+                </TextBlock>
+                <Expander Header="Why these colors? (evidence summary)" FontSize="12" Margin="0,0,0,8">
+                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="DimGray" Margin="4,4,4,4" MaxWidth="500">
                         The muted green tint is based on Noseda &amp; Burstein (Brain, 2016) and
                         later independent replications, which found white, blue, amber, and red
                         light all worsen migraine photophobia while a narrow band of green light
@@ -240,26 +250,27 @@
                                  AutomationProperties.Name="Migraine contrast reduction exact percentage"/>
                         <TextBlock Text="%" VerticalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="2,0,0,0"/>
                     </StackPanel>
-                    <TextBlock x:Name="MigraineContrastNoneHint" HorizontalAlignment="Center" FontSize="10" Foreground="DimGray" Text="0% = none"/>
+                    <TextBlock x:Name="MigraineContrastNoneHint" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray" Text="0% = none"/>
                 </StackPanel>
-                <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <StackPanel Margin="0,0,0,4">
-                    <TextBlock Text="Auto-off after (minutes, 0 = never — a real migraine can last hours, so this is off by default)"/>
+                    <TextBlock Text="Turn off automatically after this many minutes"/>
                     <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
-                    <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray"/>
+                    <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="12" Foreground="DimGray"/>
+                    <TextBlock Text="Set to 0 for never — a real migraine can last hours, so we leave this off by default." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
                 </StackPanel>
                 <CheckBox x:Name="PlaySoundCheckBox" Content="Play a sound when the hotkey toggles migraine mode" Margin="0,0,0,4"/>
-                <TextBlock Text="Off by default — migraine sufferers often also have sound sensitivity during an attack, so an audible confirmation is opt-in, not assumed helpful. A silent visual notification always shows either way." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Off by default — migraine sufferers often also have sound sensitivity during an attack, so an audible confirmation is opt-in, not assumed helpful. A silent visual notification always shows either way." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <StackPanel Margin="0,0,0,4">
                     <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>
                     <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="#FFF0F0F0"
                              PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
                 </StackPanel>
-                <TextBlock Text="Must include at least one of Ctrl/Alt/Shift." FontSize="10" Foreground="Gray" Margin="0,0,0,12"/>
+                <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="13" Foreground="DimGray" Margin="0,0,0,12"/>
 
                 <TextBlock Text="Monitors" FontWeight="Bold" Margin="0,0,0,4"/>
                 <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
-                <TextBlock Text="Dim× = dim multiplier (1.0 follows the schedule exactly); Kelvin± = a per-monitor color temp offset (e.g. -300 if it reads warmer than the others)." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="Dim amount: 1.0 matches the normal schedule exactly. Color offset: shifts just this monitor warmer or cooler than the others (try -300 if it looks too warm)." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <Grid Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -268,17 +279,17 @@
                         <ColumnDefinition Width="60"/>
                         <ColumnDefinition Width="60"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="1" Text="Exclude" FontSize="10" FontWeight="SemiBold" Foreground="Gray" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="2" Text="Color-acc." FontSize="10" FontWeight="SemiBold" Foreground="Gray" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="3" Text="Dim×" FontSize="10" FontWeight="SemiBold" Foreground="Gray" HorizontalAlignment="Center"/>
-                    <TextBlock Grid.Column="4" Text="Kelvin±" FontSize="10" FontWeight="SemiBold" Foreground="Gray" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="Exclude" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="2" Text="Color-acc." FontSize="11" FontWeight="SemiBold" Foreground="DimGray" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="3" Text="Dim×" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="4" Text="Kelvin±" FontSize="11" FontWeight="SemiBold" Foreground="DimGray" HorizontalAlignment="Center"/>
                 </Grid>
                 <ItemsControl x:Name="MonitorsList"/>
 
                 <TextBlock Text="Break Reminders" FontWeight="Bold" Margin="0,16,0,4"/>
                 <CheckBox x:Name="BreakReminderCheckBox" Content="Remind me to take a break (the 20-20-20 rule)" Margin="0,0,0,4"
                           Checked="BreakReminderCheckBox_Changed" Unchecked="BreakReminderCheckBox_Changed"/>
-                <TextBlock Text="Off by default. Every 20 minutes, look at something about 20 feet away for 20 seconds — this is the one eye-strain intervention with real ergonomics backing (unlike blue-light filtering itself; see EVALUATION.md). Skipped automatically while Migraine Mode is active." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="Off by default. Every 20 minutes, look at something about 20 feet away for 20 seconds — this is the one eye-strain intervention with real ergonomics backing (unlike blue-light filtering itself; see EVALUATION.md). Skipped automatically while Migraine Mode is active." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,4"/>
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -288,14 +299,14 @@
                     <Slider x:Name="BreakReminderIntervalSlider" Grid.Column="1" Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True"
                             ValueChanged="BreakReminderIntervalSlider_ValueChanged" AutomationProperties.Name="Break reminder interval in minutes"/>
                 </Grid>
-                <TextBlock x:Name="BreakReminderIntervalLabel" HorizontalAlignment="Center" FontSize="11" Foreground="DimGray" Margin="0,-10,0,12"/>
+                <TextBlock x:Name="BreakReminderIntervalLabel" HorizontalAlignment="Center" FontSize="12" Foreground="DimGray" Margin="0,-10,0,12"/>
 
                 <TextBlock Text="History" FontWeight="Bold" Margin="0,0,0,4"/>
                 <CheckBox x:Name="HistoryTrackingCheckBox" Content="Keep a local history of Migraine Mode activations and schedule pauses" Margin="0,0,0,4" Checked="HistoryTrackingCheckBox_Changed" Unchecked="HistoryTrackingCheckBox_Changed"/>
-                <TextBlock Text="Off by default. Fully local — nothing here is ever sent anywhere, same as the rest of this app — this just lets you see your own patterns over time." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock Text="Off by default. This stays on your computer only — it just helps you notice your own patterns over time." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
-                <TextBlock Text="Frequency and duration alone can't tell you whether Migraine Mode is actually helping — this adds a quick, skippable 1-5 rating after each use so the summary below can show that too." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock x:Name="HistorySummaryText" FontSize="11" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock x:Name="HistorySummaryText" FontSize="13" Foreground="DimGray" TextWrapping="Wrap" Margin="0,0,0,6"/>
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                     <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>

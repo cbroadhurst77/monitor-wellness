@@ -401,17 +401,26 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Shows the "how helpful was that?" prompt (AppSettings.PromptForMigraineRating) — kept
+    /// Shows the "how did that feel?" prompt (AppSettings.PromptForMigraineRating) — kept
     /// here rather than in MigraineModeController so that class stays free of a WPF window
     /// dependency it doesn't otherwise have; only appends a history event if the user actually
-    /// answers (a skipped/auto-dismissed prompt leaves no trace).
+    /// answers (a skipped/auto-dismissed prompt leaves no trace). "Don't ask again" on the
+    /// popup itself turns the setting off immediately, so opting out doesn't require finding
+    /// the same checkbox in Settings afterward.
     /// </summary>
     private void ShowMigraineRatingPrompt()
     {
-        var window = new MigraineRatingWindow(rating =>
+        var window = new MigraineRatingWindow((rating, dontAskAgain) =>
         {
             if (rating.HasValue)
                 HistoryStore.Append(new HistoryEvent(DateTime.UtcNow, "MigraineRating", null, null, rating));
+
+            if (dontAskAgain)
+            {
+                _settings.PromptForMigraineRating = false;
+                SettingsStore.Save(_settings);
+                DebugLog.Write("Migraine rating prompt: user chose 'Don't ask again'");
+            }
         });
         window.Show();
     }

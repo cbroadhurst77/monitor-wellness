@@ -36,8 +36,17 @@ recent work.
   color-adjustment state this app does, and the two can visibly conflict).
 - The app now refuses to run a second copy of itself at once, showing a message instead —
   previously two copies could run simultaneously and fight over the same monitors.
+- A "Don't ask again" option directly on the post-Migraine-Mode rating prompt, so opting out
+  doesn't require finding the same checkbox in Settings afterward.
 
 ### Fixed
+- Settings window text (the privacy note, the "Why these colors?" evidence summaries, and
+  every helper caption) is now larger and higher-contrast — much of it was small, low-contrast
+  gray text that fell below accessible-contrast guidelines, which worked against the app's own
+  purpose of reducing eye strain.
+- The location search box and the world-map location picker now have proper labels for screen
+  readers; previously the search box relied on a hover tooltip only, and the map had no
+  accessible name at all.
 - The welcome screen's "Migraine Mode gives instant relief" line has been softened to match
   the more careful language already used in the README and EVALUATION.md — describing what
   the tint is based on, not asserting a guaranteed clinical benefit.
