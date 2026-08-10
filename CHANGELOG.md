@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.4 — Presentation and support update
 
 ### Added
 - Application-aware comfort rules can now apply a temporary built-in comfort plan while a

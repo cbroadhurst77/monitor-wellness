@@ -19,7 +19,7 @@ privacy, security, and accommodation decisions.
 The Inno Setup package supports a standard unattended command line:
 
 ```powershell
-Start-Process -FilePath .\MonitorWellness-Setup-0.2.3.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+Start-Process -FilePath .\MonitorWellness-Setup-0.2.4.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
 if ($LASTEXITCODE -ne 0) { throw "Monitor Wellness installer failed with exit code $LASTEXITCODE." }
 ```
 
