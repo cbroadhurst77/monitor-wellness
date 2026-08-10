@@ -187,6 +187,7 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
     private readonly DdcCiBrightnessProbe.PhysicalMonitorNative[] _physicalMonitors;
     private readonly IntPtr[] _brightnessHandles;
     private IReadOnlyList<OriginalBrightness>? _originalBrightness;
+    private double? _lastAppliedNormalizedBrightness;
     private bool _disposed;
 
     internal DdcCiBrightnessTestSession(DdcCiBrightnessProbe.PhysicalMonitorNative[] physicalMonitors, IntPtr[] brightnessHandles)
@@ -241,6 +242,13 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
     public bool TryApplyNormalizedBrightness(double normalizedBrightness, out string error)
     {
         error = "";
+        normalizedBrightness = Math.Clamp(normalizedBrightness, 0, 1);
+        if (_lastAppliedNormalizedBrightness.HasValue
+            && Math.Abs(_lastAppliedNormalizedBrightness.Value - normalizedBrightness) < 0.002)
+        {
+            return true;
+        }
+
         if (_originalBrightness is null)
         {
             var captured = new List<OriginalBrightness>();
@@ -267,6 +275,8 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
             }
         }
 
+        _lastAppliedNormalizedBrightness = normalizedBrightness;
+
         return true;
     }
 
@@ -279,6 +289,7 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
         foreach (OriginalBrightness original in _originalBrightness)
             _ = DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, original.Value);
         _originalBrightness = null;
+        _lastAppliedNormalizedBrightness = null;
     }
 
     public void Dispose()

@@ -2,7 +2,12 @@ using System.Runtime.InteropServices;
 
 namespace MonitorWellness.Core;
 
-public sealed record MonitorInfo(string DeviceName, string DeviceString, bool IsPrimary);
+/// <summary>
+/// Describes a display attached to the Windows desktop. <see cref="HardwareDeviceId"/> is the
+/// monitor child device ID reported by Windows and is more stable across dock/replug cycles
+/// than the transient <c>\\.\DISPLAYn</c> path used to address the desktop surface.
+/// </summary>
+public sealed record MonitorInfo(string DeviceName, string DeviceString, bool IsPrimary, string HardwareDeviceId);
 
 /// <summary>
 /// Enumerates active display devices via the Win32 EnumDisplayDevices API. This is the
@@ -55,9 +60,23 @@ public static class MonitorEnumerator
                 continue;
 
             bool isPrimary = (device.StateFlags & DisplayDevicePrimaryDevice) != 0;
-            monitors.Add(new MonitorInfo(device.DeviceName, device.DeviceString, isPrimary));
+            monitors.Add(new MonitorInfo(device.DeviceName, device.DeviceString, isPrimary, GetHardwareDeviceId(device.DeviceName)));
         }
 
         return monitors;
+    }
+
+    private static string GetHardwareDeviceId(string displayDeviceName)
+    {
+        var monitor = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+        if (EnumDisplayDevices(displayDeviceName, 0, ref monitor, 0)
+            && !string.IsNullOrWhiteSpace(monitor.DeviceID))
+        {
+            return monitor.DeviceID;
+        }
+
+        // This fallback never grants a monitor a stable approval by itself; it merely lets
+        // the UI explain which desktop surface could not expose a monitor identifier.
+        return string.Empty;
     }
 }

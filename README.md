@@ -44,21 +44,21 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   "Start with Windows" from the tray menu — no admin install required to try it
 - "Identify Monitors" — flashes each display's internal name on-screen, since Windows'
   on-screen monitor numbers don't reliably match device enumeration order
+- Optional **hardware brightness** for compatible external displays: every monitor must pass
+  a reversible test first; approval follows its physical Windows device identity, and a failed
+  command automatically quarantines the monitor and returns to the safer overlay fallback
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
   once a day at most, checks for a newer release and links to it; never downloads or
   installs anything automatically
 
 ## A note on how dimming works
 
-Brightness is reduced entirely via a semi-transparent overlay window, never by lowering the
-monitor's actual backlight. That's not just a workaround for gamma ramp's limits (see
-IMPLEMENTATION.md) — it's arguably better for this app's own audience: most monitor and laptop
-backlights dim using PWM (pulse-width modulation, rapidly strobing the backlight rather than
-truly dimming it), and PWM flicker is a documented migraine/eye-strain trigger in its own right,
-especially at low brightness where PWM frequency is often lowest. The overlay approach has no
-flicker. If a future version adds direct hardware (DDC/CI) brightness control, that mode will be
-opt-in specifically so this flicker-free default isn't lost for anyone who came to this app
-because of light sensitivity.
+Brightness uses a semi-transparent overlay by default rather than lowering a monitor's physical
+backlight. Most monitor and laptop backlights dim using PWM (pulse-width modulation), which can
+be a migraine/eye-strain trigger at low brightness. Compatible external monitors may instead use
+opt-in DDC/CI hardware brightness, but only after a reversible test. That approval is tied to the
+physical monitor rather than a transient Windows display number; any failed command quarantines
+the monitor and immediately returns to the overlay fallback.
 
 Some exclusive-fullscreen, protected-video, and HDR paths remain outside an ordinary desktop
 window's control; use Emergency Restore Screen if a display ever becomes difficult to use.
@@ -76,9 +76,9 @@ utility and turn off all but one.
 
 ## Status
 
-v0.2.0. A full UX/accessibility audit pass has landed (see
+v0.2.2. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (128 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (175 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not

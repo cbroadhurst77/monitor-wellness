@@ -55,6 +55,11 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] For each detected DDC/CI display, run **Test HW**. Confirm the backlight dims only
       modestly, returns to its exact original value on every dialog exit path, and only then
       opt in with the adjacent HW checkbox and Save
+- [ ] Confirm a previously approved hardware-brightness monitor is still correctly identified
+      after reconnecting through a dock or different port; its approval must follow the physical
+      monitor, not a `DISPLAYn` number
+- [ ] Force or simulate one DDC/CI command failure. Confirm the monitor is quarantined, no
+      further automatic hardware commands are attempted, and overlay dimming remains usable
 - [ ] Kelvin safety warning appears/disappears correctly at the low end of the Day/Night
       sliders
 - [ ] Hex-color and bedtime fields show inline warnings (not a popup) for invalid input

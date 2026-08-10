@@ -49,10 +49,11 @@ public static class AppSettingsValidator
             return Invalid("Migraine hotkey settings are invalid.", out error);
         if (settings.ExcludedMonitors is null || settings.ColorExcludedMonitors is null
             || settings.MonitorDimMultiplier is null || settings.MonitorKelvinOffset is null
-            || settings.HardwareBrightnessEnabledMonitors is null)
+            || settings.HardwareBrightnessEnabledMonitors is null || settings.HardwareBrightnessSafetyByMonitor is null)
             return Invalid("Monitor settings collections cannot be null.", out error);
         if (!ValidateMonitorMultipliers(settings.MonitorDimMultiplier, out error)
-            || !ValidateMonitorOffsets(settings.MonitorKelvinOffset, out error))
+            || !ValidateMonitorOffsets(settings.MonitorKelvinOffset, out error)
+            || !ValidateHardwareBrightnessSafety(settings.HardwareBrightnessSafetyByMonitor, out error))
             return false;
 
         return true;
@@ -76,6 +77,22 @@ public static class AppSettingsValidator
         {
             if (string.IsNullOrWhiteSpace(deviceName) || Math.Abs((long)offset) > MaximumMonitorKelvinOffset)
                 return Invalid($"Kelvin offset for '{deviceName}' must be between -{MaximumMonitorKelvinOffset} and {MaximumMonitorKelvinOffset}.", out error);
+        }
+
+        error = "";
+        return true;
+    }
+
+    private static bool ValidateHardwareBrightnessSafety(IReadOnlyDictionary<string, HardwareBrightnessSafetyState> states, out string error)
+    {
+        foreach (var (key, state) in states)
+        {
+            if (string.IsNullOrWhiteSpace(key) || state is null)
+                return Invalid("Hardware brightness safety records must have a monitor identifier.", out error);
+            if (state.IsQuarantined && state.IsApproved)
+                return Invalid("A hardware-brightness monitor cannot be approved while quarantined.", out error);
+            if (state.QuarantineReason?.Length > 500)
+                return Invalid("Hardware brightness quarantine information is too long.", out error);
         }
 
         error = "";

@@ -38,6 +38,14 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void NullHardwareBrightnessSafetyCollection_IsRejected()
+    {
+        var settings = new AppSettings { HardwareBrightnessSafetyByMonitor = null! };
+
+        Assert.False(AppSettingsValidator.TryValidate(settings, out _));
+    }
+
+    [Fact]
     public void InvalidOverlayColor_IsRejected()
     {
         var settings = new AppSettings { DeepNightOverlayColorHex = "not-a-colour" };
@@ -76,6 +84,23 @@ public class AppSettingsValidatorTests
 
         Assert.Single(original.HardwareBrightnessEnabledMonitors);
         Assert.Equal(2, clone.HardwareBrightnessEnabledMonitors.Count);
+    }
+
+    [Fact]
+    public void HardwareBrightnessSafetyState_IsDeepCopied()
+    {
+        var original = new AppSettings
+        {
+            HardwareBrightnessSafetyByMonitor = new Dictionary<string, HardwareBrightnessSafetyState>
+            {
+                ["monitor:ACME"] = new HardwareBrightnessSafetyState { IsApproved = true },
+            },
+        };
+
+        var clone = original.Clone();
+        clone.HardwareBrightnessSafetyByMonitor["monitor:ACME"].IsApproved = false;
+
+        Assert.True(original.HardwareBrightnessSafetyByMonitor["monitor:ACME"].IsApproved);
     }
 
     [Fact]

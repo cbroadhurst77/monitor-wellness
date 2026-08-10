@@ -73,6 +73,13 @@ public sealed class AppSettings
     public List<string> HardwareBrightnessEnabledMonitors { get; set; } = new();
 
     /// <summary>
+    /// Hardware-brightness approval and quarantine state keyed by a monitor's physical Windows
+    /// device identifier. This supersedes the legacy display-name list above for newly tested
+    /// monitors, because <c>\\.\DISPLAYn</c> can change when a dock or cable is reconnected.
+    /// </summary>
+    public Dictionary<string, HardwareBrightnessSafetyState> HardwareBrightnessSafetyByMonitor { get; set; } = new();
+
+    /// <summary>
     /// Migraine mode overlay tint. A muted, desaturated green rather than the amber/red used
     /// in the original prototype — this is a deliberate research-backed choice, not a
     /// stylistic one. Noseda &amp; Burstein (Brain, 2016) found that white, blue, amber, and
@@ -219,6 +226,7 @@ public sealed class AppSettings
         MonitorDimMultiplier = new Dictionary<string, double>(MonitorDimMultiplier),
         MonitorKelvinOffset = new Dictionary<string, int>(MonitorKelvinOffset),
         HardwareBrightnessEnabledMonitors = new List<string>(HardwareBrightnessEnabledMonitors),
+        HardwareBrightnessSafetyByMonitor = HardwareBrightnessSafety.CloneStates(HardwareBrightnessSafetyByMonitor),
         MigraineOverlayColorHex = MigraineOverlayColorHex,
         MigraineOverlayOpacity = MigraineOverlayOpacity,
         MigraineContrastReduction = MigraineContrastReduction,
@@ -257,6 +265,7 @@ public sealed class AppSettings
         MonitorDimMultiplier = copy.MonitorDimMultiplier;
         MonitorKelvinOffset = copy.MonitorKelvinOffset;
         HardwareBrightnessEnabledMonitors = copy.HardwareBrightnessEnabledMonitors;
+        HardwareBrightnessSafetyByMonitor = copy.HardwareBrightnessSafetyByMonitor;
         MigraineOverlayColorHex = copy.MigraineOverlayColorHex;
         MigraineOverlayOpacity = copy.MigraineOverlayOpacity;
         MigraineContrastReduction = copy.MigraineContrastReduction;

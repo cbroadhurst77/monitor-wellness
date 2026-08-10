@@ -9,14 +9,18 @@ public sealed class HardwareBrightnessControllerManager : IDisposable
     private readonly Dictionary<string, DdcCiBrightnessTestSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
-    /// <summary>Returns the monitor names successfully handled by DDC/CI for this schedule tick.</summary>
-    public IReadOnlySet<string> ApplyApprovedBrightness(IReadOnlyCollection<string> approvedDevices, IReadOnlyDictionary<string, double> brightnessByDevice)
+    /// <summary>
+    /// Applies scheduled targets and reports failures to the caller, which persists the
+    /// associated monitor's safety quarantine. Failed hardware is never retried in-process.
+    /// </summary>
+    public HardwareBrightnessApplicationResult ApplyApprovedBrightness(IReadOnlyCollection<string> approvedDevices, IReadOnlyDictionary<string, double> brightnessByDevice)
     {
         var approved = approvedDevices.ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (string staleDevice in _sessions.Keys.Where(deviceName => !approved.Contains(deviceName)).ToList())
             DisposeSession(staleDevice);
 
         var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var failures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string deviceName in approved)
         {
             if (!brightnessByDevice.TryGetValue(deviceName, out double brightness))
@@ -30,6 +34,7 @@ public sealed class HardwareBrightnessControllerManager : IDisposable
                 if (!DdcCiBrightnessProbe.TryOpenTestSession(deviceName, out session, out string openError) || session is null)
                 {
                     DebugLog.Write($"Hardware brightness unavailable for {deviceName}; using overlay fallback: {openError}");
+                    failures[deviceName] = openError;
                     continue;
                 }
                 _sessions[deviceName] = session;
@@ -39,13 +44,14 @@ public sealed class HardwareBrightnessControllerManager : IDisposable
             {
                 DebugLog.Write($"Hardware brightness apply failed for {deviceName}; using overlay fallback: {applyError}");
                 DisposeSession(deviceName);
+                failures[deviceName] = applyError;
                 continue;
             }
 
             applied.Add(deviceName);
         }
 
-        return applied;
+        return new HardwareBrightnessApplicationResult(applied, failures);
     }
 
     public void RestoreAll()
@@ -68,3 +74,8 @@ public sealed class HardwareBrightnessControllerManager : IDisposable
         RestoreAll();
     }
 }
+
+/// <summary>Outcome of one scheduled DDC/CI application attempt.</summary>
+public sealed record HardwareBrightnessApplicationResult(
+    IReadOnlySet<string> AppliedDeviceNames,
+    IReadOnlyDictionary<string, string> FailuresByDeviceName);

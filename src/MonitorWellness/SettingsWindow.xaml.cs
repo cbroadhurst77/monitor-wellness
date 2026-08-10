@@ -963,9 +963,12 @@ public partial class SettingsWindow : Window
         _hardwareBrightnessBoxes.Clear();
         RefreshHardwareBrightnessReadiness();
 
+        var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors()
+            .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         var rows = new List<UIElement>();
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))
         {
+            activeMonitorsByDeviceName.TryGetValue(deviceName, out MonitorInfo? monitor);
             var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1014,15 +1017,22 @@ public partial class SettingsWindow : Window
             Grid.SetColumn(kelvinOffsetBox, 4);
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
-            bool hardwareEnabled = _settings.HardwareBrightnessEnabledMonitors.Contains(deviceName);
+            bool hasStableHardwareIdentity = monitor is not null && HardwareBrightnessSafety.GetKey(monitor) is not null;
+            string quarantineReason = "";
+            bool hardwareQuarantined = monitor is not null && HardwareBrightnessSafety.IsQuarantined(_settings, monitor, out quarantineReason);
+            bool hardwareEnabled = monitor is not null && HardwareBrightnessSafety.IsApproved(_settings, monitor);
             var hardwareBrightnessBox = new CheckBox
             {
                 Content = "HW",
                 IsChecked = hardwareEnabled,
-                IsEnabled = hardwareEnabled,
+                IsEnabled = hardwareEnabled && !hardwareQuarantined,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = "Use physical DDC/CI brightness for this monitor. It becomes available only after this session's safe test succeeds.",
+                ToolTip = hardwareQuarantined
+                    ? quarantineReason
+                    : hasStableHardwareIdentity
+                        ? "Use physical DDC/CI brightness for this monitor. It becomes available only after this session's safe test succeeds."
+                        : "This monitor does not expose a stable hardware identifier, so automatic DDC/CI brightness stays disabled for safety.",
             };
             System.Windows.Automation.AutomationProperties.SetName(hardwareBrightnessBox, $"Use hardware brightness for {ShortDeviceName(deviceName)}");
             Grid.SetColumn(hardwareBrightnessBox, 5);
@@ -1036,7 +1046,7 @@ public partial class SettingsWindow : Window
                 ToolTip = "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
             };
             System.Windows.Automation.AutomationProperties.SetName(testHardwareBrightnessButton, $"Test hardware brightness for {ShortDeviceName(deviceName)}");
-            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName, hardwareBrightnessBox);
+            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName, monitor, hardwareBrightnessBox);
             Grid.SetColumn(testHardwareBrightnessButton, 6);
 
             row.Children.Add(label);
@@ -1053,8 +1063,8 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// Detects DDC/CI capability without changing any monitor state. Hardware brightness will
-    /// remain disabled until a later explicit, reversible per-monitor test is implemented.
+    /// Detects DDC/CI capability without changing monitor state. Automatic hardware brightness
+    /// remains unavailable until the user completes the explicit reversible per-monitor test.
     /// </summary>
     private void RefreshHardwareBrightnessReadiness()
     {
@@ -1080,7 +1090,7 @@ public partial class SettingsWindow : Window
 
     private void IdentifyButton_Click(object sender, RoutedEventArgs e) => _overlay.IdentifyMonitors(TimeSpan.FromSeconds(6));
 
-    private void TestHardwareBrightness(string deviceName, CheckBox hardwareBrightnessBox)
+    private void TestHardwareBrightness(string deviceName, MonitorInfo? monitor, CheckBox hardwareBrightnessBox)
     {
         if (System.Windows.MessageBox.Show(
                 this,
@@ -1109,9 +1119,16 @@ public partial class SettingsWindow : Window
             dialog.ShowDialog();
             if (dialog.Confirmed)
             {
+                if (monitor is null || !HardwareBrightnessSafety.MarkVerified(_settings, monitor))
+                {
+                    System.Windows.MessageBox.Show(this, "The test restored correctly, but Windows did not provide a stable identity for this monitor. For safety, scheduled hardware brightness remains unavailable and the overlay will be used.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
                 hardwareBrightnessBox.IsEnabled = true;
                 hardwareBrightnessBox.IsChecked = true;
-                System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. HW is now selected for this monitor; click Save to opt in to scheduled physical brightness.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+                hardwareBrightnessBox.ToolTip = "This monitor passed its reversible hardware-brightness test. Click Save to keep the approval.";
+                System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. HW is now selected for this physically identified monitor; click Save to opt in to scheduled physical brightness.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
     }
@@ -1429,10 +1446,22 @@ public partial class SettingsWindow : Window
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
         _settings.MonitorKelvinOffset = kelvinOffsets;
-        _settings.HardwareBrightnessEnabledMonitors = _hardwareBrightnessBoxes
-            .Where(pair => pair.Value.IsEnabled && pair.Value.IsChecked == true)
-            .Select(pair => pair.Key)
-            .ToList();
+        var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors()
+            .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
+        foreach (var (deviceName, hardwareBox) in _hardwareBrightnessBoxes)
+        {
+            if (activeMonitorsByDeviceName.TryGetValue(deviceName, out MonitorInfo? monitor)
+                && HardwareBrightnessSafety.GetKey(monitor) is string key
+                && _settings.HardwareBrightnessSafetyByMonitor.TryGetValue(key, out HardwareBrightnessSafetyState? state)
+                && !state.IsQuarantined)
+            {
+                state.IsApproved = hardwareBox.IsChecked == true;
+            }
+        }
+
+        // Legacy device-name approvals are unsafe once that display has been seen by this
+        // version. New hardware approvals are persisted only against physical identities.
+        _settings.HardwareBrightnessEnabledMonitors.RemoveAll(_hardwareBrightnessBoxes.ContainsKey);
         _settings.HistoryTrackingEnabled = HistoryTrackingCheckBox.IsChecked == true;
         _settings.PromptForMigraineRating = PromptForRatingCheckBox.IsChecked == true;
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;

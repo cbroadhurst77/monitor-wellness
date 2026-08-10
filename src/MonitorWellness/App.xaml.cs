@@ -876,19 +876,55 @@ public partial class App : Application
             }
         }
 
-        var approvedHardwareDevices = _settings.HardwareBrightnessEnabledMonitors
-            .Where(deviceName => !_settings.ExcludedMonitors.Contains(deviceName))
+        var activeMonitors = MonitorEnumerator.GetActiveMonitors();
+        var approvedHardwareDevices = activeMonitors
+            .Where(monitor => !_settings.ExcludedMonitors.Contains(monitor.DeviceName)
+                && HardwareBrightnessSafety.IsApproved(_settings, monitor))
+            .Select(monitor => monitor.DeviceName)
             .ToList();
-        IReadOnlySet<string> hardwareAppliedDevices = _hardwareBrightness.ApplyApprovedBrightness(approvedHardwareDevices, brightnessByDevice);
+        HardwareBrightnessApplicationResult hardwareResult = _hardwareBrightness.ApplyApprovedBrightness(approvedHardwareDevices, brightnessByDevice);
+        PersistHardwareBrightnessQuarantines(activeMonitors, hardwareResult.FailuresByDeviceName);
         var overlayBrightnessByDevice = brightnessByDevice.ToDictionary(
             entry => entry.Key,
-            entry => hardwareAppliedDevices.Contains(entry.Key) ? 1.0 : entry.Value);
+            entry => hardwareResult.AppliedDeviceNames.Contains(entry.Key) ? 1.0 : entry.Value);
         _overlay?.ApplyDim(overlayBrightnessByDevice, dimColor);
 
         if (_trayIcon is not null && _migraine?.IsActive != true)
         {
             double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
             _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°";
+        }
+    }
+
+    private void PersistHardwareBrightnessQuarantines(
+        IReadOnlyCollection<MonitorInfo> activeMonitors,
+        IReadOnlyDictionary<string, string> failuresByDeviceName)
+    {
+        bool changed = false;
+        foreach (var (deviceName, reason) in failuresByDeviceName)
+        {
+            MonitorInfo? monitor = activeMonitors.FirstOrDefault(candidate =>
+                string.Equals(candidate.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+            if (monitor is not null)
+            {
+                changed |= HardwareBrightnessSafety.Quarantine(
+                    _settings,
+                    monitor,
+                    $"Hardware brightness was disabled after a failed command: {reason}");
+            }
+        }
+
+        if (!changed)
+            return;
+
+        try
+        {
+            SettingsStore.Save(_settings);
+            DebugLog.Write("Hardware brightness safety quarantine persisted; overlay fallback remains active.");
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"Couldn't persist hardware brightness safety quarantine: {ex}");
         }
     }
 
