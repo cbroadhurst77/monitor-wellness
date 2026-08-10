@@ -56,4 +56,33 @@ public class HardwareBrightnessSafetyTests
         Assert.Equal(string.Empty, filtered[1].HardwareDeviceId);
         Assert.Equal("MONITOR\\UNIQUE", filtered[2].HardwareDeviceId);
     }
+
+    [Fact]
+    public void DisplayTopologyMapsEachDesktopSourceToItsSinglePhysicalTarget()
+    {
+        var paths = new[]
+        {
+            new DisplayTopologyPath(@"\\.\DISPLAY1", @"\\?\DISPLAY#DELD0A1#K9V8V89J17WS#{GUID}"),
+            new DisplayTopologyPath(@"\\.\DISPLAY2", @"\\?\DISPLAY#AUS27AE#L1LMTF091503#{GUID}"),
+        };
+
+        IReadOnlyDictionary<string, string> identities = MonitorEnumerator.BuildHardwareIdsByDesktopDevice(paths);
+
+        Assert.Equal(@"\\?\DISPLAY#DELD0A1#K9V8V89J17WS#{GUID}", identities[@"\\.\DISPLAY1"]);
+        Assert.Equal(@"\\?\DISPLAY#AUS27AE#L1LMTF091503#{GUID}", identities[@"\\.\DISPLAY2"]);
+    }
+
+    [Fact]
+    public void DisplayTopologyOmitsClonedDesktopSource()
+    {
+        var paths = new[]
+        {
+            new DisplayTopologyPath(@"\\.\DISPLAY1", @"\\?\DISPLAY#DELD0A1#A#{GUID}"),
+            new DisplayTopologyPath(@"\\.\DISPLAY1", @"\\?\DISPLAY#AUS27AE#B#{GUID}"),
+        };
+
+        IReadOnlyDictionary<string, string> identities = MonitorEnumerator.BuildHardwareIdsByDesktopDevice(paths);
+
+        Assert.Empty(identities);
+    }
 }
