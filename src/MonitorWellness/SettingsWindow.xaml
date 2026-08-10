@@ -338,6 +338,9 @@
                         </Grid>
                         <ItemsControl x:Name="MonitorsList"/>
 
+                        <CheckBox x:Name="FullscreenPresentationGuardCheckBox" Content="Restore the native display while a full-screen presentation, video, or game is active" Margin="0,12,0,0"/>
+                        <TextBlock Text="Off by default. When enabled, this temporarily clears Monitor Wellness adjustments whenever Windows identifies a foreground full-screen app, then safely resumes when you leave it. Use this for screen sharing or colour-critical full-screen work; leave it off if you need your comfort settings during full screen." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
                         <Separator Margin="0,16,0,16"/>
 
                         <TextBlock Text="Break Reminders" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>

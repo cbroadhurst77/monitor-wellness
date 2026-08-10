@@ -164,6 +164,7 @@ public partial class SettingsWindow : Window
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         // HistoryTrackingCheckBox's own Checked/Unchecked handler (fired by setting its
         // IsChecked above) already set PromptForRatingCheckBox.IsEnabled to match — this just
         // loads the actual saved value into it.
@@ -430,6 +431,7 @@ public partial class SettingsWindow : Window
         _settings.MatchAmbientLight = imported.MatchAmbientLight;
         _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
         _settings.BreakReminderIntervalMinutes = imported.BreakReminderIntervalMinutes;
+        _settings.RestoreNativeDisplayInFullscreen = imported.RestoreNativeDisplayInFullscreen;
         _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
 
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
@@ -441,6 +443,7 @@ public partial class SettingsWindow : Window
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
 
         UpdateMapMarker();
@@ -1171,6 +1174,36 @@ public partial class SettingsWindow : Window
         row.ProcessNameBox.Focus();
     }
 
+    /// <summary>
+    /// Adds a generic rule from the tray's foreground-app capture. A window title is deliberately
+    /// not copied: titles can reveal document or meeting names, and the user can add a scoped
+    /// condition themselves if they want one.
+    /// </summary>
+    public void AddApplicationRuleTemplate(string processName)
+    {
+        if (!ApplicationComfortRules.TryNormalizeProcessName(processName, out string normalized))
+            return;
+
+        ApplicationRuleRow? existing = _applicationRuleRows.FirstOrDefault(row =>
+            ApplicationComfortRules.TryNormalizeProcessName(row.ProcessNameBox.Text, out string configured)
+            && string.Equals(configured, normalized, StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(row.WindowTitleBox.Text));
+        if (existing is not null)
+        {
+            existing.ActionBox.Focus();
+            return;
+        }
+
+        if (_applicationRuleRows.Count >= 100)
+        {
+            System.Windows.MessageBox.Show(this, "You can save up to 100 application rules.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        ApplicationRuleRow row = AddApplicationRuleRow(new ApplicationComfortRule { ProcessName = normalized });
+        row.ActionBox.Focus();
+    }
+
     private ApplicationRuleRow AddApplicationRuleRow(ApplicationComfortRule rule)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
@@ -1707,6 +1740,7 @@ public partial class SettingsWindow : Window
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
         _settings.BreakReminderIntervalMinutes = (int)BreakReminderIntervalSlider.Value;
+        _settings.RestoreNativeDisplayInFullscreen = FullscreenPresentationGuardCheckBox.IsChecked == true;
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)

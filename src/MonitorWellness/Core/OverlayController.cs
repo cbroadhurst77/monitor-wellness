@@ -25,6 +25,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
+        VisualStabilityDiagnostics.RecordDisplayTopologySignal();
         // SystemEvents can raise this off the thread that subscribed (documented Windows
         // Forms/SystemEvents behavior, not guaranteed to always fire on the UI thread) —
         // RebuildWindows constructs/closes WPF Window objects, which throw if touched from a
@@ -56,6 +57,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     private void OnTopologyRefreshTimerTick(object? sender, EventArgs e)
     {
         _topologyRefreshTimer?.Stop();
+        VisualStabilityDiagnostics.RecordCoalescedTopologyRefresh();
         RebuildWindows();
     }
 

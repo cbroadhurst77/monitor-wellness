@@ -5,6 +5,17 @@ namespace MonitorWellness.Tests;
 public sealed class BreakReminderPolicyTests
 {
     [Fact]
+    public void Snooze_IsActiveOnlyBeforeItsExpiry()
+    {
+        DateTime now = new(2026, 8, 10, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.True(BreakReminderPolicy.IsSnoozed(now, now.AddMinutes(30)));
+        Assert.False(BreakReminderPolicy.IsSnoozed(now, now));
+        Assert.False(BreakReminderPolicy.IsSnoozed(now, now.AddMinutes(-1)));
+        Assert.False(BreakReminderPolicy.IsSnoozed(now, null));
+    }
+
+    [Fact]
     public void Decide_shows_reminder_when_person_is_active_and_screen_is_available()
     {
         BreakReminderDecision result = BreakReminderPolicy.Decide(false, false, TimeSpan.FromSeconds(30));

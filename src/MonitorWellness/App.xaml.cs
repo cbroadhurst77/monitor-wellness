@@ -42,6 +42,7 @@ public partial class App : Application
     private DispatcherTimer? _applicationRuleTimer;
     private DispatcherTimer? _breakReminderTimer;
     private BreakFocusWindow? _breakFocusWindow;
+    private DateTime? _breakReminderSnoozedUntilUtc;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
@@ -56,6 +57,7 @@ public partial class App : Application
     private string? _activeNativeDisplayRuleProcessName;
     private string? _activeComfortPlanRuleDescription;
     private string? _manualComfortPlanName;
+    private bool _fullscreenPresentationGuardActive;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -239,6 +241,7 @@ public partial class App : Application
             PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
         menu.Items.Add(pauseMenu);
         menu.Items.Add("Start a &20-second focus break", null, (_, _) => ShowBreakFocusWindow());
+        menu.Items.Add(BuildBreakReminderSnoozeMenu());
         _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(BuildQuickComfortPlansMenu());
@@ -290,6 +293,7 @@ public partial class App : Application
         menu.Items.Add(diagnosticsMenu);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("&Settings...", null, (_, _) => OpenSettingsWindow());
+        menu.Items.Add("Add &Foreground App Rule...", null, (_, _) => CaptureForegroundApplicationRule());
         // Split out of the old single "Help / About..." item, which previously just reopened
         // the first-run onboarding wizard (the wrong voice for someone looking something up
         // later, rather than seeing it for the first time). See
@@ -442,16 +446,22 @@ public partial class App : Application
     /// </summary>
     private bool _settingsPreviewActive;
 
-    private void OpenSettingsWindow()
+    private void OpenSettingsWindow() => OpenSettingsWindow(null);
+
+    private void OpenSettingsWindow(string? initialRuleProcessName)
     {
         if (_settingsWindow is not null)
         {
+            if (!string.IsNullOrWhiteSpace(initialRuleProcessName))
+                _settingsWindow.AddApplicationRuleTemplate(initialRuleProcessName);
             _settingsWindow.Activate();
             return;
         }
 
         _settingsPreviewActive = true;
         _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved, ComputeStatusText);
+        if (!string.IsNullOrWhiteSpace(initialRuleProcessName))
+            _settingsWindow.AddApplicationRuleTemplate(initialRuleProcessName);
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -460,6 +470,27 @@ public partial class App : Application
         };
         _settingsWindow.Show();
         _settingsWindow.Activate();
+    }
+
+    private void CaptureForegroundApplicationRule()
+    {
+        ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
+        if (foregroundApplication is null || string.Equals(foregroundApplication.ProcessName, "MonitorWellness", StringComparison.OrdinalIgnoreCase))
+        {
+            System.Windows.MessageBox.Show(
+                "Bring the app you want to configure to the front, then choose Add Foreground App Rule from Monitor Wellness' tray menu.",
+                "Monitor Wellness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        OpenSettingsWindow(foregroundApplication.ProcessName);
+        _trayIcon?.ShowBalloonTip(
+            4_000,
+            "Monitor Wellness",
+            $"Added {foregroundApplication.ProcessName}. Choose native display or a comfort plan, then Save.",
+            ToolTipIcon.Info);
     }
 
     private void OnSettingsSaved()
@@ -487,6 +518,7 @@ public partial class App : Application
 
         if (!_settings.BreakReminderEnabled)
         {
+            _breakReminderSnoozedUntilUtc = null;
             DebugLog.Write("BreakReminder: disabled, timer not (re)started");
             return;
         }
@@ -496,6 +528,18 @@ public partial class App : Application
         _breakReminderTimer = new DispatcherTimer { Interval = interval };
         _breakReminderTimer.Tick += (_, _) =>
         {
+            DateTime nowUtc = DateTime.UtcNow;
+            if (BreakReminderPolicy.IsSnoozed(nowUtc, _breakReminderSnoozedUntilUtc))
+            {
+                DebugLog.Write($"BreakReminder: tick skipped (snoozed until {_breakReminderSnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC)");
+                return;
+            }
+            if (_breakReminderSnoozedUntilUtc is not null)
+            {
+                DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
+                _breakReminderSnoozedUntilUtc = null;
+            }
+
             // Skip while migraine mode is active, a fullscreen app likely owns the screen, or
             // Windows says the person has stepped away. The timer continues on its regular
             // cadence so returning from a real break never triggers an immediate catch-up prompt.
@@ -518,6 +562,46 @@ public partial class App : Application
             }
         };
         _breakReminderTimer.Start();
+    }
+
+    private ToolStripMenuItem BuildBreakReminderSnoozeMenu()
+    {
+        var menu = new ToolStripMenuItem("Snooze &Break Reminders");
+        menu.DropDownItems.Add("30 minutes", null, (_, _) => SnoozeBreakReminders(TimeSpan.FromMinutes(30)));
+        menu.DropDownItems.Add("1 hour", null, (_, _) => SnoozeBreakReminders(TimeSpan.FromHours(1)));
+        menu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
+            SnoozeBreakReminders(DateTime.Today.AddDays(1).ToUniversalTime() - DateTime.UtcNow));
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        menu.DropDownItems.Add("Resume break reminders", null, (_, _) => ResumeBreakReminders());
+        menu.DropDownOpening += (_, _) =>
+        {
+            bool enabled = _settings.BreakReminderEnabled;
+            menu.Text = !enabled
+                ? "Snooze &Break Reminders (off)"
+                : BreakReminderPolicy.IsSnoozed(DateTime.UtcNow, _breakReminderSnoozedUntilUtc)
+                    ? $"Snooze &Break Reminders (until {_breakReminderSnoozedUntilUtc!.Value.ToLocalTime():HH:mm})"
+                    : "Snooze &Break Reminders";
+        };
+        return menu;
+    }
+
+    private void SnoozeBreakReminders(TimeSpan duration)
+    {
+        if (!_settings.BreakReminderEnabled || duration <= TimeSpan.Zero)
+            return;
+
+        _breakReminderSnoozedUntilUtc = DateTime.UtcNow + duration;
+        DebugLog.Write($"BreakReminder: snoozed until {_breakReminderSnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC.");
+        _trayIcon?.ShowBalloonTip(4_000, "Monitor Wellness", $"Break reminders snoozed until {_breakReminderSnoozedUntilUtc.Value.ToLocalTime():HH:mm}.", ToolTipIcon.Info);
+    }
+
+    private void ResumeBreakReminders()
+    {
+        if (_breakReminderSnoozedUntilUtc is null)
+            return;
+
+        _breakReminderSnoozedUntilUtc = null;
+        DebugLog.Write("BreakReminder: snooze cleared; reminders resumed.");
     }
 
     private void ShowBreakFocusWindow()
@@ -768,6 +852,8 @@ public partial class App : Application
 
         if (_pauseUntilUtc is DateTime pauseUntil)
             return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
+        if (_fullscreenPresentationGuardActive)
+            return "Currently: Native display restored for a fullscreen presentation or app.";
         if (_activeNativeDisplayRuleProcessName is not null)
             return $"Currently: Native display restored for {_activeNativeDisplayRuleProcessName}.";
         if (_manualComfortPlanName is not null)
@@ -961,6 +1047,17 @@ public partial class App : Application
             _settings.ApplicationComfortRules,
             foregroundApplication?.ProcessName,
             foregroundApplication?.WindowTitle);
+        if (_settings.RestoreNativeDisplayInFullscreen && FullscreenDetector.IsForegroundWindowLikelyFullscreen())
+        {
+            _activeComfortPlanRuleDescription = null;
+            ActivateFullscreenPresentationGuard();
+            return;
+        }
+        if (_fullscreenPresentationGuardActive)
+        {
+            DebugLog.Write("Fullscreen presentation guard ended; resuming the selected schedule or application rule.");
+            _fullscreenPresentationGuardActive = false;
+        }
         if (applicationRule?.Action == ApplicationComfortActions.RestoreNativeDisplay)
         {
             _activeComfortPlanRuleDescription = null;
@@ -1050,9 +1147,11 @@ public partial class App : Application
         _applicationRuleTimer.Tick += (_, _) =>
         {
             ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
+            bool fullscreenGuardShouldApply = _settings.RestoreNativeDisplayInFullscreen
+                && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
             string? context = foregroundApplication is null
                 ? null
-                : $"{foregroundApplication.ProcessName}\u001f{foregroundApplication.WindowTitle}";
+                : $"{foregroundApplication.ProcessName}\u001f{foregroundApplication.WindowTitle}\u001f{fullscreenGuardShouldApply}";
             if (string.Equals(_lastForegroundApplicationContext, context, StringComparison.OrdinalIgnoreCase))
                 return;
 
@@ -1064,16 +1163,33 @@ public partial class App : Application
             if (!ApplicationRuleRefreshPolicy.ShouldRefresh(
                 matchingRule,
                 _activeNativeDisplayRuleProcessName is not null,
-                _activeComfortPlanRuleDescription is not null))
+                _activeComfortPlanRuleDescription is not null,
+                fullscreenGuardShouldApply,
+                _fullscreenPresentationGuardActive))
             {
                 // The regular schedule timer will handle its next gradual adjustment. Do not
                 // write the same gamma/overlay state merely because an unrelated window opened.
+                VisualStabilityDiagnostics.RecordForegroundDisplayWriteAvoided();
                 return;
             }
 
             RunScheduleTick();
         };
         _applicationRuleTimer.Start();
+    }
+
+    private void ActivateFullscreenPresentationGuard()
+    {
+        if (_fullscreenPresentationGuardActive)
+            return;
+
+        _fullscreenPresentationGuardActive = true;
+        DebugLog.Write("Fullscreen presentation guard active: restoring native display state.");
+        _hardwareBrightness.RestoreAll();
+        _overlay?.Clear();
+        _gammaManager?.ResetAllToIdentity();
+        if (_trayIcon is not null)
+            _trayIcon.Text = "Monitor Wellness — native display for fullscreen app";
     }
 
     private void ActivateNativeDisplayApplicationRule(ApplicationComfortRule rule)

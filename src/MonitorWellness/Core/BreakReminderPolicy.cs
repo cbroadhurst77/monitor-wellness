@@ -13,6 +13,10 @@ public static class BreakReminderPolicy
     /// </summary>
     public static readonly TimeSpan AwayThreshold = TimeSpan.FromMinutes(2);
 
+    /// <summary>Session-only snoozes are active strictly until their stored UTC expiry.</summary>
+    public static bool IsSnoozed(DateTime nowUtc, DateTime? snoozedUntilUtc) =>
+        snoozedUntilUtc is DateTime until && until > nowUtc;
+
     public static BreakReminderDecision Decide(bool migraineActive, bool likelyFullscreen, TimeSpan idleDuration)
     {
         if (migraineActive)

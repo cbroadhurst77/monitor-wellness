@@ -209,6 +209,13 @@ public sealed class AppSettings
     public int BreakReminderIntervalMinutes { get; set; } = 20;
 
     /// <summary>
+    /// Opt-in presentation safeguard: restores native gamma, overlay, and approved hardware
+    /// brightness while Windows reports that a foreground app is fullscreen. Off by default so
+    /// it never overrides a person's chosen comfort settings without an explicit decision.
+    /// </summary>
+    public bool RestoreNativeDisplayInFullscreen { get; set; }
+
+    /// <summary>
     /// Opt-in, defaults false: once a day at most, check GitHub's public Releases API for a
     /// newer version and show a balloon linking to it if one exists (see Core/UpdateChecker.cs)
     /// — never a silent download/install. This is the only other network call in the app
@@ -254,6 +261,7 @@ public sealed class AppSettings
         MatchAmbientLight = MatchAmbientLight,
         BreakReminderEnabled = BreakReminderEnabled,
         BreakReminderIntervalMinutes = BreakReminderIntervalMinutes,
+        RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
         CheckForUpdatesEnabled = CheckForUpdatesEnabled,
         LastUpdateCheckUtc = LastUpdateCheckUtc,
     };
@@ -295,6 +303,7 @@ public sealed class AppSettings
         MatchAmbientLight = copy.MatchAmbientLight;
         BreakReminderEnabled = copy.BreakReminderEnabled;
         BreakReminderIntervalMinutes = copy.BreakReminderIntervalMinutes;
+        RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
         CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;
         LastUpdateCheckUtc = copy.LastUpdateCheckUtc;
     }

@@ -10,6 +10,9 @@ public static class ApplicationRuleRefreshPolicy
     public static bool ShouldRefresh(
         ApplicationComfortRule? matchingRule,
         bool nativeDisplayRuleWasActive,
-        bool comfortPlanRuleWasActive) =>
-        matchingRule is not null || nativeDisplayRuleWasActive || comfortPlanRuleWasActive;
+        bool comfortPlanRuleWasActive,
+        bool fullscreenGuardShouldApply = false,
+        bool fullscreenGuardWasActive = false) =>
+        matchingRule is not null || nativeDisplayRuleWasActive || comfortPlanRuleWasActive
+        || fullscreenGuardShouldApply || fullscreenGuardWasActive;
 }

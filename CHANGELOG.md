@@ -18,6 +18,14 @@ recent work.
 - The optional local History summary now compares the last seven days of recorded activity with
   the preceding seven days, while clearly distinguishing these personal records from medical
   insight.
+- Break reminders can be snoozed from the tray for 30 minutes, an hour, or until tomorrow.
+  Snoozes are session-only and do not alter saved preferences.
+- Add Foreground App Rule captures the target executable from the tray without copying a window
+  title, making application-aware rules quicker to set up without collecting document names.
+- Optional fullscreen presentation guard restores the native display for fullscreen content and
+  safely resumes afterward.
+- Display Capability Passport now refreshes, copies its local report to the clipboard, and
+  exposes privacy-preserving Flicker Guard session counters.
 
 ### Improved
 - Switching between unrelated apps or windows no longer re-applies gamma and overlay state.

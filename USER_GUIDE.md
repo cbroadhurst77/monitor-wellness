@@ -48,6 +48,12 @@ backend.
 Use it as an explanation of what this PC can expose—not a display-health or medical report.
 An `unknown` result for PWM, dithering, spectral output, or medical suitability is intentional.
 
+Use **Refresh** after docking, waking, or changing monitor settings. Use **Copy report** to put
+the read-only report on the clipboard for a support request. The report also shows session-only
+Flicker Guard counters: display-topology signals, coalesced refreshes, and unrelated
+foreground-window display writes the app avoided. These counters contain no window titles,
+settings, or personal content.
+
 ## Optional hardware brightness
 
 External monitors that expose DDC/CI may offer physical brightness control in
@@ -89,6 +95,10 @@ work) or **Use comfort plan** (for example, Reading while Word is active). A com
 temporary: it does not alter saved settings, and the normal schedule resumes after you switch
 away.
 
+To avoid typing an executable name, bring the target app to the front and choose **Add
+Foreground App Rule** from the tray menu. The app captures only the executable name; it never
+copies the current window title, which you can choose to add manually as an optional condition.
+
 An optional window-title phrase narrows a rule to a named meeting, presentation, or document.
 For the same executable, a matching title-specific rule takes precedence over the general rule.
 Window titles are used locally for matching only; they are not included in diagnostic bundles.
@@ -102,7 +112,16 @@ medical treatment.
 
 The optional 20-20-20 reminder is off by default. When enabled, it stays quiet during Migraine
 Mode, full-screen work, and time away from the PC. The tray menu also provides a dismissible
-20-second focus timer.
+20-second focus timer. Use **Snooze Break Reminders** in the tray for 30 minutes, an hour, or
+until tomorrow; snoozes are local to the current session and clear if reminders are disabled.
+
+## Fullscreen presentations
+
+In **Settings → Monitors & Breaks**, you can opt in to the fullscreen presentation guard. It
+temporarily restores native gamma, dimming, and approved hardware brightness when Windows
+identifies a fullscreen presentation, video, or game. It is off by default: leave it off if you
+need your comfort settings during fullscreen work. Migraine Mode and Emergency Restore remain
+available independently.
 
 ## Privacy, support, and accessibility
 

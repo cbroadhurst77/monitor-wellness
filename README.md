@@ -52,7 +52,10 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   command automatically quarantines the monitor and returns to the safer overlay fallback
 - **Application-aware comfort rules**: either restore the native display or temporarily apply
   a built-in comfort plan while a selected editor, game, meeting, document, or media app is
-  foreground, then safely resume the saved schedule
+  foreground, then safely resume the saved schedule; capture a foreground app directly from
+  the tray instead of typing its executable name
+- Optional **fullscreen presentation guard**: restore the native display during a fullscreen
+  presentation, video, or game, then resume safely when leaving fullscreen
 - Ambient-light compensation is optional, sensor-only, and rate-limited so changes in room
   lighting adapt gradually; per-monitor dim and Kelvin matching adjustments preview live
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
@@ -60,10 +63,11 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   installs anything automatically
 - Optional, idle-aware 20-20-20 break reminders that stay quiet during migraine mode,
   full-screen work, or after you have stepped away; the tray menu can start a simple,
-  always-dismissible 20-second focus timer
+  always-dismissible 20-second focus timer and snooze reminders for the current session
 - **Display Capability Passport** in Diagnostics: a local, read-only explanation of each
   display's physical identity, DDC/CI eligibility, HDR state, and safest brightness backend;
-  it deliberately reports PWM, temporal dithering, spectrum, and medical suitability as unknown
+  copy or refresh it for support, and view local Flicker Guard counters; it deliberately reports
+  PWM, temporal dithering, spectrum, and medical suitability as unknown
 - Built-in sensory comfort plans for balanced work, reading, colour-critical work, early
   sensitivity, and recovery—preview them in Settings or choose one temporarily from the tray;
   comfort starting points, not treatment recommendations
@@ -96,7 +100,7 @@ utility and turn off all but one.
 
 v0.2.3. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (210 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (213 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not

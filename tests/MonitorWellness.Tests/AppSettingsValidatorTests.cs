@@ -117,6 +117,16 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void Clone_PreservesFullscreenPresentationGuardPreference()
+    {
+        var original = new AppSettings { RestoreNativeDisplayInFullscreen = true };
+
+        AppSettings clone = original.Clone();
+
+        Assert.True(clone.RestoreNativeDisplayInFullscreen);
+    }
+
+    [Fact]
     public void HardwareBrightnessOptIns_AreDeepCopied()
     {
         var original = new AppSettings { HardwareBrightnessEnabledMonitors = new List<string> { @"\\.\DISPLAY1" } };

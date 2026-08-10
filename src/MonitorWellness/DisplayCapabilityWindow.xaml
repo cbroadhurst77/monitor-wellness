@@ -4,8 +4,14 @@
         Title="Display Capability Passport" Width="680" Height="560"
         WindowStartupLocation="CenterScreen" MinWidth="480" MinHeight="360">
     <DockPanel Margin="16">
-        <Button DockPanel.Dock="Bottom" Content="Close" Width="84" HorizontalAlignment="Right" Margin="0,12,0,0"
-                IsCancel="True" Click="Close_Click" AutomationProperties.Name="Close Display Capability Passport"/>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Refresh" Width="84" Margin="0,0,8,0" Click="Refresh_Click"
+                    AutomationProperties.Name="Refresh Display Capability Passport"/>
+            <Button Content="Copy report" Width="96" Margin="0,0,8,0" Click="Copy_Click"
+                    AutomationProperties.Name="Copy Display Capability Passport report to clipboard"/>
+            <Button Content="Close" Width="84" IsCancel="True" Click="Close_Click"
+                    AutomationProperties.Name="Close Display Capability Passport"/>
+        </StackPanel>
         <TextBox x:Name="ReportText" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                  AutomationProperties.Name="Display Capability Passport report"/>

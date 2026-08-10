@@ -36,6 +36,8 @@ public static class DiagnosticBundleService
         report.AppendLine(CultureInfo.InvariantCulture, $"Process architecture: {RuntimeInformation.ProcessArchitecture}");
         report.AppendLine(CultureInfo.InvariantCulture, $"HDR enabled: {HdrDetector.IsAnyDisplayHdrEnabled()}");
         report.AppendLine(CultureInfo.InvariantCulture, $"Ambient-light sensor available: {AmbientLightSensor.IsAvailable}");
+        VisualStabilitySnapshot visualStability = VisualStabilityDiagnostics.GetSnapshot();
+        report.AppendLine(CultureInfo.InvariantCulture, $"Flicker Guard session counters: topology signals={visualStability.DisplayTopologySignals}; coalesced refreshes={visualStability.CoalescedTopologyRefreshes}; unrelated foreground display writes avoided={visualStability.ForegroundDisplayWritesAvoided}");
         report.AppendLine();
         report.AppendLine("Active monitors:");
         foreach (MonitorInfo monitor in MonitorEnumerator.GetActiveMonitors())

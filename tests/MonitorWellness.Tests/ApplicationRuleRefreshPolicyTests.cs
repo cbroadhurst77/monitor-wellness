@@ -19,4 +19,11 @@ public class ApplicationRuleRefreshPolicyTests
         Assert.True(ApplicationRuleRefreshPolicy.ShouldRefresh(null, nativeDisplayRuleWasActive: true, comfortPlanRuleWasActive: false));
         Assert.True(ApplicationRuleRefreshPolicy.ShouldRefresh(null, nativeDisplayRuleWasActive: false, comfortPlanRuleWasActive: true));
     }
+
+    [Fact]
+    public void EnteringOrLeavingFullscreenGuard_RefreshesDisplayState()
+    {
+        Assert.True(ApplicationRuleRefreshPolicy.ShouldRefresh(null, false, false, fullscreenGuardShouldApply: true));
+        Assert.True(ApplicationRuleRefreshPolicy.ShouldRefresh(null, false, false, fullscreenGuardWasActive: true));
+    }
 }

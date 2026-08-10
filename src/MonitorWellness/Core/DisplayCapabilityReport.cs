@@ -21,7 +21,8 @@ public sealed record DisplayCapability(
 public sealed record DisplayCapabilityReport(
     bool IsHdrEnabled,
     bool IsAmbientLightSensorAvailable,
-    IReadOnlyList<DisplayCapability> Displays)
+    IReadOnlyList<DisplayCapability> Displays,
+    VisualStabilitySnapshot VisualStability)
 {
     public string ToPlainText()
     {
@@ -29,6 +30,7 @@ public sealed record DisplayCapabilityReport(
         builder.AppendLine("Monitor Wellness — Display Capability Passport");
         builder.AppendLine(CultureInfo.InvariantCulture, $"HDR enabled: {IsHdrEnabled}");
         builder.AppendLine(CultureInfo.InvariantCulture, $"Ambient-light sensor available: {IsAmbientLightSensorAvailable}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"Flicker Guard this session: {VisualStability.ForegroundDisplayWritesAvoided} unrelated foreground display write(s) avoided; {VisualStability.CoalescedTopologyRefreshes} coalesced refresh(es) from {VisualStability.DisplayTopologySignals} display-topology signal(s).");
         builder.AppendLine();
 
         foreach (DisplayCapability display in Displays)
@@ -57,7 +59,7 @@ public static class DisplayCapabilityReporter
             .ToDictionary(capability => capability.DeviceName, StringComparer.OrdinalIgnoreCase);
 
         var displays = monitors.Select(monitor => CreateDisplayCapability(settings, monitor, ddcCapabilities)).ToList();
-        return new DisplayCapabilityReport(HdrDetector.IsAnyDisplayHdrEnabled(), AmbientLightSensor.IsAvailable, displays);
+        return new DisplayCapabilityReport(HdrDetector.IsAnyDisplayHdrEnabled(), AmbientLightSensor.IsAvailable, displays, VisualStabilityDiagnostics.GetSnapshot());
     }
 
     internal static DisplayCapability CreateDisplayCapability(
