@@ -15,6 +15,9 @@ recent work.
 - The tray menu now offers **Temporary Comfort Plan** for an immediate, non-persistent switch
   to Balanced, Reading, Colour-critical, Early sensitivity, or Recovery. Emergency Restore
   clears the temporary plan as part of returning the display to normal.
+- The optional local History summary now compares the last seven days of recorded activity with
+  the preceding seven days, while clearly distinguishing these personal records from medical
+  insight.
 
 ## 0.2.3 — Sensory safety and comfort update
 

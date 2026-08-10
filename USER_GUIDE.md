@@ -108,6 +108,10 @@ Mode, full-screen work, and time away from the PC. The tray menu also provides a
 Settings, optional local history, and logs remain on this PC. Location search happens only when
 you ask it to; update checks are opt-in. See [PRIVACY.md](PRIVACY.md) for the full policy.
 
+When local history is enabled, the Settings summary compares activations in the last seven days
+with the preceding seven days. It is a private activity record to help you notice your own use,
+not a symptom tracker, diagnosis, or medical insight.
+
 The app supports keyboard operation, Windows contrast themes, colour filters, and scaling, but
 it currently ships in English only. For a problem report, use **tray icon → Diagnostics → Export
 Diagnostic Bundle**, review the bundle before sharing it, and include your Windows, monitor, and

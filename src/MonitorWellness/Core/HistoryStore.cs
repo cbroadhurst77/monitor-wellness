@@ -99,6 +99,7 @@ public static class HistoryStore
 public sealed record HistorySummary(
     int TotalActivations,
     int ActivationsLast7Days,
+    int ActivationsPrevious7Days,
     int ActivationsLast30Days,
     double? AverageDurationMinutes,
     int MildCount,
@@ -123,6 +124,7 @@ public static class HistorySummarizer
             .ToList();
 
         int last7 = activations.Count(e => (nowUtc - e.TimestampUtc).TotalDays is >= 0 and <= 7);
+        int previous7 = activations.Count(e => (nowUtc - e.TimestampUtc).TotalDays is > 7 and <= 14);
         int last30 = activations.Count(e => (nowUtc - e.TimestampUtc).TotalDays is >= 0 and <= 30);
         int mild = activations.Count(e => e.Mild == true);
         int full = activations.Count(e => e.Mild != true);
@@ -132,6 +134,6 @@ public static class HistorySummarizer
             : null;
         double? averageRating = ratings.Count > 0 ? ratings.Average() : null;
 
-        return new HistorySummary(activations.Count, last7, last30, averageDurationMinutes, mild, full, pauseCount, averageRating, ratings.Count);
+        return new HistorySummary(activations.Count, last7, previous7, last30, averageDurationMinutes, mild, full, pauseCount, averageRating, ratings.Count);
     }
 }

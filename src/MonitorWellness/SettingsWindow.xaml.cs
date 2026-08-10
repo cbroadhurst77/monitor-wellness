@@ -264,10 +264,11 @@ public partial class SettingsWindow : Window
         HistorySummaryText.Text = summary.TotalActivations == 0
             ? "No Migraine Mode activations recorded yet."
             : $"{summary.TotalActivations} total activation(s) ({summary.FullCount} strong, {summary.MildCount} gentle) — " +
-              $"{summary.ActivationsLast7Days} in the last 7 days, {summary.ActivationsLast30Days} in the last 30." +
+              $"recent activity: {summary.ActivationsLast7Days} in the last 7 days and {summary.ActivationsPrevious7Days} in the 7 days before that; {summary.ActivationsLast30Days} in the last 30." +
               (summary.AverageDurationMinutes is double avg ? $" Average duration: {avg:F0} min." : "") +
               (summary.PauseCount > 0 ? $" Schedule paused {summary.PauseCount} time(s)." : "") +
-              (summary.AverageRating is double avgRating ? $" Average helpfulness: {avgRating:F1}/5 ({summary.RatingCount} rating(s))." : "");
+              (summary.AverageRating is double avgRating ? $" Average helpfulness: {avgRating:F1}/5 ({summary.RatingCount} rating(s))." : "") +
+              " Activity counts are personal records, not medical insight.";
     }
 
     /// <summary>

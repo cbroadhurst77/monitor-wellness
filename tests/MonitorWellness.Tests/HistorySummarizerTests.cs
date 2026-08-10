@@ -13,6 +13,7 @@ public class HistorySummarizerTests
 
         Assert.Equal(0, summary.TotalActivations);
         Assert.Equal(0, summary.ActivationsLast7Days);
+        Assert.Equal(0, summary.ActivationsPrevious7Days);
         Assert.Equal(0, summary.ActivationsLast30Days);
         Assert.Null(summary.AverageDurationMinutes);
         Assert.Equal(0, summary.MildCount);
@@ -54,7 +55,25 @@ public class HistorySummarizerTests
 
         Assert.Equal(3, summary.TotalActivations);
         Assert.Equal(1, summary.ActivationsLast7Days);
+        Assert.Equal(1, summary.ActivationsPrevious7Days);
         Assert.Equal(2, summary.ActivationsLast30Days);
+    }
+
+    [Fact]
+    public void SeparatesCurrentWeekFromPreviousWeek()
+    {
+        var events = new[]
+        {
+            new HistoryEvent(Now.AddDays(-2), "MigraineActivated", false, null),
+            new HistoryEvent(Now.AddDays(-8), "MigraineActivated", false, null),
+            new HistoryEvent(Now.AddDays(-14), "MigraineActivated", false, null),
+            new HistoryEvent(Now.AddDays(-15), "MigraineActivated", false, null),
+        };
+
+        var summary = HistorySummarizer.Summarize(events, Now);
+
+        Assert.Equal(1, summary.ActivationsLast7Days);
+        Assert.Equal(2, summary.ActivationsPrevious7Days);
     }
 
     [Fact]
