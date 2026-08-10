@@ -18,7 +18,12 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore
+      # These are separate projects rather than a solution. Restore each one explicitly so
+      # subsequent --no-restore steps work on a clean GitHub-hosted runner.
+      - name: Restore application
+        run: dotnet restore src/MonitorWellness/MonitorWellness.csproj
+
+      - name: Restore tests
         run: dotnet restore tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj
 
       - name: Build release application
