@@ -23,17 +23,21 @@
                    AutomationProperties.HeadingLevel="Level1"/>
 
         <StackPanel Grid.Row="1">
-            <TextBlock Text="Migraine relief doesn't seem to be showing" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2"/>
+            <TextBlock Text="Migraine Mode doesn't seem to be showing" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2"/>
             <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}" Margin="0,0,0,12">
                 A full-screen app (a game, video, or presentation) may be hiding the dim overlay.
-                Try switching to windowed mode, or Alt+Tab away, to see the full effect.
+                Try switching to windowed mode, or Alt+Tab away, to see the full effect. If you
+                need the normal screen back immediately, press Ctrl+Alt+Shift+R or choose
+                Emergency Restore Screen from the tray menu.
             </TextBlock>
 
             <TextBlock Text="Colors flicker, or keep reverting to normal" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2"/>
             <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}" Margin="0,0,0,12">
                 Another screen-color app (such as f.lux, or Windows Night Light) may be running
                 at the same time. Using two at once can cause flickering — try closing one of
-                them.
+                them. Monitor Wellness now delays overlay rebuilds while Windows display
+                notifications settle; repeated flashing after that usually points to a competing
+                colour-management tool or a driver/display issue.
             </TextBlock>
 
             <TextBlock Text="The Migraine Mode hotkey doesn't do anything" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2"/>
@@ -46,7 +50,9 @@
             <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}" Margin="0,0,0,12">
                 If that screen has Windows HDR turned on, color adjustments haven't been tested
                 against HDR displays and may not look right — try turning HDR off for that
-                monitor.
+                monitor. Open Diagnostics → Display Capability Passport to see what Windows and
+                the monitor expose; it deliberately reports unmeasurable panel properties as
+                unknown rather than guessing.
             </TextBlock>
 
             <TextBlock Text="Something else is wrong, or the app seems stuck" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,2"/>

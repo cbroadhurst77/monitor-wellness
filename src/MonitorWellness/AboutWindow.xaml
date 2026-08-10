@@ -26,9 +26,14 @@
         <StackPanel Grid.Row="1" Margin="0,0,0,12">
             <TextBlock TextWrapping="Wrap" FontSize="14" Margin="0,0,0,10">
                 Monitor Wellness gently warms and dims your screen as the day goes on, following
-                sunrise and sunset where you are. Migraine Mode offers instant relief with a
-                soothing green tint, based on published migraine-light research (see Settings
-                for details).
+                sunrise and sunset where you are. Migraine Mode is an instant personal comfort
+                option using a muted green tint informed by published migraine-light research
+                (see Settings for details); it does not promise clinical relief.
+            </TextBlock>
+            <TextBlock TextWrapping="Wrap" FontSize="14" Margin="0,0,0,10">
+                The tray menu includes Diagnostics → Display Capability Passport for a local,
+                read-only explanation of monitor and brightness capabilities, plus Emergency
+                Restore Screen (Ctrl+Alt+Shift+R) if you need to recover the normal display.
             </TextBlock>
             <TextBlock TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource MW.SafetyText}">
                 Nothing is sent anywhere except an optional, one-off location search in

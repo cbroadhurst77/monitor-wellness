@@ -8,6 +8,27 @@ recent work.
 
 ## Unreleased
 
+## 0.2.3 — Sensory safety and comfort update
+
+### Added
+- **Display Capability Passport** under Diagnostics: a local, read-only explanation of the
+  active displays, stable identity, HDR state, ambient-light availability, DDC/CI eligibility,
+  and the safest brightness backend. It explicitly leaves PWM, temporal dithering, spectrum,
+  and medical suitability as unknown when software cannot measure them.
+- Five editable built-in comfort plans: Balanced, Reading, Colour-critical, Early sensitivity,
+  and Recovery. They are previews and starting points, not treatment recommendations.
+- Optional window-title conditions for application-aware comfort rules. A matching
+  title-specific rule now takes precedence over a general rule for the same executable.
+- Enterprise deployment and localisation/accessibility implementation guidance.
+
+### Improved
+- Display-topology notifications are coalesced before overlays rebuild, and unchanged overlay
+  bounds are not repositioned. This reduces unnecessary topmost-window churn that could look
+  like a flash during docking, app switching, or Windows display changes.
+- CI now treats build warnings as errors.
+
+## 0.2.2 — UX and reliability update
+
 ### Added
 - An opt-in break reminder (the 20-20-20 rule): every N minutes, a tray balloon suggests
   looking at something ~20 feet away for ~20 seconds. Off by default; automatically skipped

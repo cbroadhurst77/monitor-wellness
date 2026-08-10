@@ -69,11 +69,12 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 ## A note on how dimming works
 
 Brightness uses a semi-transparent overlay by default rather than lowering a monitor's physical
-backlight. Most monitor and laptop backlights dim using PWM (pulse-width modulation), which can
-be a migraine/eye-strain trigger at low brightness. Compatible external monitors may instead use
-opt-in DDC/CI hardware brightness, but only after a reversible test. That approval is tied to the
-physical monitor rather than a transient Windows display number; any failed command quarantines
-the monitor and immediately returns to the overlay fallback.
+backlight. Some monitors and laptops use PWM (pulse-width modulation) while dimming their
+backlight, which some people find uncomfortable at low brightness; software cannot determine
+whether a particular panel does. Compatible external monitors may instead use opt-in DDC/CI
+hardware brightness, but only after a reversible test. That approval is tied to the physical
+monitor rather than a transient Windows display number; any failed command quarantines the
+monitor and immediately returns to the overlay fallback.
 
 Some exclusive-fullscreen, protected-video, and HDR paths remain outside an ordinary desktop
 window's control; use Emergency Restore Screen if a display ever becomes difficult to use.
@@ -112,6 +113,8 @@ Practical enterprise and localisation/accessibility implementation standards are
 ## Support
 
 Bug reports and questions: [GitHub Issues](https://github.com/cbroadhurst77/monitor-wellness/issues).
+For day-to-day setup, safety recovery, hardware-brightness testing, and accessibility guidance,
+see the [User Guide](USER_GUIDE.md).
 
 ## Building from source
 

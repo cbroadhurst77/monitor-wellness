@@ -67,6 +67,10 @@
                     sunset times. Set your real location so the schedule matches where you
                     actually are.
                 </TextBlock>
+                <TextBlock TextWrapping="Wrap" FontSize="14" Margin="0,10,0,0">
+                    If a display ever becomes hard to use, press Ctrl+Alt+Shift+R to restore the
+                    normal screen immediately and pause the schedule for an hour.
+                </TextBlock>
             </StackPanel>
         </Grid>
 
