@@ -48,7 +48,8 @@ public static class AppSettingsValidator
         if ((settings.MigraineHotkeyModifiers & ~AllowedHotkeyModifiers) != 0 || settings.MigraineHotkeyModifiers == 0 || settings.MigraineHotkeyKey == 0)
             return Invalid("Migraine hotkey settings are invalid.", out error);
         if (settings.ExcludedMonitors is null || settings.ColorExcludedMonitors is null
-            || settings.MonitorDimMultiplier is null || settings.MonitorKelvinOffset is null)
+            || settings.MonitorDimMultiplier is null || settings.MonitorKelvinOffset is null
+            || settings.HardwareBrightnessEnabledMonitors is null)
             return Invalid("Monitor settings collections cannot be null.", out error);
         if (!ValidateMonitorMultipliers(settings.MonitorDimMultiplier, out error)
             || !ValidateMonitorOffsets(settings.MonitorKelvinOffset, out error))

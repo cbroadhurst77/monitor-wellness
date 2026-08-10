@@ -318,11 +318,14 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="1" Text="Exclude" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,8,0"/>
                             <TextBlock Grid.Column="2" Text="Color-acc." FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,8,0"/>
                             <TextBlock Grid.Column="3" Text="Dim×" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Column="4" Text="Kelvin±" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="5" Text="HW" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MW.HelperText}" Margin="6,0,0,0"/>
                         </Grid>
                         <ItemsControl x:Name="MonitorsList"/>
 

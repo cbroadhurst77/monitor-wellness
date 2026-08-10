@@ -69,6 +69,9 @@ public sealed class AppSettings
     /// </summary>
     public Dictionary<string, int> MonitorKelvinOffset { get; set; } = new();
 
+    /// <summary>Monitors explicitly approved to use physical DDC/CI brightness after a successful test.</summary>
+    public List<string> HardwareBrightnessEnabledMonitors { get; set; } = new();
+
     /// <summary>
     /// Migraine mode overlay tint. A muted, desaturated green rather than the amber/red used
     /// in the original prototype — this is a deliberate research-backed choice, not a
@@ -215,6 +218,7 @@ public sealed class AppSettings
         ColorExcludedMonitors = new List<string>(ColorExcludedMonitors),
         MonitorDimMultiplier = new Dictionary<string, double>(MonitorDimMultiplier),
         MonitorKelvinOffset = new Dictionary<string, int>(MonitorKelvinOffset),
+        HardwareBrightnessEnabledMonitors = new List<string>(HardwareBrightnessEnabledMonitors),
         MigraineOverlayColorHex = MigraineOverlayColorHex,
         MigraineOverlayOpacity = MigraineOverlayOpacity,
         MigraineContrastReduction = MigraineContrastReduction,
@@ -252,6 +256,7 @@ public sealed class AppSettings
         ColorExcludedMonitors = copy.ColorExcludedMonitors;
         MonitorDimMultiplier = copy.MonitorDimMultiplier;
         MonitorKelvinOffset = copy.MonitorKelvinOffset;
+        HardwareBrightnessEnabledMonitors = copy.HardwareBrightnessEnabledMonitors;
         MigraineOverlayColorHex = copy.MigraineOverlayColorHex;
         MigraineOverlayOpacity = copy.MigraineOverlayOpacity;
         MigraineContrastReduction = copy.MigraineContrastReduction;

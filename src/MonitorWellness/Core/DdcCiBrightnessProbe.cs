@@ -234,6 +234,42 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Applies a normalized value while preserving the exact original physical brightness for
+    /// restoration when this session is disposed.
+    /// </summary>
+    public bool TryApplyNormalizedBrightness(double normalizedBrightness, out string error)
+    {
+        error = "";
+        if (_originalBrightness is null)
+        {
+            var captured = new List<OriginalBrightness>();
+            foreach (IntPtr handle in _brightnessHandles)
+            {
+                if (!DdcCiBrightnessProbe.TryGetMonitorBrightness(handle, out uint minimum, out uint current, out uint maximum) || minimum > maximum)
+                {
+                    error = "Windows could not read this monitor's current brightness.";
+                    return false;
+                }
+                captured.Add(new OriginalBrightness(handle, current, minimum, maximum));
+            }
+            _originalBrightness = captured;
+        }
+
+        foreach (OriginalBrightness original in _originalBrightness)
+        {
+            uint target = HardwareBrightnessMath.ToNativeBrightness(normalizedBrightness, original.Minimum, original.Maximum);
+            if (!DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, target))
+            {
+                Restore();
+                error = "Windows could not apply the hardware brightness target.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Restores the exact physical brightness values captured before the test.</summary>
     public void Restore()
     {

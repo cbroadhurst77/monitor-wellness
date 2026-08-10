@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
+using System.IO;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Win32;
 using MonitorWellness.Core;
@@ -40,6 +41,7 @@ public partial class App : Application
     private DispatcherTimer? _breakReminderTimer;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
+    private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
     private MigraineModeController? _migraine;
     private GlobalHotkey? _hotkey;
     private GlobalHotkey? _emergencyRestoreHotkey;
@@ -272,6 +274,7 @@ public partial class App : Application
         // user has to scan. See MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P2).
         var diagnosticsMenu = new ToolStripMenuItem("&Diagnostics");
         diagnosticsMenu.DropDownItems.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
+        diagnosticsMenu.DropDownItems.Add("Export Diagnostic Bundle...", null, (_, _) => ExportDiagnosticBundle());
         diagnosticsMenu.DropDownItems.Add("Open Logs Folder", null, (_, _) => OpenLogsFolder());
         menu.Items.Add(diagnosticsMenu);
         menu.Items.Add(new ToolStripSeparator());
@@ -603,6 +606,7 @@ public partial class App : Application
     {
         DebugLog.Write("Emergency Restore Screen activated");
         _migraine?.RestoreImmediately();
+        _hardwareBrightness.RestoreAll();
         _overlay?.Clear();
         _gammaManager?.ResetAllToIdentity();
         PauseScheduleFor(EmergencyRestorePauseDuration);
@@ -635,6 +639,33 @@ public partial class App : Application
 
         System.Windows.MessageBox.Show(message, "Monitor Wellness — Auto-start Diagnostics", MessageBoxButton.OK,
             diagnostics.IsRegistered ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private static void ExportDiagnosticBundle()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export Monitor Wellness diagnostic bundle",
+            Filter = "ZIP archive (*.zip)|*.zip",
+            FileName = $"MonitorWellness-diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.zip",
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            DiagnosticBundleService.Create(dialog.FileName);
+            System.Windows.MessageBox.Show(
+                "Diagnostic bundle created. It contains technical environment data and debug.log, but not settings, location, history, or profiles. Review it before sharing.",
+                "Monitor Wellness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            DebugLog.Write($"Diagnostic bundle export failed: {ex}");
+            System.Windows.MessageBox.Show($"Couldn't create the diagnostic bundle: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
@@ -845,7 +876,14 @@ public partial class App : Application
             }
         }
 
-        _overlay?.ApplyDim(brightnessByDevice, dimColor);
+        var approvedHardwareDevices = _settings.HardwareBrightnessEnabledMonitors
+            .Where(deviceName => !_settings.ExcludedMonitors.Contains(deviceName))
+            .ToList();
+        IReadOnlySet<string> hardwareAppliedDevices = _hardwareBrightness.ApplyApprovedBrightness(approvedHardwareDevices, brightnessByDevice);
+        var overlayBrightnessByDevice = brightnessByDevice.ToDictionary(
+            entry => entry.Key,
+            entry => hardwareAppliedDevices.Contains(entry.Key) ? 1.0 : entry.Value);
+        _overlay?.ApplyDim(overlayBrightnessByDevice, dimColor);
 
         if (_trayIcon is not null && _migraine?.IsActive != true)
         {
@@ -881,6 +919,7 @@ public partial class App : Application
         _startupBalloonTimer?.Stop();
         _hotkey?.Dispose();
         _emergencyRestoreHotkey?.Dispose();
+        _hardwareBrightness.Dispose();
         _gammaManager?.Dispose();
         _overlay?.Dispose();
         _trayIcon?.Dispose();

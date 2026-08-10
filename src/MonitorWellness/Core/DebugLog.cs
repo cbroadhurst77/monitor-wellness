@@ -19,6 +19,9 @@ public static class DebugLog
     private const long MaxSizeBytes = 2 * 1024 * 1024; // 2MB
     private const long TrimToBytes = 512 * 1024;       // keep the most recent 512KB when rotating
 
+    /// <summary>Path to the local rolling log, exposed for explicit user-requested support bundles.</summary>
+    public static string FilePath => LogPath;
+
     public static void Write(string message)
     {
         try

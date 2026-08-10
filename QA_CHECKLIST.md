@@ -52,6 +52,9 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] Choosing 0% Day or Night brightness shows the blackout confirmation **before** the
       screen darkens; confirm Escape, the 15-second timeout, and closing Settings all restore
       visibility, and that 0% cannot be saved
+- [ ] For each detected DDC/CI display, run **Test HW**. Confirm the backlight dims only
+      modestly, returns to its exact original value on every dialog exit path, and only then
+      opt in with the adjacent HW checkbox and Save
 - [ ] Kelvin safety warning appears/disappears correctly at the low end of the Day/Night
       sliders
 - [ ] Hex-color and bedtime fields show inline warnings (not a popup) for invalid input
@@ -78,6 +81,8 @@ release blocker; anything under "Nice to confirm" is lower priority.
       — confirm gamma/overlay rebuild without a crash and without leaving a stuck tint
       on any screen
 - [ ] Sleep/resume: confirm color and dim state are correctly reapplied on wake
+- [ ] If a DDC/CI monitor is opted in, unplug/replug it, use Emergency Restore Screen, and
+      exit the app; confirm its original physical brightness is restored in each case
 - [ ] While dimming is active, repeatedly open/close ordinary windows, notifications, Game
       Bar, and an always-on-top app; confirm the screen never flashes or pulses
 - [ ] Confirm the normal schedule never dims the Windows primary display below its 20% safety

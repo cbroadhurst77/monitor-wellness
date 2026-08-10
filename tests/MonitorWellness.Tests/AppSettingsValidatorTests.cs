@@ -30,6 +30,14 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void NullHardwareBrightnessCollection_IsRejected()
+    {
+        var settings = new AppSettings { HardwareBrightnessEnabledMonitors = null! };
+
+        Assert.False(AppSettingsValidator.TryValidate(settings, out _));
+    }
+
+    [Fact]
     public void InvalidOverlayColor_IsRejected()
     {
         var settings = new AppSettings { DeepNightOverlayColorHex = "not-a-colour" };
@@ -56,6 +64,18 @@ public class AppSettingsValidatorTests
 
         Assert.Single(original.ExcludedMonitors);
         Assert.Equal(2, clone.ExcludedMonitors.Count);
+    }
+
+    [Fact]
+    public void HardwareBrightnessOptIns_AreDeepCopied()
+    {
+        var original = new AppSettings { HardwareBrightnessEnabledMonitors = new List<string> { @"\\.\DISPLAY1" } };
+
+        var clone = original.Clone();
+        clone.HardwareBrightnessEnabledMonitors.Add(@"\\.\DISPLAY2");
+
+        Assert.Single(original.HardwareBrightnessEnabledMonitors);
+        Assert.Equal(2, clone.HardwareBrightnessEnabledMonitors.Count);
     }
 
     [Fact]

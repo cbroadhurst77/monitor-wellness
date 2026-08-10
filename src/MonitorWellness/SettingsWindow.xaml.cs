@@ -55,6 +55,7 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, CheckBox> _colorExcludeBoxes = new();
     private readonly Dictionary<string, TextBox> _multiplierBoxes = new();
     private readonly Dictionary<string, TextBox> _kelvinOffsetBoxes = new();
+    private readonly Dictionary<string, CheckBox> _hardwareBrightnessBoxes = new();
 
     private uint _pendingHotkeyModifiers;
     private uint _pendingHotkeyKey;
@@ -959,6 +960,7 @@ public partial class SettingsWindow : Window
         _colorExcludeBoxes.Clear();
         _multiplierBoxes.Clear();
         _kelvinOffsetBoxes.Clear();
+        _hardwareBrightnessBoxes.Clear();
         RefreshHardwareBrightnessReadiness();
 
         var rows = new List<UIElement>();
@@ -970,6 +972,7 @@ public partial class SettingsWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var label = new TextBlock { Text = ShortDeviceName(deviceName), VerticalAlignment = VerticalAlignment.Center };
@@ -1011,6 +1014,20 @@ public partial class SettingsWindow : Window
             Grid.SetColumn(kelvinOffsetBox, 4);
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
+            bool hardwareEnabled = _settings.HardwareBrightnessEnabledMonitors.Contains(deviceName);
+            var hardwareBrightnessBox = new CheckBox
+            {
+                Content = "HW",
+                IsChecked = hardwareEnabled,
+                IsEnabled = hardwareEnabled,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "Use physical DDC/CI brightness for this monitor. It becomes available only after this session's safe test succeeds.",
+            };
+            System.Windows.Automation.AutomationProperties.SetName(hardwareBrightnessBox, $"Use hardware brightness for {ShortDeviceName(deviceName)}");
+            Grid.SetColumn(hardwareBrightnessBox, 5);
+            _hardwareBrightnessBoxes[deviceName] = hardwareBrightnessBox;
+
             var testHardwareBrightnessButton = new System.Windows.Controls.Button
             {
                 Content = "Test HW",
@@ -1019,14 +1036,15 @@ public partial class SettingsWindow : Window
                 ToolTip = "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
             };
             System.Windows.Automation.AutomationProperties.SetName(testHardwareBrightnessButton, $"Test hardware brightness for {ShortDeviceName(deviceName)}");
-            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName);
-            Grid.SetColumn(testHardwareBrightnessButton, 5);
+            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName, hardwareBrightnessBox);
+            Grid.SetColumn(testHardwareBrightnessButton, 6);
 
             row.Children.Add(label);
             row.Children.Add(excludeBox);
             row.Children.Add(colorExcludeBox);
             row.Children.Add(multiplierBox);
             row.Children.Add(kelvinOffsetBox);
+            row.Children.Add(hardwareBrightnessBox);
             row.Children.Add(testHardwareBrightnessButton);
             rows.Add(row);
         }
@@ -1054,7 +1072,7 @@ public partial class SettingsWindow : Window
             int supported = capabilities.Count(capability => capability.IsSupported);
             HardwareBrightnessReadinessText.Text = supported == 0
                 ? "Optional hardware brightness: no compatible DDC/CI monitor was detected. The flicker-free overlay remains in use."
-                : $"Optional hardware brightness: {supported} of {capabilities.Count} monitor(s) report DDC/CI support. It is not enabled yet; a future test will require your confirmation before changing a monitor's backlight.";
+                : $"Optional hardware brightness: {supported} of {capabilities.Count} monitor(s) report DDC/CI support. Test a monitor first; after a successful test, tick HW and Save to opt in to scheduled physical brightness.";
         }));
     }
 
@@ -1062,7 +1080,7 @@ public partial class SettingsWindow : Window
 
     private void IdentifyButton_Click(object sender, RoutedEventArgs e) => _overlay.IdentifyMonitors(TimeSpan.FromSeconds(6));
 
-    private void TestHardwareBrightness(string deviceName)
+    private void TestHardwareBrightness(string deviceName, CheckBox hardwareBrightnessBox)
     {
         if (System.Windows.MessageBox.Show(
                 this,
@@ -1090,7 +1108,11 @@ public partial class SettingsWindow : Window
             var dialog = new HardwareBrightnessTestDialog { Owner = this };
             dialog.ShowDialog();
             if (dialog.Confirmed)
-                System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. It is still disabled for normal scheduling until you explicitly opt in.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            {
+                hardwareBrightnessBox.IsEnabled = true;
+                hardwareBrightnessBox.IsChecked = true;
+                System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. HW is now selected for this monitor; click Save to opt in to scheduled physical brightness.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
     }
 
@@ -1407,6 +1429,10 @@ public partial class SettingsWindow : Window
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
         _settings.MonitorKelvinOffset = kelvinOffsets;
+        _settings.HardwareBrightnessEnabledMonitors = _hardwareBrightnessBoxes
+            .Where(pair => pair.Value.IsEnabled && pair.Value.IsChecked == true)
+            .Select(pair => pair.Key)
+            .ToList();
         _settings.HistoryTrackingEnabled = HistoryTrackingCheckBox.IsChecked == true;
         _settings.PromptForMigraineRating = PromptForRatingCheckBox.IsChecked == true;
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
