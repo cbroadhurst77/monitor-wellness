@@ -12,6 +12,7 @@ namespace MonitorWellness.Core;
 /// </summary>
 public sealed class GlobalHotkey : IDisposable
 {
+#pragma warning disable CA1707 // Names intentionally mirror the Win32 RegisterHotKey modifier flags.
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
@@ -19,24 +20,27 @@ public sealed class GlobalHotkey : IDisposable
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private const int WM_HOTKEY = 0x0312;
-    private const int HotkeyId = 0xA1F3; // arbitrary, just needs to be unique within this process
+    private const int DefaultHotkeyId = 0xA1F3; // arbitrary, just needs to be unique within this process
 
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_WIN = 0x0008;
     public const uint MOD_NOREPEAT = 0x4000; // don't refire while the key is held down
+#pragma warning restore CA1707
 
     private readonly HwndSource _messageWindow;
     private readonly bool _registered;
+    private readonly int _hotkeyId;
 
     /// <summary>False if RegisterHotKey failed (most commonly ERROR_HOTKEY_ALREADY_REGISTERED, another app owns this combination). Callers should surface this visibly, not just log it — a silently-failed hotkey looks like the app is broken.</summary>
     public bool IsRegistered => _registered;
 
     public event Action? Pressed;
 
-    public GlobalHotkey(uint modifiers, uint virtualKey)
+    public GlobalHotkey(uint modifiers, uint virtualKey, int hotkeyId = DefaultHotkeyId)
     {
+        _hotkeyId = hotkeyId;
         var parameters = new HwndSourceParameters("MonitorWellnessHotkeyWindow")
         {
             Width = 0,
@@ -47,7 +51,7 @@ public sealed class GlobalHotkey : IDisposable
         _messageWindow = new HwndSource(parameters);
         _messageWindow.AddHook(WndProc);
 
-        _registered = RegisterHotKey(_messageWindow.Handle, HotkeyId, modifiers | MOD_NOREPEAT, virtualKey);
+        _registered = RegisterHotKey(_messageWindow.Handle, _hotkeyId, modifiers | MOD_NOREPEAT, virtualKey);
         if (!_registered)
         {
             int error = Marshal.GetLastWin32Error();
@@ -60,7 +64,7 @@ public sealed class GlobalHotkey : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+        if (msg == WM_HOTKEY && wParam.ToInt32() == _hotkeyId)
         {
             Pressed?.Invoke();
             handled = true;
@@ -71,7 +75,7 @@ public sealed class GlobalHotkey : IDisposable
     public void Dispose()
     {
         if (_registered)
-            UnregisterHotKey(_messageWindow.Handle, HotkeyId);
+            UnregisterHotKey(_messageWindow.Handle, _hotkeyId);
         _messageWindow.RemoveHook(WndProc);
         _messageWindow.Dispose();
     }

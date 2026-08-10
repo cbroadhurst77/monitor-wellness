@@ -1,4 +1,6 @@
+using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -19,12 +21,15 @@ public sealed record GeocodingResult(double Latitude, double Longitude, string D
 /// </summary>
 public sealed class GeocodingService
 {
+    private const int MaximumQueryLength = 256;
+    private const int MaximumResponseBytes = 64 * 1024;
     private static readonly HttpClient Client = CreateClient();
 
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("MonitorWellness/1.0 (+https://github.com/cbroadhurst77/monitor-wellness)");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         return client;
     }
 
@@ -38,44 +43,84 @@ public sealed class GeocodingService
     /// found or the lookup failed (network error, timeout, malformed response) — callers
     /// should treat null as "couldn't find that," not throw a user-facing exception for it.
     /// </summary>
-    public async Task<GeocodingResult?> SearchAsync(string query, CancellationToken cancellationToken = default)
+    public static async Task<GeocodingResult?> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        if (string.IsNullOrWhiteSpace(query) || query.Length > MaximumQueryLength)
             return null;
 
         string url = $"https://nominatim.openstreetmap.org/search?q={Uri.EscapeDataString(query)}&format=json&limit=1";
 
         try
         {
-            using var response = await Client.GetAsync(url, cancellationToken);
+            using var response = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                DebugLog.Write($"GeocodingService: HTTP {(int)response.StatusCode} for query '{query}'");
+                DebugLog.Write($"GeocodingService: HTTP {(int)response.StatusCode}");
+                return null;
+            }
+            if (response.Content.Headers.ContentLength is long contentLength && contentLength > MaximumResponseBytes)
+            {
+                DebugLog.Write("GeocodingService: response exceeded the allowed size");
                 return null;
             }
 
-            string json = await response.Content.ReadAsStringAsync(cancellationToken);
+            string? json = await ReadResponseAtMostAsync(response.Content, cancellationToken);
+            if (json is null)
+            {
+                DebugLog.Write("GeocodingService: response exceeded the allowed size");
+                return null;
+            }
             var entries = JsonSerializer.Deserialize<List<NominatimEntry>>(json);
             if (entries is null || entries.Count == 0)
             {
-                DebugLog.Write($"GeocodingService: no results for query '{query}'");
+                DebugLog.Write("GeocodingService: no results");
                 return null;
             }
 
             var first = entries[0];
-            if (!double.TryParse(first.Lat, System.Globalization.CultureInfo.InvariantCulture, out double lat)
-                || !double.TryParse(first.Lon, System.Globalization.CultureInfo.InvariantCulture, out double lon))
+            if (!TryCreateResult(first.Lat, first.Lon, first.DisplayName, out var result))
             {
-                DebugLog.Write($"GeocodingService: malformed lat/lon in response for query '{query}'");
+                DebugLog.Write("GeocodingService: response had invalid coordinates");
                 return null;
             }
 
-            return new GeocodingResult(lat, lon, first.DisplayName);
+            return result;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            DebugLog.Write($"GeocodingService: lookup failed for query '{query}': {ex.Message}");
+            DebugLog.Write($"GeocodingService: lookup failed: {ex.Message}");
             return null;
         }
+    }
+
+    internal static bool TryCreateResult(string? latitudeText, string? longitudeText, string? displayName, out GeocodingResult? result)
+    {
+        result = null;
+        if (!double.TryParse(latitudeText, System.Globalization.CultureInfo.InvariantCulture, out double latitude)
+            || !double.TryParse(longitudeText, System.Globalization.CultureInfo.InvariantCulture, out double longitude)
+            || !double.IsFinite(latitude) || !double.IsFinite(longitude)
+            || latitude is < -90 or > 90 || longitude is < -180 or > 180
+            || string.IsNullOrWhiteSpace(displayName) || displayName.Length > 512)
+            return false;
+
+        result = new GeocodingResult(latitude, longitude, displayName.Trim());
+        return true;
+    }
+
+    private static async Task<string?> ReadResponseAtMostAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        byte[] readBuffer = new byte[8 * 1024];
+        int bytesRead;
+        while ((bytesRead = await stream.ReadAsync(readBuffer, cancellationToken)) > 0)
+        {
+            if (buffer.Length + bytesRead > MaximumResponseBytes)
+                return null;
+
+            buffer.Write(readBuffer, 0, bytesRead);
+        }
+
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 }

@@ -19,9 +19,9 @@ public partial class ProfileNameDialog : Window
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         string name = NameBox.Text.Trim();
-        if (name.Length == 0)
+        if (!ProfileStore.TryValidateName(name, out string error))
         {
-            System.Windows.MessageBox.Show(this, "Enter a profile name.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, error, "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

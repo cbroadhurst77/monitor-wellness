@@ -25,11 +25,16 @@ public static class SettingsStore
             {
                 string json = File.ReadAllText(SettingsPath);
                 var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
-                if (loaded is not null)
+                if (loaded is not null && AppSettingsValidator.TryValidate(loaded, out _))
                 {
                     DebugLog.Write($"SettingsStore: loaded settings from {SettingsPath}");
                     return loaded;
                 }
+
+                string validationError = loaded is null
+                    ? "The file was empty or did not contain a settings object."
+                    : GetValidationError(loaded);
+                DebugLog.Write($"SettingsStore: settings file failed validation, falling back to defaults: {validationError}");
             }
             else
             {
@@ -51,12 +56,15 @@ public static class SettingsStore
 
     public static void Save(AppSettings settings)
     {
+        if (!AppSettingsValidator.TryValidate(settings, out string validationError))
+            throw new ArgumentException($"Refusing to save invalid settings: {validationError}", nameof(settings));
+
         string? directory = Path.GetDirectoryName(SettingsPath);
         if (directory is not null)
             Directory.CreateDirectory(directory);
 
         string json = JsonSerializer.Serialize(settings, JsonOptions);
-        File.WriteAllText(SettingsPath, json);
+        WriteAtomically(SettingsPath, json);
     }
 
     /// <summary>
@@ -68,8 +76,11 @@ public static class SettingsStore
     /// </summary>
     public static void ExportTo(AppSettings settings, string destinationPath)
     {
+        if (!AppSettingsValidator.TryValidate(settings, out string validationError))
+            throw new ArgumentException($"Refusing to export invalid settings: {validationError}", nameof(settings));
+
         string json = JsonSerializer.Serialize(settings, JsonOptions);
-        File.WriteAllText(destinationPath, json);
+        WriteAtomically(destinationPath, json);
     }
 
     /// <summary>Reads settings from an arbitrary path (the counterpart to ExportTo) without touching the real settings.json — the caller decides whether/when to apply and persist it.</summary>
@@ -86,6 +97,11 @@ public static class SettingsStore
                 error = "That file doesn't contain valid Monitor Wellness settings.";
                 return false;
             }
+            if (!AppSettingsValidator.TryValidate(loaded, out error))
+            {
+                error = $"That file contains invalid Monitor Wellness settings: {error}";
+                return false;
+            }
             settings = loaded;
             return true;
         }
@@ -94,5 +110,32 @@ public static class SettingsStore
             error = $"Couldn't read that file: {ex.Message}";
             return false;
         }
+    }
+
+    private static void WriteAtomically(string destinationPath, string contents)
+    {
+        string fullPath = Path.GetFullPath(destinationPath);
+        string? directory = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(directory))
+            throw new IOException("Settings destination has no parent directory.");
+
+        Directory.CreateDirectory(directory);
+        string temporaryPath = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllText(temporaryPath, contents);
+            File.Move(temporaryPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
+    }
+
+    private static string GetValidationError(AppSettings settings)
+    {
+        _ = AppSettingsValidator.TryValidate(settings, out string error);
+        return error;
     }
 }

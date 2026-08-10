@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Win32;
 using MonitorWellness.Core;
 using Application = System.Windows.Application;
@@ -18,10 +19,18 @@ namespace MonitorWellness;
 /// sleep, since some driver configurations reset gamma ramp state across that transition.
 /// Still no settings UI — settings.json is hand-edited or defaulted for now; that's next.
 /// </summary>
+[SuppressMessage(
+    "Reliability",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "WPF Application owns the process lifetime; OnExit disposes the owned resources after stopping event sources.")]
 public partial class App : Application
 {
     private static readonly TimeSpan ScheduleTickInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan IdentifyDuration = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan EmergencyRestorePauseDuration = TimeSpan.FromHours(1);
+    private const uint EmergencyRestoreModifiers = GlobalHotkey.MOD_CONTROL | GlobalHotkey.MOD_ALT | GlobalHotkey.MOD_SHIFT;
+    private const uint EmergencyRestoreKey = 0x52; // R
+    private const int EmergencyRestoreHotkeyId = 0xA1F4;
 
     private AppSettings _settings = new();
     private NotifyIcon? _trayIcon;
@@ -33,6 +42,7 @@ public partial class App : Application
     private OverlayController? _overlay;
     private MigraineModeController? _migraine;
     private GlobalHotkey? _hotkey;
+    private GlobalHotkey? _emergencyRestoreHotkey;
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
     private DateTime? _pauseUntilUtc;
@@ -173,6 +183,7 @@ public partial class App : Application
                 ToolTipIcon.Warning);
         }
 
+        RegisterEmergencyRestoreHotkey();
         RebuildHotkey(isStartup: true);
 
         // A single left-click on the tray icon toggles migraine mode directly — the hotkey and
@@ -192,6 +203,7 @@ public partial class App : Application
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("&Toggle Migraine Mode", null, (_, _) => _migraine.Toggle());
+        menu.Items.Add("Emergency &Restore Screen (Ctrl+Alt+Shift+R)", null, (_, _) => EmergencyRestoreDisplay());
         menu.Items.Add("Activate Migraine Mode (&Full)", null, (_, _) => _migraine.Activate(mild: false));
         menu.Items.Add("Activate Migraine Mode (Mi&ld)", null, (_, _) => _migraine.Activate(mild: true));
         menu.Items.Add("&Deactivate Migraine Mode", null, (_, _) => _migraine.Deactivate());
@@ -337,14 +349,14 @@ public partial class App : Application
         onboarding.Activate();
     }
 
-    private void ShowAboutWindow()
+    private static void ShowAboutWindow()
     {
         var window = new AboutWindow();
         window.Show();
         window.Activate();
     }
 
-    private void ShowTroubleshootingWindow()
+    private static void ShowTroubleshootingWindow()
     {
         var window = new TroubleshootingWindow();
         window.Show();
@@ -569,6 +581,38 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Registers a fixed, independent recovery shortcut that cannot be changed in Settings.</summary>
+    private void RegisterEmergencyRestoreHotkey()
+    {
+        _emergencyRestoreHotkey?.Dispose();
+        _emergencyRestoreHotkey = new GlobalHotkey(EmergencyRestoreModifiers, EmergencyRestoreKey, EmergencyRestoreHotkeyId);
+        _emergencyRestoreHotkey.Pressed += EmergencyRestoreDisplay;
+
+        if (!_emergencyRestoreHotkey.IsRegistered)
+            QueueStartupBalloon(
+                "Monitor Wellness",
+                "Emergency Restore Screen (Ctrl+Alt+Shift+R) is already used by another app. You can still use Emergency Restore Screen from this tray menu.",
+                ToolTipIcon.Warning);
+    }
+
+    /// <summary>
+    /// Returns every controlled display to an immediately visible state, then pauses normal
+    /// scheduling so it cannot reapply a dim overlay before the user can recover.
+    /// </summary>
+    private void EmergencyRestoreDisplay()
+    {
+        DebugLog.Write("Emergency Restore Screen activated");
+        _migraine?.RestoreImmediately();
+        _overlay?.Clear();
+        _gammaManager?.ResetAllToIdentity();
+        PauseScheduleFor(EmergencyRestorePauseDuration);
+        _trayIcon?.ShowBalloonTip(
+            10_000,
+            "Monitor Wellness",
+            "Your screen has been restored. The normal schedule is paused for one hour.",
+            ToolTipIcon.Info);
+    }
+
     /// <summary>
     /// Answers the one question the drift-check-on-startup balloon (above) can't: not just
     /// "is the task still registered," but "has it actually fired" -- the only way, short of
@@ -707,6 +751,10 @@ public partial class App : Application
             deepNightFactor);
 
         var brightnessByDevice = new Dictionary<string, double>();
+        var primaryMonitorNames = MonitorEnumerator.GetActiveMonitors()
+            .Where(monitor => monitor.IsPrimary)
+            .Select(monitor => monitor.DeviceName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
         {
             if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
@@ -716,8 +764,10 @@ public partial class App : Application
             }
 
             double multiplier = _settings.MonitorDimMultiplier.TryGetValue(controller.DeviceName, out var m) ? m : 1.0;
-            double dimAmount = (1.0 - globalBrightness) * multiplier;
-            brightnessByDevice[controller.DeviceName] = Math.Clamp(1.0 - dimAmount, 0.0, 1.0);
+            brightnessByDevice[controller.DeviceName] = BrightnessSafety.CalculateEffectiveBrightness(
+                globalBrightness,
+                multiplier,
+                primaryMonitorNames.Contains(controller.DeviceName));
         }
 
         return (kelvin, brightnessByDevice, dimColor);
@@ -825,8 +875,12 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        _timer?.Stop();
         _breakReminderTimer?.Stop();
+        _pauseTimer?.Stop();
+        _startupBalloonTimer?.Stop();
         _hotkey?.Dispose();
+        _emergencyRestoreHotkey?.Dispose();
         _gammaManager?.Dispose();
         _overlay?.Dispose();
         _trayIcon?.Dispose();

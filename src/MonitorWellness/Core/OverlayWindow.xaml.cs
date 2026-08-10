@@ -21,7 +21,7 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
     [DllImport("user32.dll")]
@@ -48,7 +48,9 @@ public partial class OverlayWindow : Window
     {
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+        int previousStyle = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+        if (previousStyle == 0 && Marshal.GetLastWin32Error() != 0)
+            DebugLog.Write($"OverlayWindow: couldn't enable click-through style (Win32Error={Marshal.GetLastWin32Error()})");
     }
 
     /// <summary>Positions and sizes this window to exactly cover the given physical-pixel bounds.</summary>
@@ -74,6 +76,12 @@ public partial class OverlayWindow : Window
         // (already called on every ~30s schedule tick, migraine fade tick, and Settings live
         // preview) self-heals this within one tick instead of only fixing it when Settings
         // happens to be reopened. NOMOVE/NOSIZE make this a cheap re-stack, not a resize.
+        ReassertTopmost();
+    }
+
+    /// <summary>Moves this click-through overlay back to the top of the topmost window band.</summary>
+    public void ReassertTopmost()
+    {
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }

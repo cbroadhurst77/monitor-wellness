@@ -12,12 +12,12 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class AppIconSource
 {
-    private static readonly Lazy<BitmapSource?> Icon = new(Load);
+    private static readonly Lazy<BitmapFrame?> Icon = new(Load);
 
     /// <summary>The app's default (migraine-off) icon, or null if it couldn't be loaded — callers should treat null as "leave Window.Icon unset," never throw.</summary>
-    public static BitmapSource? Default => Icon.Value;
+    public static BitmapFrame? Default => Icon.Value;
 
-    private static BitmapSource? Load()
+    private static BitmapFrame? Load()
     {
         try
         {

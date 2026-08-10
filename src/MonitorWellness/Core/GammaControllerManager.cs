@@ -79,6 +79,13 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
             controller.ApplyColorTemperatureWithContrast(kelvin, contrastReduction);
     }
 
+    /// <summary>Immediately restores all controllable gamma ramps to their native identity state.</summary>
+    public void ResetAllToIdentity()
+    {
+        foreach (var controller in Controllers)
+            controller.ResetToIdentity();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

@@ -113,7 +113,7 @@ public sealed class AppSettings
     /// migraine can last many hours, and auto-reverting on a fixed timer could be actively
     /// unwelcome if someone's genuinely still mid-migraine when it fires. Opt-in, not default-on.
     /// </summary>
-    public int MigraineAutoRevertMinutes { get; set; } = 0;
+    public int MigraineAutoRevertMinutes { get; set; }
 
     /// <summary>
     /// Play a system sound when the hotkey toggles migraine mode, in addition to the always-
@@ -121,7 +121,7 @@ public sealed class AppSettings
     /// phonophobia (sound sensitivity) during an attack — the same population this feature is
     /// for — so an audible confirmation is opt-in rather than assumed helpful.
     /// </summary>
-    public bool PlaySoundOnMigraineToggle { get; set; } = false;
+    public bool PlaySoundOnMigraineToggle { get; set; }
 
     /// <summary>
     /// AutoStartManager.Register() was called and succeeded — tracked separately from the
@@ -129,7 +129,7 @@ public sealed class AppSettings
     /// (e.g. a Windows update or IT policy silently removed the task) and tell the user,
     /// rather than auto-start just quietly stopping working with no explanation.
     /// </summary>
-    public bool AutoStartEnabled { get; set; } = false;
+    public bool AutoStartEnabled { get; set; }
 
     /// <summary>
     /// Optional "HH:mm" local bedtime. When set, ScheduleCurve.GetBedtimeFactor blends in
@@ -137,14 +137,14 @@ public sealed class AppSettings
     /// Math.Max in App.ComputeScheduleTarget -- whichever reaches deep night first wins. Null
     /// (the default) disables this; the sun alone still drives deep night as before.
     /// </summary>
-    public string? BedtimeLocal { get; set; } = null;
+    public string? BedtimeLocal { get; set; }
 
     /// <summary>
     /// Set once the first-run onboarding window has been shown and dismissed (either path —
     /// "Open Settings Now" or "Got it"). False only ever occurs on a brand-new settings.json,
     /// so this is really just "is this the very first launch."
     /// </summary>
-    public bool HasCompletedOnboarding { get; set; } = false;
+    public bool HasCompletedOnboarding { get; set; }
 
     /// <summary>
     /// Opt-in, defaults false: whether migraine-mode activations and schedule pauses get
@@ -152,7 +152,7 @@ public sealed class AppSettings
     /// default so this app's "no telemetry" story stays true out of the box even though this
     /// particular log never leaves the PC either way — see TECHNICAL_UX_REVIEW.md §1.5/§7.1.
     /// </summary>
-    public bool HistoryTrackingEnabled { get; set; } = false;
+    public bool HistoryTrackingEnabled { get; set; }
 
     /// <summary>
     /// Opt-in, defaults false, only meaningful alongside HistoryTrackingEnabled: after each
@@ -163,7 +163,7 @@ public sealed class AppSettings
     /// HistoryTrackingEnabled since counting usage and being asked to rate it are different
     /// levels of opt-in.
     /// </summary>
-    public bool PromptForMigraineRating { get; set; } = false;
+    public bool PromptForMigraineRating { get; set; }
 
     /// <summary>
     /// Opt-in, defaults false: nudge daytime brightness up/down (within
@@ -172,7 +172,7 @@ public sealed class AppSettings
     /// difference on the (common) majority of machines with no ambient light sensor at all —
     /// see TECHNICAL_UX_REVIEW.md §1.1.
     /// </summary>
-    public bool MatchAmbientLight { get; set; } = false;
+    public bool MatchAmbientLight { get; set; }
 
     /// <summary>
     /// Opt-in, defaults false: a periodic reminder to look away from the screen (the 20-20-20
@@ -183,7 +183,7 @@ public sealed class AppSettings
     /// previously entirely absent despite that. Off by default, consistent with every other
     /// comfort feature in this app being opt-in rather than assumed wanted.
     /// </summary>
-    public bool BreakReminderEnabled { get; set; } = false;
+    public bool BreakReminderEnabled { get; set; }
 
     /// <summary>Minutes between break reminders when BreakReminderEnabled is true. 20 matches the 20-20-20 rule this feature is based on.</summary>
     public int BreakReminderIntervalMinutes { get; set; } = 20;
@@ -195,8 +195,79 @@ public sealed class AppSettings
     /// besides the user-triggered location search, so it follows the same off-by-default
     /// pattern as every other optional feature rather than silently phoning home.
     /// </summary>
-    public bool CheckForUpdatesEnabled { get; set; } = false;
+    public bool CheckForUpdatesEnabled { get; set; }
 
     /// <summary>Last time an update check actually ran, so it's throttled to roughly once/day regardless of how often the app is launched/restarted.</summary>
-    public DateTime? LastUpdateCheckUtc { get; set; } = null;
+    public DateTime? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>Returns a deep copy suitable for editing as an uncommitted settings draft.</summary>
+    public AppSettings Clone() => new()
+    {
+        Latitude = Latitude,
+        Longitude = Longitude,
+        DayKelvin = DayKelvin,
+        NightKelvin = NightKelvin,
+        DayBrightness = DayBrightness,
+        NightBrightness = NightBrightness,
+        DeepNightBrightness = DeepNightBrightness,
+        DeepNightOverlayColorHex = DeepNightOverlayColorHex,
+        ExcludedMonitors = new List<string>(ExcludedMonitors),
+        ColorExcludedMonitors = new List<string>(ColorExcludedMonitors),
+        MonitorDimMultiplier = new Dictionary<string, double>(MonitorDimMultiplier),
+        MonitorKelvinOffset = new Dictionary<string, int>(MonitorKelvinOffset),
+        MigraineOverlayColorHex = MigraineOverlayColorHex,
+        MigraineOverlayOpacity = MigraineOverlayOpacity,
+        MigraineContrastReduction = MigraineContrastReduction,
+        MigraineHotkeyModifiers = MigraineHotkeyModifiers,
+        MigraineHotkeyKey = MigraineHotkeyKey,
+        MigraineAutoRevertMinutes = MigraineAutoRevertMinutes,
+        PlaySoundOnMigraineToggle = PlaySoundOnMigraineToggle,
+        AutoStartEnabled = AutoStartEnabled,
+        BedtimeLocal = BedtimeLocal,
+        HasCompletedOnboarding = HasCompletedOnboarding,
+        HistoryTrackingEnabled = HistoryTrackingEnabled,
+        PromptForMigraineRating = PromptForMigraineRating,
+        MatchAmbientLight = MatchAmbientLight,
+        BreakReminderEnabled = BreakReminderEnabled,
+        BreakReminderIntervalMinutes = BreakReminderIntervalMinutes,
+        CheckForUpdatesEnabled = CheckForUpdatesEnabled,
+        LastUpdateCheckUtc = LastUpdateCheckUtc,
+    };
+
+    /// <summary>Replaces this instance's values with a deep copy of a validated settings snapshot.</summary>
+    public void CopyFrom(AppSettings source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var copy = source.Clone();
+
+        Latitude = copy.Latitude;
+        Longitude = copy.Longitude;
+        DayKelvin = copy.DayKelvin;
+        NightKelvin = copy.NightKelvin;
+        DayBrightness = copy.DayBrightness;
+        NightBrightness = copy.NightBrightness;
+        DeepNightBrightness = copy.DeepNightBrightness;
+        DeepNightOverlayColorHex = copy.DeepNightOverlayColorHex;
+        ExcludedMonitors = copy.ExcludedMonitors;
+        ColorExcludedMonitors = copy.ColorExcludedMonitors;
+        MonitorDimMultiplier = copy.MonitorDimMultiplier;
+        MonitorKelvinOffset = copy.MonitorKelvinOffset;
+        MigraineOverlayColorHex = copy.MigraineOverlayColorHex;
+        MigraineOverlayOpacity = copy.MigraineOverlayOpacity;
+        MigraineContrastReduction = copy.MigraineContrastReduction;
+        MigraineHotkeyModifiers = copy.MigraineHotkeyModifiers;
+        MigraineHotkeyKey = copy.MigraineHotkeyKey;
+        MigraineAutoRevertMinutes = copy.MigraineAutoRevertMinutes;
+        PlaySoundOnMigraineToggle = copy.PlaySoundOnMigraineToggle;
+        AutoStartEnabled = copy.AutoStartEnabled;
+        BedtimeLocal = copy.BedtimeLocal;
+        HasCompletedOnboarding = copy.HasCompletedOnboarding;
+        HistoryTrackingEnabled = copy.HistoryTrackingEnabled;
+        PromptForMigraineRating = copy.PromptForMigraineRating;
+        MatchAmbientLight = copy.MatchAmbientLight;
+        BreakReminderEnabled = copy.BreakReminderEnabled;
+        BreakReminderIntervalMinutes = copy.BreakReminderIntervalMinutes;
+        CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;
+        LastUpdateCheckUtc = copy.LastUpdateCheckUtc;
+    }
 }

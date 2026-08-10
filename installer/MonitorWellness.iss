@@ -1,8 +1,8 @@
 ; Monitor Wellness installer.
 ;
-; Auto-start is registered via Task Scheduler (schtasks), not a Registry Run key -- see the
-; "Locked decisions" section of IMPLEMENTATION.md. /rl limited runs the task with standard
-; (non-admin) rights, matching what the app actually needs.
+; Auto-start is an explicit, post-install user choice from the tray UI. When enabled, the app
+; registers it via Task Scheduler (schtasks), not a Registry Run key -- see the "Locked
+; decisions" section of IMPLEMENTATION.md. It runs with standard (non-admin) rights.
 ;
 ; Source is the self-contained single-file publish output (see IMPLEMENTATION.md Week 4 for
 ; why: it avoids requiring end users to separately install the .NET runtime). Rebuild it
@@ -32,14 +32,9 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Registering an onlogon-triggered scheduled task requires elevation -- confirmed directly:
-; `schtasks /create /sc onlogon` fails with "Access is denied" under a standard (non-admin)
-; token, while the same command with /sc once succeeds fine. PrivilegesRequired=lowest was
-; tried first specifically to avoid a UAC prompt, but that's incompatible with registering
-; this kind of trigger, so the installer needs admin after all (standard for an installer
-; that also writes to Program Files). /rl limited below still makes the *app itself* run
-; with standard rights once the task fires -- only registering it needs elevation, not
-; running it.
+; The default installation directory is Program Files, so installation needs elevation. The
+; installed app itself runs as the standard user. Enabling its optional Task Scheduler
+; auto-start entry later requires a separate, explicit UAC-approved user action.
 PrivilegesRequired=admin
 
 [Languages]
@@ -57,14 +52,10 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Register auto-start at logon. /f overwrites a pre-existing task from a previous install.
-Filename: "{sys}\schtasks.exe"; \
-  Parameters: "/create /tn ""{#MyTaskName}"" /tr ""\""{app}\{#MyAppExeName}\"""" /sc onlogon /rl limited /f"; \
-  Flags: runhidden
-
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
+; Remove the optional auto-start task if the user enabled it from the app.
 Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""{#MyTaskName}"" /f"; Flags: runhidden; RunOnceId: "RemoveAutoStartTask"
 
 [UninstallDelete]

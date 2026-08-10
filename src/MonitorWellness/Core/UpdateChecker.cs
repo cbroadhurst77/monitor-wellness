@@ -74,8 +74,7 @@ public static class UpdateChecker
                 return null;
 
             Uri releaseUrl = doc.RootElement.TryGetProperty("html_url", out var urlProp)
-                && urlProp.GetString() is string htmlUrl
-                && Uri.TryCreate(htmlUrl, UriKind.Absolute, out var parsedUrl)
+                && TryGetTrustedReleaseUrl(urlProp.GetString(), out var parsedUrl)
                     ? parsedUrl
                     : FallbackReleaseUrl;
 
@@ -86,5 +85,20 @@ public static class UpdateChecker
             DebugLog.Write($"UpdateChecker: check failed: {ex.Message}");
             return null;
         }
+    }
+
+    internal static bool TryGetTrustedReleaseUrl(string? candidate, out Uri releaseUrl)
+    {
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var parsedUrl)
+            && parsedUrl.Scheme == Uri.UriSchemeHttps
+            && string.Equals(parsedUrl.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+            && parsedUrl.AbsolutePath.StartsWith("/cbroadhurst77/monitor-wellness/releases/", StringComparison.Ordinal))
+        {
+            releaseUrl = parsedUrl;
+            return true;
+        }
+
+        releaseUrl = FallbackReleaseUrl;
+        return false;
     }
 }

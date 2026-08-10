@@ -26,10 +26,12 @@ release blocker; anything under "Nice to confirm" is lower priority.
 
 - [ ] Fresh install via `MonitorWellness-Setup-X.Y.Z.exe` completes without error
 - [ ] Desktop shortcut task (if selected) is created; app launches from it
-- [ ] Auto-start is registered (check Task Scheduler for the "MonitorWellness" task)
-- [ ] **Reboot the machine** and confirm the app actually starts on logon (not just that
-      the task exists — see the app's own "Auto-start Diagnostics" panel for this
-      distinction)
+- [ ] Auto-start is **not** registered by installation alone (check Task Scheduler for the
+      absence of the "MonitorWellness" task)
+- [ ] Explicitly enable **Start with Windows** from the tray menu, approve the UAC prompt,
+      and verify the task targets the installed executable with limited rights
+- [ ] **Reboot the machine** and confirm the app starts on logon only after that explicit
+      opt-in (see the app's "Auto-start Diagnostics" panel for this distinction)
 - [ ] Uninstall removes the Start Menu entries, shortcut, and scheduled task
 - [ ] Uninstall does **not** delete `%AppData%\MonitorWellness\` (settings/history are
       user data, kept deliberately — confirm this is still the desired behavior)
@@ -47,6 +49,9 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] Opens from the tray menu without error; all four tabs are clickable
 - [ ] Every slider in Schedule/Migraine Mode tabs live-previews on the real screen,
       smoothly, while dragging (not just after release)
+- [ ] Choosing 0% Day or Night brightness shows the blackout confirmation **before** the
+      screen darkens; confirm Escape, the 15-second timeout, and closing Settings all restore
+      visibility, and that 0% cannot be saved
 - [ ] Kelvin safety warning appears/disappears correctly at the low end of the Day/Night
       sliders
 - [ ] Hex-color and bedtime fields show inline warnings (not a popup) for invalid input
@@ -73,6 +78,23 @@ release blocker; anything under "Nice to confirm" is lower priority.
       — confirm gamma/overlay rebuild without a crash and without leaving a stuck tint
       on any screen
 - [ ] Sleep/resume: confirm color and dim state are correctly reapplied on wake
+- [ ] While dimming is active, open/close a notification, Game Bar, and an always-on-top app;
+      confirm the overlay returns above ordinary desktop windows within two seconds
+- [ ] Confirm the normal schedule never dims the Windows primary display below its 20% safety
+      floor, even with a per-monitor dim multiplier above 1.0
+
+## Emergency recovery (release blocker)
+
+- [ ] Press `Ctrl+Alt+Shift+R` while the schedule is dimming: all adjusted monitors become
+      immediately usable, gamma returns to native, and the tray says the schedule is paused
+      for one hour
+- [ ] Trigger Emergency Restore Screen while Migraine Mode is active or fading: it must stop
+      the effect immediately and it must not reappear during the pause
+- [ ] Deliberately reserve `Ctrl+Alt+Shift+R` in another application before launching Monitor
+      Wellness: confirm the startup warning appears and the tray-menu Emergency Restore Screen
+      action still works
+- [ ] On an HDR display and while playing protected/exclusive-fullscreen video, confirm the
+      recovery action leaves the desktop usable afterward; document any overlay limitation
 
 ## Update checker (new — see Settings → Profiles & History → Updates)
 

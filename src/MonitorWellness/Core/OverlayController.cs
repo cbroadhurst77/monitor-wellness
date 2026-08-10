@@ -12,11 +12,15 @@ namespace MonitorWellness.Core;
 /// </summary>
 public sealed class OverlayController : IDisposable, IOverlayTarget
 {
+    private static readonly TimeSpan ZOrderHeartbeatInterval = TimeSpan.FromSeconds(2);
     private readonly Dictionary<string, OverlayWindow> _windows = new();
+    private readonly DispatcherTimer _zOrderHeartbeatTimer;
     private bool _disposed;
 
     public OverlayController()
     {
+        _zOrderHeartbeatTimer = new DispatcherTimer { Interval = ZOrderHeartbeatInterval };
+        _zOrderHeartbeatTimer.Tick += (_, _) => ReassertVisibleOverlayZOrder();
         RebuildWindows();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
@@ -81,11 +85,20 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     /// </summary>
     public void Apply(IReadOnlyDictionary<string, (Color Color, double Opacity)> byDevice)
     {
+        bool anyVisible = false;
         foreach (var (deviceName, window) in _windows)
         {
             if (byDevice.TryGetValue(deviceName, out var setting))
+            {
                 window.SetTint(setting.Color, Math.Clamp(setting.Opacity, 0.0, 1.0));
+                anyVisible |= setting.Opacity > 0.001;
+            }
         }
+
+        if (anyVisible)
+            _zOrderHeartbeatTimer.Start();
+        else
+            _zOrderHeartbeatTimer.Stop();
     }
 
     /// <summary>
@@ -101,6 +114,25 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
             kv => kv.Key,
             kv => (dimColor, 1.0 - Math.Clamp(kv.Value, 0.0, 1.0)));
         Apply(byDevice);
+    }
+
+    /// <summary>Immediately makes every dim/tint overlay transparent.</summary>
+    public void Clear()
+    {
+        foreach (var window in _windows.Values)
+            window.SetTint(System.Windows.Media.Colors.Transparent, 0.0);
+        _zOrderHeartbeatTimer.Stop();
+    }
+
+    /// <summary>
+    /// A video overlay, game bar, notification, or other topmost window can displace our
+    /// overlay between normal 30-second schedule ticks. Keep recovering that ordering while
+    /// dimming is actually visible, but do no periodic work when every overlay is transparent.
+    /// </summary>
+    private void ReassertVisibleOverlayZOrder()
+    {
+        foreach (var window in _windows.Values)
+            window.ReassertTopmost();
     }
 
     /// <summary>
@@ -144,6 +176,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         _disposed = true;
 
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _zOrderHeartbeatTimer.Stop();
         foreach (var window in _windows.Values)
             window.Close();
         _windows.Clear();

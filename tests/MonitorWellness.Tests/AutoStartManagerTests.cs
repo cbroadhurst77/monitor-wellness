@@ -21,7 +21,7 @@ public class AutoStartManagerTests
         Assert.Contains(@"C:\Program Files\Monitor Wellness\MonitorWellness.exe", args);
         Assert.Contains("/sc onlogon", args);
         Assert.Contains("/rl limited", args); // runs with standard rights once triggered, even though registering it needs elevation
-        Assert.Contains("/f", args);
+        Assert.DoesNotContain("/f", args); // never overwrite an existing task without an explicit recovery path
     }
 
     [Fact]

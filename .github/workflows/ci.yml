@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj
+
+      - name: Build release application
+        run: dotnet build src/MonitorWellness/MonitorWellness.csproj --configuration Release --no-restore --nologo
+
+      - name: Run tests
+        run: dotnet test tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj --configuration Release --no-restore --nologo
+
+      - name: Check known vulnerable dependencies
+        shell: pwsh
+        run: ./tools/Test-VulnerableDependencies.ps1 -ProjectPath tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj

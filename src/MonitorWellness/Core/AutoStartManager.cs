@@ -22,7 +22,7 @@ public static class AutoStartManager
 
     /// <summary>Builds the schtasks argument string for registering the auto-start task. Pure and testable — no process is started here.</summary>
     public static string BuildCreateArguments(string exePath)
-        => $"/create /tn \"{TaskName}\" /tr \"\\\"{exePath}\\\"\" /sc onlogon /rl limited /f";
+        => $"/create /tn \"{TaskName}\" /tr \"\\\"{exePath}\\\"\" /sc onlogon /rl limited";
 
     /// <summary>Builds the schtasks argument string for removing the auto-start task. Pure and testable.</summary>
     public static string BuildDeleteArguments()

@@ -5,7 +5,8 @@
         Width="600" Height="760"
         MinWidth="520" MinHeight="480"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        PreviewKeyDown="SettingsWindow_PreviewKeyDown">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -53,7 +54,8 @@
                                      AutomationProperties.Name="Search for your town, postcode, or place name"/>
                             <Button x:Name="FindLocationButton" Grid.Column="1" Content="Find" Padding="12,4" Click="FindLocationButton_Click"/>
                         </Grid>
-                        <TextBlock x:Name="LocationSearchStatus" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,6" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="LocationSearchStatus" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,6" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"/>
                         <TextBlock FontSize="15" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8">
                             Privacy: nothing in Monitor Wellness is sent anywhere except this location
                             search above (only when you click Find) and, if turned on under Profiles
@@ -64,15 +66,16 @@
 
                         <Border BorderBrush="#FFAAAAAA" BorderThickness="1" Margin="0,0,0,4" HorizontalAlignment="Left">
                             <Grid x:Name="MapContainer" Width="440" Height="222" ClipToBounds="True"
-                                  MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" Cursor="Hand"
-                                  AutomationProperties.Name="Click to set location on the world map">
+                                   MouseLeftButtonDown="MapContainer_MouseLeftButtonDown" PreviewKeyDown="MapContainer_PreviewKeyDown"
+                                   Cursor="Hand" Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                   AutomationProperties.Name="World map location picker. Click to set a location, or use arrow keys to move one degree; hold Shift to move ten degrees.">
                                 <Image x:Name="MapImage" Stretch="Fill"/>
                                 <Canvas x:Name="MapMarkerCanvas" IsHitTestVisible="False">
                                     <Ellipse x:Name="MapMarker" Width="10" Height="10" Fill="#FFE84B3C" Stroke="White" StrokeThickness="1.5"/>
                                 </Canvas>
                             </Grid>
                         </Border>
-                        <TextBlock Text="Click the map to set your location. A rough click is fine — sunrise and sunset times barely change over short distances." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <TextBlock Text="Click the map to set your location, or Tab to it and use the arrow keys (Shift+arrow moves faster). A rough location is fine — sunrise and sunset times barely change over short distances." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
@@ -80,15 +83,16 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Latitude"/>
+                                <Label Content="Latitude" Target="{Binding ElementName=LatitudeBox}"/>
                                 <TextBox x:Name="LatitudeBox" TextChanged="LatLongBox_TextChanged"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="Longitude"/>
+                                <Label Content="Longitude" Target="{Binding ElementName=LongitudeBox}"/>
                                 <TextBox x:Name="LongitudeBox" TextChanged="LatLongBox_TextChanged"/>
                             </StackPanel>
                         </Grid>
-                        <TextBlock x:Name="SunTimesText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,16"/>
+                        <TextBlock x:Name="SunTimesText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,16"
+                                   AutomationProperties.LiveSetting="Polite"/>
 
                         <Separator Margin="0,0,0,16"/>
 
@@ -187,7 +191,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Bedtime (HH:mm)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Label Grid.Column="0" Content="Bedtime (HH:mm)" Target="{Binding ElementName=BedtimeBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left" TextChanged="BedtimeBox_TextChanged"/>
                         </Grid>
                         <TextBlock x:Name="BedtimeWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
@@ -210,7 +214,7 @@
                             </StackPanel>
                         </StackPanel>
                         <StackPanel Margin="0,0,0,4">
-                            <TextBlock Text="Deep-night overlay color (hex, e.g. #190C04)"/>
+                            <Label Content="Deep-night overlay color (hex, e.g. #190C04)" Target="{Binding ElementName=DeepNightColorBox}"/>
                             <TextBox x:Name="DeepNightColorBox" TextChanged="DeepNightColorBox_TextChanged"/>
                         </StackPanel>
                         <TextBlock x:Name="DeepNightColorWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
@@ -248,7 +252,7 @@
                             </TextBlock>
                         </Expander>
                         <StackPanel Margin="0,0,0,4">
-                            <TextBlock Text="Overlay color (hex, e.g. #173620)"/>
+                            <Label Content="Overlay color (hex, e.g. #173620)" Target="{Binding ElementName=MigraineColorBox}"/>
                             <TextBox x:Name="MigraineColorBox" TextChanged="MigrainePreview_Changed"/>
                         </StackPanel>
                         <TextBlock x:Name="MigraineColorWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
@@ -280,7 +284,8 @@
                         <TextBlock Text="We turn Migraine Mode on instantly, and always fade it back off slowly over about 20 seconds — sudden brightness changes can themselves be uncomfortable, so we designed around that on purpose." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                         <StackPanel Margin="0,0,0,4">
                             <TextBlock Text="Turn off automatically after this many minutes"/>
-                            <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"/>
+                            <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"
+                                    AutomationProperties.Name="Migraine Mode automatic turn-off delay in minutes"/>
                             <TextBlock x:Name="MigraineAutoRevertLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}"/>
                             <TextBlock Text="Set to 0 for never — a real migraine can last hours, so we leave this off by default." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
                         </StackPanel>
@@ -289,7 +294,8 @@
                         <StackPanel Margin="0,0,0,4">
                             <TextBlock Text="Toggle hotkey (click box, then press a key combo)"/>
                             <TextBox x:Name="HotkeyBox" IsReadOnly="True" Background="{DynamicResource MW.ReadOnlyBackground}"
-                                     PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
+                                     PreviewKeyDown="HotkeyBox_PreviewKeyDown"
+                                     AutomationProperties.Name="Migraine Mode toggle hotkey. Press a key combination to change it."/>
                         </StackPanel>
                         <TextBlock Text="Your shortcut needs at least one of Ctrl, Alt, or Shift, plus another key." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     </StackPanel>
@@ -302,6 +308,7 @@
                         <TextBlock Text="Monitors" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
                         <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
                         <TextBlock Text="Dim amount: 1.0 matches the normal schedule exactly. Color offset: shifts just this monitor warmer or cooler than the others (try -300 if it looks too warm)." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <TextBlock Text="Safety: the primary display stays at or above 20% during the normal schedule. Use Emergency Restore Screen (Ctrl+Alt+Shift+R) if any display becomes difficult to use." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -348,7 +355,8 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <ComboBox x:Name="ProfilesComboBox" Grid.Column="0" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
+                            <ComboBox x:Name="ProfilesComboBox" Grid.Column="0" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                                      AutomationProperties.Name="Saved profiles"/>
                             <Button Grid.Column="1" Content="Load" Padding="8,2" Margin="0,0,4,0" Click="LoadProfileButton_Click"/>
                             <Button Grid.Column="2" Content="Save As..." Padding="8,2" Margin="0,0,4,0" Click="SaveProfileButton_Click"/>
                             <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
@@ -367,7 +375,8 @@
                         <TextBlock Text="Off by default. This stays on your computer only — it just helps you notice your own patterns over time." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <CheckBox x:Name="PromptForRatingCheckBox" Content="Ask how helpful Migraine Mode was after each use (needs history above)" Margin="0,0,0,4"/>
                         <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                        <TextBlock x:Name="HistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="HistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                   AutomationProperties.LiveSetting="Polite"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                             <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>

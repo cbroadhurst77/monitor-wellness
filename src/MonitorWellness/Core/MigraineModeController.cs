@@ -202,6 +202,27 @@ public sealed class MigraineModeController
         else Activate();
     }
 
+    /// <summary>
+    /// Stops migraine-mode timers without a fade. Reserved for the emergency display restore
+    /// path, where returning a usable screen takes precedence over a gradual visual transition.
+    /// </summary>
+    public void RestoreImmediately()
+    {
+        if (!IsActive && !IsFadingOut)
+            return;
+
+        DebugLog.Write("MigraineMode: emergency immediate restore");
+        _fadeTimer?.Stop();
+        _fadeTimer = null;
+        _autoRevertTimer?.Stop();
+        _autoRevertTimer = null;
+        AutoRevertAtUtc = null;
+        IsActive = false;
+        IsFadingOut = false;
+        _activatedAtUtc = null;
+        StateChanged?.Invoke();
+    }
+
     private void FadeTick()
     {
         double t = Math.Clamp((DateTime.UtcNow - _fadeStartUtc).TotalSeconds / FadeDuration.TotalSeconds, 0.0, 1.0);

@@ -61,9 +61,9 @@ public static class ThemeDetector
         for (int i = window.Resources.MergedDictionaries.Count - 1; i >= 0; i--)
         {
             string? source = window.Resources.MergedDictionaries[i].Source?.OriginalString;
-            if (source?.EndsWith(DarkThemeUriSuffix) == true)
+            if (source?.EndsWith(DarkThemeUriSuffix, StringComparison.Ordinal) == true)
                 window.Resources.MergedDictionaries.RemoveAt(i);
-            else if (source?.EndsWith(BaseThemeUriSuffix) == true)
+            else if (source?.EndsWith(BaseThemeUriSuffix, StringComparison.Ordinal) == true)
                 hasBaseTheme = true;
         }
         if (!hasBaseTheme)

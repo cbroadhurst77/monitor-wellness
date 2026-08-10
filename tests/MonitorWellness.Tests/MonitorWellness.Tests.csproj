@@ -12,6 +12,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Underscores make xUnit test names readable as behavior specifications. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,9 +46,14 @@
     <Compile Include="..\..\src\MonitorWellness\Core\FullscreenHeuristic.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightAdapter.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AppSettings.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AppSettingsValidator.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\BrightnessSafety.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareTargets.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MigraineModeController.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\UpdateChecker.cs" />
   </ItemGroup>
 
 </Project>

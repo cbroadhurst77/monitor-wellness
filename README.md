@@ -34,6 +34,10 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   optional auto-off timer (disabled by default — a real migraine can last hours)
 - **Pause the schedule** for 30 min / 1 hour / 2 hours / until tomorrow — useful for
   color-sensitive work like photo/video editing
+- **Emergency Restore Screen** via `Ctrl+Alt+Shift+R` or the tray menu — immediately clears
+  dim/tint overlays, restores native gamma, and pauses scheduling for one hour
+- Normal scheduling always keeps the Windows primary display at least 20% visible; every
+  other display has a 5% minimum as a recovery floor
 - Settings window with live sliders — color/brightness/contrast changes preview directly on
   your real screens before you commit to saving them
 - **Portable**: run the downloaded exe directly with no installer, and optionally enable
@@ -55,6 +59,11 @@ especially at low brightness where PWM frequency is often lowest. The overlay ap
 flicker. If a future version adds direct hardware (DDC/CI) brightness control, that mode will be
 opt-in specifically so this flicker-free default isn't lost for anyone who came to this app
 because of light sensitivity.
+
+While a dim overlay is visible, Monitor Wellness also reasserts its always-on-top placement
+every two seconds to recover from notifications, game bars, and other topmost windows. Some
+exclusive-fullscreen, protected-video, and HDR paths remain outside an ordinary desktop
+window's control; use Emergency Restore Screen if a display ever becomes difficult to use.
 
 ## Known conflicts with other color-management tools
 
@@ -117,8 +126,25 @@ first, then:
 ```
 
 Produces `dist/MonitorWellness-Setup-<version>.exe`. The installer requires administrator
-privileges (needed to register the Task Scheduler auto-start entry and write to Program
-Files) — expect a UAC prompt.
+privileges to write to Program Files — expect a UAC prompt. It does not enable auto-start.
+Users who want that behavior can explicitly choose **Start with Windows** from the tray menu,
+which requests its own UAC approval.
+
+## Release gate
+
+Commercial releases must be Authenticode-signed and timestamped before distribution. After
+signing the published executable and installer, verify both their signatures, versions, and
+SHA-256 hashes before publishing:
+
+```powershell
+.\tools\Verify-Release.ps1 `
+  -ApplicationPath .\publish\MonitorWellness.exe `
+  -InstallerPath .\dist\MonitorWellness-Setup-0.2.2.exe `
+  -ExpectedVersion 0.2.2 `
+  -ManifestPath .\dist\MonitorWellness-0.2.2-release-manifest.json
+```
+
+The script intentionally fails for unsigned, invalidly signed, or version-mismatched artifacts.
 
 ## Why Task Scheduler instead of a Registry Run key for auto-start?
 

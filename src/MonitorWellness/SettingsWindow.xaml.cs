@@ -16,20 +16,21 @@ using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 namespace MonitorWellness;
 
 /// <summary>
-/// Minimal but functional settings editor. Mutates the live AppSettings instance in place on
-/// Save (the same object App holds), so there's no separate "apply" step to keep in sync —
-/// App's next schedule tick just reads the updated values. onSaved is called after
-/// persisting, so App can rebuild the hotkey and reapply the schedule immediately rather than
-/// waiting for the next 30s tick or app restart.
+/// Minimal but functional settings editor. Edits an isolated AppSettings draft and commits it
+/// to the live instance App holds only on Save, so Cancel and Import remain non-destructive.
+/// onSaved is called after persisting, so App can rebuild the hotkey and reapply the schedule
+/// immediately rather than waiting for the next 30s tick or app restart.
 /// </summary>
 public partial class SettingsWindow : Window
 {
+    // The window edits this isolated draft. It is copied to _targetSettings only after every
+    // field has passed validation and the user explicitly presses Save.
     private readonly AppSettings _settings;
+    private readonly AppSettings _targetSettings;
     private readonly GammaControllerManager _gammaManager;
     private readonly OverlayController _overlay;
     private readonly Action _onSaved;
     private readonly Func<string> _getStatusText;
-    private readonly GeocodingService _geocoding = new();
 
     private static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(2);
     private readonly DispatcherTimer _statusRefreshTimer;
@@ -40,8 +41,15 @@ public partial class SettingsWindow : Window
     // MonitorWellness_UX_Accessibility_Audit.html §2.2/§2.5/§6 (P0). The timer only runs while
     // a preview is actually pending and stops itself once flushed, so idle time costs nothing.
     private static readonly TimeSpan PreviewThrottleInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan BlackoutPreviewDuration = TimeSpan.FromSeconds(15);
+    private const double SafePreviewBrightness = 0.20;
     private readonly HashSet<string> _pendingPreviews = new();
     private DispatcherTimer? _previewThrottleTimer;
+    private DispatcherTimer? _blackoutSafetyTimer;
+    private Slider? _blackoutSlider;
+    private string? _blackoutPreviewKind;
+    private bool _changingBrightnessForSafety;
+    private bool _allowTemporaryBlackout;
 
     private readonly Dictionary<string, CheckBox> _excludeBoxes = new();
     private readonly Dictionary<string, CheckBox> _colorExcludeBoxes = new();
@@ -67,7 +75,8 @@ public partial class SettingsWindow : Window
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);
         Icon = AppIconSource.Default;
-        _settings = settings;
+        _targetSettings = settings;
+        _settings = settings.Clone();
         _gammaManager = gammaManager;
         _overlay = overlay;
         _onSaved = onSaved;
@@ -94,6 +103,7 @@ public partial class SettingsWindow : Window
         {
             _statusRefreshTimer.Stop();
             _previewThrottleTimer?.Stop();
+            RestoreBlackoutPreview();
         };
     }
 
@@ -434,9 +444,9 @@ public partial class SettingsWindow : Window
     /// </summary>
     private void UpdateMapMarker()
     {
-        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat))
+        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat) || !double.IsFinite(lat))
             return;
-        if (!double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon))
+        if (!double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon) || !double.IsFinite(lon))
             return;
 
         lat = Math.Clamp(lat, -90, 90);
@@ -459,7 +469,9 @@ public partial class SettingsWindow : Window
     private void UpdateSunTimesDisplay()
     {
         if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat)
-            || !double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon))
+            || !double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon)
+            || !double.IsFinite(lat) || !double.IsFinite(lon)
+            || lat is < -90 or > 90 || lon is < -180 or > 180)
         {
             SunTimesText.Text = "";
             return;
@@ -485,9 +497,49 @@ public partial class SettingsWindow : Window
         double lon = pos.X / MapContainer.Width * 360.0 - 180.0;
         double lat = 90.0 - pos.Y / MapContainer.Height * 180.0;
 
+        SetLocationCoordinates(lat, lon);
+    }
+
+    private void MapContainer_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        const double SmallStepDegrees = 1.0;
+        const double LargeStepDegrees = 10.0;
+        double step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? LargeStepDegrees : SmallStepDegrees;
+        double lat = TryReadCoordinate(LatitudeBox.Text, 0.0);
+        double lon = TryReadCoordinate(LongitudeBox.Text, 0.0);
+
+        switch (e.Key)
+        {
+            case Key.Up:
+                lat += step;
+                break;
+            case Key.Down:
+                lat -= step;
+                break;
+            case Key.Right:
+                lon += step;
+                break;
+            case Key.Left:
+                lon -= step;
+                break;
+            default:
+                return;
+        }
+
+        SetLocationCoordinates(lat, lon, "Location adjusted with the keyboard.");
+        e.Handled = true;
+    }
+
+    private static double TryReadCoordinate(string text, double fallback)
+        => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) && double.IsFinite(value)
+            ? value
+            : fallback;
+
+    private void SetLocationCoordinates(double lat, double lon, string status = "")
+    {
         LatitudeBox.Text = Math.Clamp(lat, -90, 90).ToString("F4", CultureInfo.InvariantCulture);
         LongitudeBox.Text = Math.Clamp(lon, -180, 180).ToString("F4", CultureInfo.InvariantCulture);
-        LocationSearchStatus.Text = "";
+        LocationSearchStatus.Text = status;
     }
 
     private async void FindLocationButton_Click(object sender, RoutedEventArgs e)
@@ -499,26 +551,34 @@ public partial class SettingsWindow : Window
         FindLocationButton.IsEnabled = false;
         LocationSearchStatus.Text = "Searching...";
 
-        var result = await _geocoding.SearchAsync(query);
-
-        if (result is null)
+        try
         {
-            LocationSearchStatus.Text = $"Couldn't find \"{query}\" — try a different spelling, or a nearby larger town.";
-        }
-        else
-        {
-            LatitudeBox.Text = result.Latitude.ToString("F4", CultureInfo.InvariantCulture);
-            LongitudeBox.Text = result.Longitude.ToString("F4", CultureInfo.InvariantCulture);
-            LocationSearchStatus.Text = $"Found: {result.DisplayName}";
-        }
+            var result = await GeocodingService.SearchAsync(query);
 
-        // Nominatim's usage policy asks for roughly no more than 1 request/second. This is a
-        // manual, one-off search box, not a batch process, so the real-world risk is low --
-        // but keeping the button disabled a beat past the request itself closes the gap
-        // between "compliant in practice" and "compliant by design" for this app's only
-        // network call.
-        await Task.Delay(TimeSpan.FromSeconds(1));
-        FindLocationButton.IsEnabled = true;
+            if (result is null)
+            {
+                LocationSearchStatus.Text = $"Couldn't find \"{query}\" — try a different spelling, or a nearby larger town.";
+            }
+            else
+            {
+                SetLocationCoordinates(result.Latitude, result.Longitude, $"Found: {result.DisplayName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"Location search failed unexpectedly: {ex.Message}");
+            LocationSearchStatus.Text = "Location search failed. Try again or enter coordinates manually.";
+        }
+        finally
+        {
+            // Nominatim's usage policy asks for roughly no more than 1 request/second. This is a
+            // manual, one-off search box, not a batch process, so the real-world risk is low --
+            // but keeping the button disabled a beat past the request itself closes the gap
+            // between "compliant in practice" and "compliant by design" for this app's only
+            // network call.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            FindLocationButton.IsEnabled = true;
+        }
     }
 
     // --- Live preview -------------------------------------------------------------------
@@ -533,6 +593,7 @@ public partial class SettingsWindow : Window
     private void DaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_loaded) return;
+        if (HandleZeroBrightness((Slider)sender, e, "day")) return;
         UpdateSliderLabels();
         QueuePreview("day");
     }
@@ -540,8 +601,86 @@ public partial class SettingsWindow : Window
     private void NightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (!_loaded) return;
+        if (HandleZeroBrightness((Slider)sender, e, "night")) return;
         UpdateSliderLabels();
         QueuePreview("night");
+    }
+
+    /// <summary>
+    /// Intercepts a zero-brightness live preview before an overlay can make the screen black.
+    /// A deliberate preview is time-limited, and Escape/closing Settings restores a visible level.
+    /// </summary>
+    private bool HandleZeroBrightness(Slider slider, RoutedPropertyChangedEventArgs<double> e, string previewKind)
+    {
+        if (e.NewValue > 0)
+        {
+            if (ReferenceEquals(_blackoutSlider, slider))
+                StopBlackoutSafetyTimer();
+            return false;
+        }
+
+        if (_changingBrightnessForSafety || _allowTemporaryBlackout)
+            return false;
+
+        SetBrightnessForSafety(slider, Math.Max(e.OldValue, SafePreviewBrightness));
+        PreviewSchedule(previewKind);
+
+        var confirmation = new BlackoutPreviewDialog { Owner = this };
+        confirmation.ShowDialog();
+        if (!confirmation.ShouldPreviewBlackout)
+            return true;
+
+        _blackoutSlider = slider;
+        _blackoutPreviewKind = previewKind;
+        _allowTemporaryBlackout = true;
+        slider.Value = 0;
+        _allowTemporaryBlackout = false;
+        StartBlackoutSafetyTimer();
+        return true;
+    }
+
+    private void SetBrightnessForSafety(Slider slider, double brightness)
+    {
+        _changingBrightnessForSafety = true;
+        slider.Value = Math.Clamp(brightness, AppSettingsValidator.MinimumSafeBrightness, slider.Maximum);
+        _changingBrightnessForSafety = false;
+    }
+
+    private void StartBlackoutSafetyTimer()
+    {
+        _blackoutSafetyTimer?.Stop();
+        _blackoutSafetyTimer = new DispatcherTimer { Interval = BlackoutPreviewDuration };
+        _blackoutSafetyTimer.Tick += (_, _) => RestoreBlackoutPreview();
+        _blackoutSafetyTimer.Start();
+    }
+
+    private void StopBlackoutSafetyTimer()
+    {
+        _blackoutSafetyTimer?.Stop();
+        _blackoutSafetyTimer = null;
+        _blackoutSlider = null;
+        _blackoutPreviewKind = null;
+    }
+
+    private void RestoreBlackoutPreview()
+    {
+        Slider? slider = _blackoutSlider;
+        string? previewKind = _blackoutPreviewKind;
+        StopBlackoutSafetyTimer();
+        if (slider is null || previewKind is null)
+            return;
+
+        SetBrightnessForSafety(slider, SafePreviewBrightness);
+        PreviewSchedule(previewKind);
+    }
+
+    private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _blackoutSlider is not null)
+        {
+            RestoreBlackoutPreview();
+            e.Handled = true;
+        }
     }
 
     private void MigrainePreview_Changed(object sender, EventArgs e)
@@ -699,6 +838,12 @@ public partial class SettingsWindow : Window
 
     private void PreviewNight() => ApplySchedulePreview((int)NightKelvinSlider.Value, NightBrightnessSlider.Value);
 
+    private void PreviewSchedule(string previewKind)
+    {
+        if (previewKind == "day") PreviewDay();
+        else PreviewNight();
+    }
+
     private void ApplySchedulePreview(int kelvin, double globalBrightness)
     {
         foreach (var controller in _gammaManager.Controllers)
@@ -783,6 +928,10 @@ public partial class SettingsWindow : Window
     private Dictionary<string, double> BuildBrightnessByDeviceForPreview(double globalBrightness)
     {
         var result = new Dictionary<string, double>();
+        var primaryMonitorNames = MonitorEnumerator.GetActiveMonitors()
+            .Where(monitor => monitor.IsPrimary)
+            .Select(monitor => monitor.DeviceName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var deviceName in _overlay.DeviceNames)
         {
             bool excluded = _excludeBoxes.TryGetValue(deviceName, out var box) && box.IsChecked == true;
@@ -796,8 +945,10 @@ public partial class SettingsWindow : Window
             if (_multiplierBoxes.TryGetValue(deviceName, out var multiplierBox))
                 double.TryParse(multiplierBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out multiplier);
 
-            double dimAmount = (1.0 - globalBrightness) * multiplier;
-            result[deviceName] = Math.Clamp(1.0 - dimAmount, 0.0, 1.0);
+            result[deviceName] = BrightnessSafety.CalculateEffectiveBrightness(
+                globalBrightness,
+                multiplier,
+                primaryMonitorNames.Contains(deviceName));
         }
         return result;
     }
@@ -1040,8 +1191,15 @@ public partial class SettingsWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        ProfileStore.Save(dialog.ProfileName, snapshot);
-        RefreshProfilesComboBox(dialog.ProfileName);
+        try
+        {
+            ProfileStore.Save(dialog.ProfileName, snapshot);
+            RefreshProfilesComboBox(dialog.ProfileName);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't save profile: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void DeleteProfileButton_Click(object sender, RoutedEventArgs e)
@@ -1068,21 +1226,29 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        SettingsStore.Save(_settings);
-        _onSaved();
-        Close();
+        try
+        {
+            SettingsStore.Save(_settings);
+            _targetSettings.CopyFrom(_settings);
+            _onSaved();
+            Close();
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't save settings: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private bool TryParseAll(out string error)
     {
         error = "";
 
-        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat) || lat < -90 || lat > 90)
+        if (!double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat) || !double.IsFinite(lat) || lat < -90 || lat > 90)
         {
             error = "Latitude must be a number between -90 and 90.";
             return false;
         }
-        if (!double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon) || lon < -180 || lon > 180)
+        if (!double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon) || !double.IsFinite(lon) || lon < -180 || lon > 180)
         {
             error = "Longitude must be a number between -180 and 180.";
             return false;
@@ -1099,10 +1265,19 @@ public partial class SettingsWindow : Window
             error = $"{nightKelvin}K is a bit too warm for this screen. Please choose 3,400K or higher, then try saving again.";
             return false;
         }
-        // Brightness/opacity sliders are range-locked to 0-1 in XAML (Minimum/Maximum), so
-        // unlike the text boxes they replaced, there's nothing to validate here.
+        // A 0% value can be previewed briefly after explicit confirmation, but cannot be
+        // saved: otherwise the next scheduled tick could leave the display black with no
+        // usable visual recovery path. The same floor applies to deep night.
         double dayBrightness = DayBrightnessSlider.Value;
         double nightBrightness = NightBrightnessSlider.Value;
+        double deepNightBrightness = DeepNightBrightnessSlider.Value;
+        if (dayBrightness < AppSettingsValidator.MinimumSafeBrightness
+            || nightBrightness < AppSettingsValidator.MinimumSafeBrightness
+            || deepNightBrightness < AppSettingsValidator.MinimumSafeBrightness)
+        {
+            error = $"Brightness settings must be at least {AppSettingsValidator.MinimumSafeBrightness:P0}. You can preview 0% temporarily, but it cannot be saved.";
+            return false;
+        }
         double migraineOpacity = MigraineOpacitySlider.Value;
 
         // Hex-color/bedtime problems surface as inline warning text next to the field itself
@@ -1122,9 +1297,10 @@ public partial class SettingsWindow : Window
         var multipliers = new Dictionary<string, double>();
         foreach (var (deviceName, box) in _multiplierBoxes)
         {
-            if (!double.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double multiplier) || multiplier < 0)
+            if (!double.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double multiplier)
+                || !double.IsFinite(multiplier) || multiplier < 0 || multiplier > 5)
             {
-                error = $"Dim multiplier for {ShortDeviceName(deviceName)} must be a number >= 0.";
+                error = $"Dim multiplier for {ShortDeviceName(deviceName)} must be a finite number between 0 and 5.";
                 return false;
             }
             multipliers[deviceName] = multiplier;
@@ -1149,7 +1325,7 @@ public partial class SettingsWindow : Window
         _settings.NightKelvin = nightKelvin;
         _settings.DayBrightness = dayBrightness;
         _settings.NightBrightness = nightBrightness;
-        _settings.DeepNightBrightness = DeepNightBrightnessSlider.Value;
+        _settings.DeepNightBrightness = deepNightBrightness;
         _settings.DeepNightOverlayColorHex = deepNightColorHex;
         _settings.MigraineOverlayColorHex = migraineColorHex;
         _settings.MigraineOverlayOpacity = migraineOpacity;

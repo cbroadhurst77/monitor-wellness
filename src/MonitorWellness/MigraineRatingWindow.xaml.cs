@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
 using MonitorWellness.Core;
@@ -39,7 +40,7 @@ public partial class MigraineRatingWindow : Window
 
     private void RatingButton_Click(object sender, RoutedEventArgs e)
     {
-        int rating = int.Parse((string)((Button)sender).Content);
+        int rating = int.Parse((string)((Button)sender).Content, CultureInfo.InvariantCulture);
         Answer(rating, dontAskAgain: false);
     }
 
