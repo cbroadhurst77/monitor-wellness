@@ -1057,6 +1057,20 @@ public partial class App : Application
                 return;
 
             _lastForegroundApplicationContext = context;
+            ApplicationComfortRule? matchingRule = ApplicationComfortRules.FindForegroundRule(
+                _settings.ApplicationComfortRules,
+                foregroundApplication?.ProcessName,
+                foregroundApplication?.WindowTitle);
+            if (!ApplicationRuleRefreshPolicy.ShouldRefresh(
+                matchingRule,
+                _activeNativeDisplayRuleProcessName is not null,
+                _activeComfortPlanRuleDescription is not null))
+            {
+                // The regular schedule timer will handle its next gradual adjustment. Do not
+                // write the same gamma/overlay state merely because an unrelated window opened.
+                return;
+            }
+
             RunScheduleTick();
         };
         _applicationRuleTimer.Start();

@@ -55,6 +55,7 @@
     <Compile Include="..\..\src\MonitorWellness\Core\MonitorEnumerator.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessSafety.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ApplicationComfortRule.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ApplicationRuleRefreshPolicy.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MigraineResponsePlans.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SensoryComfortPlans.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSmoother.cs" />

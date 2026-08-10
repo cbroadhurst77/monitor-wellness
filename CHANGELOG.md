@@ -19,6 +19,11 @@ recent work.
   the preceding seven days, while clearly distinguishing these personal records from medical
   insight.
 
+### Improved
+- Switching between unrelated apps or windows no longer re-applies gamma and overlay state.
+  This reduces unnecessary display churn while preserving immediate changes when an
+  application-aware rule begins or ends.
+
 ## 0.2.3 — Sensory safety and comfort update
 
 ### Added

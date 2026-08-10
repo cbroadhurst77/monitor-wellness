@@ -32,10 +32,11 @@ It may avoid problems that some displays introduce when their backlight is lower
 cannot measure panel PWM, temporal dithering, spectrum, or medical suitability.
 
 The overlay refreshes only after a short quiet period when Windows reports display-topology
-changes. If you still notice repeated flashes when switching apps or opening windows, turn off
-other colour-management tools (Windows Night Light, f.lux, or GPU vendor night modes) so only
-one tool changes colour. For exclusive-fullscreen, protected video, or HDR content, a normal
-desktop overlay may not be visible; use windowed mode or Emergency Restore Screen.
+changes. Ordinary app and window switching does not reapply display controls unless you enter
+or leave a configured app-aware rule. If you still notice repeated flashes, turn off other
+colour-management tools (Windows Night Light, f.lux, or GPU vendor night modes) so only one
+tool changes colour. For exclusive-fullscreen, protected video, or HDR content, a normal desktop
+overlay may not be visible; use windowed mode or Emergency Restore Screen.
 
 ## Display Capability Passport
 
