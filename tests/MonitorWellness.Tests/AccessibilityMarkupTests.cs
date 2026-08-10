@@ -20,6 +20,10 @@ public class AccessibilityMarkupTests
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "TextBlock"
             && element.Attributes().Any(attribute => attribute.Name.LocalName == "AutomationProperties.LiveSetting" && attribute.Value == "Polite"));
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "CheckBox"
+            && element.Attributes().Any(attribute => attribute.Value.Contains(
+                "overlay-only compatibility mode", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]

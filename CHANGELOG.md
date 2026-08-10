@@ -6,9 +6,13 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## 0.2.4 — Presentation and support update
+## 0.2.5 — Compatibility and reliability update
 
 ### Added
+- Overlay-only compatibility mode is on by default for displays Windows explicitly identifies
+  as Remote Desktop, virtual, USB, or indirect. It keeps gamma-ramp and physical-brightness
+  commands away from those less predictable display paths while retaining the reversible
+  dimmer overlay.
 - Application-aware comfort rules can now apply a temporary built-in comfort plan while a
   chosen app or title-matched window is in the foreground. This does not save or overwrite the
   person's normal schedule; switching away restores it automatically.

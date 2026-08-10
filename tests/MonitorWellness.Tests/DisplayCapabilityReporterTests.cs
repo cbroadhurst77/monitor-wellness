@@ -39,4 +39,17 @@ public class DisplayCapabilityReporterTests
         Assert.Equal("Verified hardware brightness", capability.RecommendedBrightnessBackend);
         Assert.Equal("Hardware brightness approved", capability.SafetyStatus);
     }
+
+    [Fact]
+    public void CreateDisplayCapability_UsesCompatibilityFallbackForRemoteDisplay()
+    {
+        var monitor = new MonitorInfo(@"\\.\DISPLAY1", "Microsoft Remote Display Adapter", true, "");
+        var capability = DisplayCapabilityReporter.CreateDisplayCapability(
+            new AppSettings(),
+            monitor,
+            new Dictionary<string, DdcCiBrightnessCapability>());
+
+        Assert.Equal("Stable overlay fallback", capability.RecommendedBrightnessBackend);
+        Assert.Equal("Compatibility fallback active", capability.SafetyStatus);
+    }
 }

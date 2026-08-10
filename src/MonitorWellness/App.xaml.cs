@@ -58,6 +58,7 @@ public partial class App : Application
     private string? _activeComfortPlanRuleDescription;
     private string? _manualComfortPlanName;
     private bool _fullscreenPresentationGuardActive;
+    private readonly HashSet<string> _compatibilityFallbackDevices = new(StringComparer.OrdinalIgnoreCase);
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -1095,10 +1096,29 @@ public partial class App : Application
 
         var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget(scheduleOverride);
 
+        IReadOnlyList<MonitorInfo> activeMonitors = MonitorEnumerator.GetActiveMonitors();
+        var activeMonitorsByDeviceName = activeMonitors.ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
         {
             if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
                 continue;
+
+            if (_settings.PreferOverlayOnlyOnCompatibilityDisplays
+                && activeMonitorsByDeviceName.TryGetValue(controller.DeviceName, out MonitorInfo? monitor)
+                && DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out string compatibilityReason))
+            {
+                // A remote/virtual/indirect surface can be backed by a transport or driver
+                // which handles gamma state unpredictably. Reset a previously applied ramp,
+                // then leave the normal per-monitor overlay in charge of dimming.
+                if (_compatibilityFallbackDevices.Add(controller.DeviceName))
+                {
+                    controller.ResetToIdentity();
+                    DebugLog.Write($"Compatibility fallback active for {controller.DeviceName}: {compatibilityReason}");
+                }
+                continue;
+            }
+
+            _compatibilityFallbackDevices.Remove(controller.DeviceName);
 
             if (_settings.ColorExcludedMonitors.Contains(controller.DeviceName))
             {
@@ -1121,9 +1141,10 @@ public partial class App : Application
             }
         }
 
-        var activeMonitors = MonitorEnumerator.GetActiveMonitors();
         var approvedHardwareDevices = activeMonitors
             .Where(monitor => !_settings.ExcludedMonitors.Contains(monitor.DeviceName)
+                && (!_settings.PreferOverlayOnlyOnCompatibilityDisplays
+                    || !DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out _))
                 && HardwareBrightnessSafety.IsApproved(_settings, monitor))
             .Select(monitor => monitor.DeviceName)
             .ToList();

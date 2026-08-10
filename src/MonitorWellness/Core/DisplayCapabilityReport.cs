@@ -76,12 +76,21 @@ public static class DisplayCapabilityReporter
         bool approved = HardwareBrightnessSafety.IsApproved(settings, monitor);
         bool ddcAvailable = ddcCapabilities.TryGetValue(monitor.DeviceName, out DdcCiBrightnessCapability? ddcCapability)
             && ddcCapability.IsSupported;
+        string compatibilityReason = "";
+        bool compatibilityFallback = settings.PreferOverlayOnlyOnCompatibilityDisplays
+            && DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out compatibilityReason);
 
         string identity = hasIdentity ? "Stable physical monitor path available" : "Unavailable or ambiguous — automatic hardware brightness is disabled";
         string backend;
         string status;
         string detail;
-        if (quarantined)
+        if (compatibilityFallback)
+        {
+            backend = "Stable overlay fallback";
+            status = "Compatibility fallback active";
+            detail = $"{compatibilityReason} Gamma-ramp and physical-brightness commands are held back while compatibility mode is enabled.";
+        }
+        else if (quarantined)
         {
             backend = "Stable overlay fallback";
             status = "Hardware brightness quarantined";

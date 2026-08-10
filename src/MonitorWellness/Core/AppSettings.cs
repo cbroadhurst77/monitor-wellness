@@ -216,6 +216,14 @@ public sealed class AppSettings
     public bool RestoreNativeDisplayInFullscreen { get; set; }
 
     /// <summary>
+    /// Defaults on: remote desktop, virtual, and USB/indirect display paths keep using the
+    /// compositor overlay while this setting is enabled. Gamma-ramp and DDC/CI commands can
+    /// be driver- or transport-dependent on those paths, whereas the overlay has the most
+    /// predictable recovery behaviour. An explicit setting keeps the choice with the user.
+    /// </summary>
+    public bool PreferOverlayOnlyOnCompatibilityDisplays { get; set; } = true;
+
+    /// <summary>
     /// Opt-in, defaults false: once a day at most, check GitHub's public Releases API for a
     /// newer version and show a balloon linking to it if one exists (see Core/UpdateChecker.cs)
     /// — never a silent download/install. This is the only other network call in the app
@@ -262,6 +270,7 @@ public sealed class AppSettings
         BreakReminderEnabled = BreakReminderEnabled,
         BreakReminderIntervalMinutes = BreakReminderIntervalMinutes,
         RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
+        PreferOverlayOnlyOnCompatibilityDisplays = PreferOverlayOnlyOnCompatibilityDisplays,
         CheckForUpdatesEnabled = CheckForUpdatesEnabled,
         LastUpdateCheckUtc = LastUpdateCheckUtc,
     };
@@ -304,6 +313,7 @@ public sealed class AppSettings
         BreakReminderEnabled = copy.BreakReminderEnabled;
         BreakReminderIntervalMinutes = copy.BreakReminderIntervalMinutes;
         RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
+        PreferOverlayOnlyOnCompatibilityDisplays = copy.PreferOverlayOnlyOnCompatibilityDisplays;
         CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;
         LastUpdateCheckUtc = copy.LastUpdateCheckUtc;
     }

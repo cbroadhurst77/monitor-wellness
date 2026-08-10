@@ -98,9 +98,9 @@ utility and turn off all but one.
 
 ## Status
 
-v0.2.4. A full UX/accessibility audit pass has landed (see
+v0.2.5. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (213 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (219 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not
@@ -167,9 +167,9 @@ SHA-256 hashes before publishing:
 ```powershell
 .\tools\Verify-Release.ps1 `
   -ApplicationPath .\publish\MonitorWellness.exe `
-  -InstallerPath .\dist\MonitorWellness-Setup-0.2.4.exe `
-  -ExpectedVersion 0.2.4 `
-  -ManifestPath .\dist\MonitorWellness-0.2.4-release-manifest.json
+  -InstallerPath .\dist\MonitorWellness-Setup-0.2.5.exe `
+  -ExpectedVersion 0.2.5 `
+  -ManifestPath .\dist\MonitorWellness-0.2.5-release-manifest.json
 ```
 
 The script intentionally fails for unsigned, invalidly signed, or version-mismatched artifacts.

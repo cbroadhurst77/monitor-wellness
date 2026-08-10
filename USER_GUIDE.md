@@ -38,6 +38,12 @@ colour-management tools (Windows Night Light, f.lux, or GPU vendor night modes) 
 tool changes colour. For exclusive-fullscreen, protected video, or HDR content, a normal desktop
 overlay may not be visible; use windowed mode or Emergency Restore Screen.
 
+For Remote Desktop, virtual-monitor software, and USB/indirect display paths, **Settings →
+Monitors & Breaks** enables overlay-only compatibility mode by default. It avoids gamma-ramp
+and physical-brightness commands on displays Windows explicitly identifies that way, while
+keeping the reversible overlay dimmer available. Turn it off only after testing that exact
+display path yourself.
+
 ## Display Capability Passport
 
 Open **tray icon → Diagnostics → Display Capability Passport**. The report is local and
@@ -66,6 +72,8 @@ External monitors that expose DDC/CI may offer physical brightness control in
 
 Approval follows the monitor's stable physical identity, not a temporary display number. If a
 hardware command fails, the app quarantines that monitor and returns to the overlay fallback.
+Compatibility displays are kept out of DDC/CI control while overlay-only compatibility mode is
+enabled, even if a driver appears to expose it.
 
 ## Comfort plans and profiles
 

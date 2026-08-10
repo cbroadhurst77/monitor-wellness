@@ -165,6 +165,7 @@ public partial class SettingsWindow : Window
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
+        CompatibilityOverlayOnlyCheckBox.IsChecked = _settings.PreferOverlayOnlyOnCompatibilityDisplays;
         // HistoryTrackingCheckBox's own Checked/Unchecked handler (fired by setting its
         // IsChecked above) already set PromptForRatingCheckBox.IsEnabled to match — this just
         // loads the actual saved value into it.
@@ -1074,6 +1075,10 @@ public partial class SettingsWindow : Window
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
             bool hasStableHardwareIdentity = monitor is not null && HardwareBrightnessSafety.GetKey(monitor) is not null;
+            string compatibilityReason = "";
+            bool compatibilityFallback = monitor is not null
+                && _settings.PreferOverlayOnlyOnCompatibilityDisplays
+                && DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out compatibilityReason);
             string quarantineReason = "";
             bool hardwareQuarantined = monitor is not null && HardwareBrightnessSafety.IsQuarantined(_settings, monitor, out quarantineReason);
             bool hardwareEnabled = monitor is not null && HardwareBrightnessSafety.IsApproved(_settings, monitor);
@@ -1081,10 +1086,12 @@ public partial class SettingsWindow : Window
             {
                 Content = "HW",
                 IsChecked = hardwareEnabled,
-                IsEnabled = hardwareEnabled && !hardwareQuarantined,
+                IsEnabled = hardwareEnabled && !hardwareQuarantined && !compatibilityFallback,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = hardwareQuarantined
+                ToolTip = compatibilityFallback
+                    ? $"{compatibilityReason} Compatibility mode keeps this display overlay-only."
+                    : hardwareQuarantined
                     ? quarantineReason
                     : hasStableHardwareIdentity
                         ? "Use physical DDC/CI brightness for this monitor. It becomes available only after this session's safe test succeeds."
@@ -1097,9 +1104,12 @@ public partial class SettingsWindow : Window
             var testHardwareBrightnessButton = new System.Windows.Controls.Button
             {
                 Content = "Test HW",
+                IsEnabled = !compatibilityFallback,
                 Padding = new Thickness(6, 2, 6, 2),
                 Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
+                ToolTip = compatibilityFallback
+                    ? $"{compatibilityReason} Turn off overlay-only compatibility mode only if you have tested this display path."
+                    : "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
             };
             System.Windows.Automation.AutomationProperties.SetName(testHardwareBrightnessButton, $"Test hardware brightness for {ShortDeviceName(deviceName)}");
             testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName, monitor, hardwareBrightnessBox);
@@ -1741,6 +1751,7 @@ public partial class SettingsWindow : Window
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
         _settings.BreakReminderIntervalMinutes = (int)BreakReminderIntervalSlider.Value;
         _settings.RestoreNativeDisplayInFullscreen = FullscreenPresentationGuardCheckBox.IsChecked == true;
+        _settings.PreferOverlayOnlyOnCompatibilityDisplays = CompatibilityOverlayOnlyCheckBox.IsChecked == true;
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)

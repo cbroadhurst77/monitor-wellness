@@ -41,7 +41,12 @@ public static class DiagnosticBundleService
         report.AppendLine();
         report.AppendLine("Active monitors:");
         foreach (MonitorInfo monitor in MonitorEnumerator.GetActiveMonitors())
-            report.AppendLine(CultureInfo.InvariantCulture, $"- {monitor.DeviceName}; primary={monitor.IsPrimary}; name={monitor.DeviceString}");
+        {
+            string compatibility = DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out string reason)
+                ? $"; compatibility fallback recommended ({reason})"
+                : "";
+            report.AppendLine(CultureInfo.InvariantCulture, $"- {monitor.DeviceName}; primary={monitor.IsPrimary}; name={monitor.DeviceString}{compatibility}");
+        }
 
         report.AppendLine();
         report.AppendLine("DDC/CI brightness capability (read-only probe):");

@@ -127,6 +127,16 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void Clone_PreservesCompatibilityOverlayOnlyPreference()
+    {
+        var original = new AppSettings { PreferOverlayOnlyOnCompatibilityDisplays = false };
+
+        AppSettings clone = original.Clone();
+
+        Assert.False(clone.PreferOverlayOnlyOnCompatibilityDisplays);
+    }
+
+    [Fact]
     public void HardwareBrightnessOptIns_AreDeepCopied()
     {
         var original = new AppSettings { HardwareBrightnessEnabledMonitors = new List<string> { @"\\.\DISPLAY1" } };
