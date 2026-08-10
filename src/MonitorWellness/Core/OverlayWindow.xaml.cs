@@ -35,10 +35,15 @@ public partial class OverlayWindow : Window
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const uint SWP_NOACTIVATE = 0x0010;
+    private System.Drawing.Rectangle? _lastBounds;
+    private System.Windows.Media.Color _tintColor = Colors.Transparent;
+    private double _tintOpacity;
+    private readonly SolidColorBrush _tintBrush = new(Colors.Transparent);
 
     public OverlayWindow()
     {
         InitializeComponent();
+        TintLayer.Background = _tintBrush;
         SourceInitialized += OnSourceInitialized;
     }
 
@@ -54,14 +59,21 @@ public partial class OverlayWindow : Window
     /// <summary>Positions and sizes this window to exactly cover the given physical-pixel bounds.</summary>
     public void PositionOver(System.Drawing.Rectangle bounds)
     {
+        if (_lastBounds == bounds)
+            return;
+
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         SetWindowPos(hwnd, HWND_TOPMOST, bounds.X, bounds.Y, bounds.Width, bounds.Height, SWP_NOACTIVATE);
+        _lastBounds = bounds;
     }
 
     /// <summary>Sets the overlay's tint color and opacity (0.0 = invisible, 1.0 = fully opaque).</summary>
     public void SetTint(System.Windows.Media.Color color, double opacity)
     {
-        TintLayer.Background = new SolidColorBrush(color) { Opacity = Math.Clamp(opacity, 0.0, 1.0) };
+        _tintColor = color;
+        _tintOpacity = Math.Clamp(opacity, 0.0, 1.0);
+        if (LabelText.Visibility != Visibility.Visible)
+            ApplyStoredTint();
     }
 
     /// <summary>
@@ -72,7 +84,8 @@ public partial class OverlayWindow : Window
     /// </summary>
     public void ShowLabel(string text)
     {
-        TintLayer.Background = new SolidColorBrush(Colors.Black) { Opacity = 0.55 };
+        _tintBrush.Color = Colors.Black;
+        _tintBrush.Opacity = 0.55;
         LabelText.Text = text;
         LabelText.Visibility = Visibility.Visible;
     }
@@ -80,5 +93,12 @@ public partial class OverlayWindow : Window
     public void HideLabel()
     {
         LabelText.Visibility = Visibility.Collapsed;
+        ApplyStoredTint();
+    }
+
+    private void ApplyStoredTint()
+    {
+        _tintBrush.Color = _tintColor;
+        _tintBrush.Opacity = _tintOpacity;
     }
 }

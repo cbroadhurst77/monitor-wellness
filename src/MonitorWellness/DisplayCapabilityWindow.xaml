@@ -1,0 +1,13 @@
+<Window x:Class="MonitorWellness.DisplayCapabilityWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Display Capability Passport" Width="680" Height="560"
+        WindowStartupLocation="CenterScreen" MinWidth="480" MinHeight="360">
+    <DockPanel Margin="16">
+        <Button DockPanel.Dock="Bottom" Content="Close" Width="84" HorizontalAlignment="Right" Margin="0,12,0,0"
+                IsCancel="True" Click="Close_Click" AutomationProperties.Name="Close Display Capability Passport"/>
+        <TextBox x:Name="ReportText" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="Display Capability Passport report"/>
+    </DockPanel>
+</Window>

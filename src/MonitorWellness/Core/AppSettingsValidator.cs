@@ -109,16 +109,19 @@ public static class AppSettingsValidator
         if (rules.Count > 100)
             return Invalid("No more than 100 application comfort rules can be saved.", out error);
 
-        var processes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ruleContexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (ApplicationComfortRule? rule in rules)
         {
             if (rule is null || !ApplicationComfortRules.TryNormalizeProcessName(rule.ProcessName, out string normalized)
-                || !ApplicationComfortActions.IsSupported(rule.Action))
+                || !ApplicationComfortActions.IsSupported(rule.Action)
+                || rule.WindowTitleContains?.Length > 200
+                || rule.WindowTitleContains?.Any(char.IsControl) == true)
             {
-                return Invalid("Application comfort rules must use a valid executable name and supported action.", out error);
+                return Invalid("Application comfort rules must use a valid executable name, optional safe window-title condition, and supported action.", out error);
             }
-            if (!processes.Add(normalized))
-                return Invalid("Each application can have only one comfort rule.", out error);
+            string titleCondition = rule.WindowTitleContains?.Trim() ?? "";
+            if (!ruleContexts.Add($"{normalized}\u001f{titleCondition}"))
+                return Invalid("Each application and window-title condition can have only one comfort rule.", out error);
         }
 
         error = "";

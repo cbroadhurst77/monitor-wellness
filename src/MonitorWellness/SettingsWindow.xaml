@@ -376,6 +376,22 @@
                             <Button Grid.Column="3" Content="Delete" Padding="8,2" Click="DeleteProfileButton_Click"/>
                         </Grid>
                         <TextBlock Text="A profile remembers your color, brightness, and Migraine Mode settings. It does not remember your location, monitor setup, or break reminders — those stay the same no matter which profile you load. Useful for switching quickly between, say, a bright work setup and a migraine-prone-day setup." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <TextBlock Text="Built-in comfort plans" FontWeight="Bold" FontSize="14" Margin="0,12,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="BuiltInComfortPlanComboBox" Grid.Column="0" Margin="0,0,8,0" SelectedIndex="0" AutomationProperties.Name="Built-in sensory comfort plan">
+                                <ComboBoxItem Tag="Balanced" Content="Balanced — normal day/night comfort"/>
+                                <ComboBoxItem Tag="Reading" Content="Reading — softer daytime contrast"/>
+                                <ComboBoxItem Tag="ColourCritical" Content="Colour-critical — native white and brightness"/>
+                                <ComboBoxItem Tag="EarlySensitivity" Content="Early sensitivity — gentler starting point"/>
+                                <ComboBoxItem Tag="Recovery" Content="Recovery — lower-stimulation starting point"/>
+                            </ComboBox>
+                            <Button Grid.Column="1" Content="Preview plan" Padding="8,2" Click="PreviewBuiltInComfortPlanButton_Click" AutomationProperties.Name="Preview selected sensory comfort plan"/>
+                        </Grid>
+                        <TextBlock Text="Plans are editable comfort starting points, not treatment recommendations. Previewing does not save anything; use the normal Save button only if the result feels right." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
                             <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>
@@ -385,7 +401,7 @@
                         <Separator Margin="0,0,0,16"/>
 
                         <TextBlock Text="Application-aware comfort" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
-                        <TextBlock Text="Add an executable such as photoshop.exe, premiere, or a game. While it is the active app, Monitor Wellness restores native brightness and colour, then safely resumes your schedule when you switch away." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock Text="Add an executable such as photoshop.exe, premiere, or a game. Optionally include part of a window title to scope a rule to a meeting, presentation, or document. While it matches, Monitor Wellness restores native brightness and colour, then safely resumes your schedule when you switch away." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <StackPanel x:Name="ApplicationRulesList" Margin="0,0,0,4"/>
                         <Button Content="Add application rule" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,16" Click="AddApplicationRuleButton_Click" AutomationProperties.Name="Add an application-aware comfort rule"/>
 

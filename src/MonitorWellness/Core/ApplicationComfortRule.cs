@@ -19,12 +19,19 @@ public sealed class ApplicationComfortRule
     /// <summary>Executable name only, normalized without a trailing .exe (for example, photoshop).</summary>
     public string ProcessName { get; set; } = "";
 
+    /// <summary>
+    /// Optional case-insensitive substring of the foreground window title. This scopes a rule
+    /// to a document, meeting, presentation, or workspace without inspecting its contents.
+    /// </summary>
+    public string? WindowTitleContains { get; set; }
+
     public string Action { get; set; } = ApplicationComfortActions.RestoreNativeDisplay;
     public bool IsEnabled { get; set; } = true;
 
     public ApplicationComfortRule Clone() => new()
     {
         ProcessName = ProcessName,
+        WindowTitleContains = WindowTitleContains,
         Action = Action,
         IsEnabled = IsEnabled,
     };
@@ -53,15 +60,23 @@ public static class ApplicationComfortRules
 
     public static ApplicationComfortRule? FindForegroundRule(
         IEnumerable<ApplicationComfortRule> rules,
-        string? foregroundProcessName)
+        string? foregroundProcessName,
+        string? foregroundWindowTitle = null)
     {
         ArgumentNullException.ThrowIfNull(rules);
         if (!TryNormalizeProcessName(foregroundProcessName, out string processName))
             return null;
 
-        return rules.FirstOrDefault(rule => rule.IsEnabled
+        // A title-scoped rule is more specific than a process-wide rule. This lets users retain
+        // a sensible default while overriding it for a named meeting or document.
+        return rules.Where(rule => rule.IsEnabled
             && ApplicationComfortActions.IsSupported(rule.Action)
             && TryNormalizeProcessName(rule.ProcessName, out string configuredProcessName)
-            && string.Equals(configuredProcessName, processName, StringComparison.Ordinal));
+            && string.Equals(configuredProcessName, processName, StringComparison.Ordinal)
+            && (string.IsNullOrWhiteSpace(rule.WindowTitleContains)
+                || (!string.IsNullOrWhiteSpace(foregroundWindowTitle)
+                    && foregroundWindowTitle.Contains(rule.WindowTitleContains.Trim(), StringComparison.OrdinalIgnoreCase))))
+            .OrderByDescending(rule => !string.IsNullOrWhiteSpace(rule.WindowTitleContains))
+            .FirstOrDefault();
     }
 }

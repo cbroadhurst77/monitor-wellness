@@ -35,6 +35,7 @@ public static class DiagnosticBundleService
         report.AppendLine(CultureInfo.InvariantCulture, $"Operating system: {Environment.OSVersion}");
         report.AppendLine(CultureInfo.InvariantCulture, $"Process architecture: {RuntimeInformation.ProcessArchitecture}");
         report.AppendLine(CultureInfo.InvariantCulture, $"HDR enabled: {HdrDetector.IsAnyDisplayHdrEnabled()}");
+        report.AppendLine(CultureInfo.InvariantCulture, $"Ambient-light sensor available: {AmbientLightSensor.IsAvailable}");
         report.AppendLine();
         report.AppendLine("Active monitors:");
         foreach (MonitorInfo monitor in MonitorEnumerator.GetActiveMonitors())
@@ -44,6 +45,9 @@ public static class DiagnosticBundleService
         report.AppendLine("DDC/CI brightness capability (read-only probe):");
         foreach (DdcCiBrightnessCapability capability in DdcCiBrightnessProbe.GetCapabilities())
             report.AppendLine(CultureInfo.InvariantCulture, $"- {capability.DeviceName}; supported={capability.IsSupported}; {capability.Detail}");
+
+        report.AppendLine();
+        report.AppendLine("The Display Capability Passport is intentionally not included because it depends on personal approval/quarantine settings, which diagnostic bundles exclude for privacy.");
         return report.ToString();
     }
 

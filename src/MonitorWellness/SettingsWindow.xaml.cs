@@ -301,6 +301,23 @@ public partial class SettingsWindow : Window
         DeepNightColorBox.Text = source.DeepNightOverlayColorHex;
     }
 
+    private void PreviewBuiltInComfortPlanButton_Click(object sender, RoutedEventArgs e)
+    {
+        string? plan = (BuiltInComfortPlanComboBox.SelectedItem as ComboBoxItem)?.Tag as string;
+        if (string.IsNullOrWhiteSpace(plan))
+            return;
+
+        AppSettings preview = _settings.Clone();
+        if (!SensoryComfortPlans.Apply(plan, preview))
+            return;
+
+        // This only updates the settings-window draft controls. Save remains the explicit
+        // commit boundary; Cancel abandons the preview and App reapplies the real schedule.
+        LoadPreferencesFrom(preview);
+        UpdateSliderLabels();
+        PreviewDay();
+    }
+
     private void SelectMigraineResponsePlan(string plan)
     {
         foreach (ComboBoxItem item in MigraineDefaultPlanComboBox.Items.OfType<ComboBoxItem>())
@@ -1126,6 +1143,7 @@ public partial class SettingsWindow : Window
     {
         public required Grid Container { get; init; }
         public required TextBox ProcessNameBox { get; init; }
+        public required TextBox WindowTitleBox { get; init; }
         public required CheckBox EnabledBox { get; init; }
     }
 
@@ -1154,6 +1172,7 @@ public partial class SettingsWindow : Window
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var enabled = new CheckBox
@@ -1175,6 +1194,16 @@ public partial class SettingsWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(processName, "Application executable name");
         Grid.SetColumn(processName, 1);
 
+        var windowTitle = new TextBox
+        {
+            Text = rule.WindowTitleContains ?? "",
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+            ToolTip = "Optional window-title words, e.g. Presentation or Teams meeting.",
+        };
+        System.Windows.Automation.AutomationProperties.SetName(windowTitle, "Optional application window title condition");
+        Grid.SetColumn(windowTitle, 2);
+
         var remove = new System.Windows.Controls.Button
         {
             Content = "Remove",
@@ -1182,9 +1211,9 @@ public partial class SettingsWindow : Window
             Margin = new Thickness(8, 0, 0, 0),
         };
         System.Windows.Automation.AutomationProperties.SetName(remove, "Remove application comfort rule");
-        Grid.SetColumn(remove, 2);
+        Grid.SetColumn(remove, 3);
 
-        var row = new ApplicationRuleRow { Container = grid, ProcessNameBox = processName, EnabledBox = enabled };
+        var row = new ApplicationRuleRow { Container = grid, ProcessNameBox = processName, WindowTitleBox = windowTitle, EnabledBox = enabled };
         remove.Click += (_, _) =>
         {
             ApplicationRulesList.Children.Remove(grid);
@@ -1193,6 +1222,7 @@ public partial class SettingsWindow : Window
 
         grid.Children.Add(enabled);
         grid.Children.Add(processName);
+        grid.Children.Add(windowTitle);
         grid.Children.Add(remove);
         ApplicationRulesList.Children.Add(grid);
         _applicationRuleRows.Add(row);
@@ -1561,6 +1591,7 @@ public partial class SettingsWindow : Window
             applicationRules.Add(new ApplicationComfortRule
             {
                 ProcessName = processName,
+                WindowTitleContains = string.IsNullOrWhiteSpace(row.WindowTitleBox.Text) ? null : row.WindowTitleBox.Text.Trim(),
                 Action = ApplicationComfortActions.RestoreNativeDisplay,
                 IsEnabled = row.EnabledBox.IsChecked == true,
             });

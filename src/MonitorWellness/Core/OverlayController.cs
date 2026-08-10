@@ -12,7 +12,9 @@ namespace MonitorWellness.Core;
 /// </summary>
 public sealed class OverlayController : IDisposable, IOverlayTarget
 {
+    private static readonly TimeSpan TopologyRefreshDebounce = TimeSpan.FromMilliseconds(250);
     private readonly Dictionary<string, OverlayWindow> _windows = new();
+    private DispatcherTimer? _topologyRefreshTimer;
     private bool _disposed;
 
     public OverlayController()
@@ -32,9 +34,29 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         // proactively rather than waiting to reproduce a crash first).
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
-            dispatcher.Invoke(RebuildWindows);
+            dispatcher.BeginInvoke(ScheduleTopologyRefresh);
         else
-            RebuildWindows();
+            ScheduleTopologyRefresh();
+    }
+
+    /// <summary>
+    /// Display settings commonly arrive in a short burst while a dock, driver, or DPI setting
+    /// settles. Rebuilding a topmost overlay for every notification can be perceived as a
+    /// flash, so one quiet, delayed rebuild replaces the whole burst.
+    /// </summary>
+    private void ScheduleTopologyRefresh()
+    {
+        _topologyRefreshTimer ??= new DispatcherTimer { Interval = TopologyRefreshDebounce };
+        _topologyRefreshTimer.Tick -= OnTopologyRefreshTimerTick;
+        _topologyRefreshTimer.Tick += OnTopologyRefreshTimerTick;
+        _topologyRefreshTimer.Stop();
+        _topologyRefreshTimer.Start();
+    }
+
+    private void OnTopologyRefreshTimerTick(object? sender, EventArgs e)
+    {
+        _topologyRefreshTimer?.Stop();
+        RebuildWindows();
     }
 
     private void RebuildWindows()
@@ -151,6 +173,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         _disposed = true;
 
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _topologyRefreshTimer?.Stop();
         foreach (var window in _windows.Values)
             window.Close();
         _windows.Clear();

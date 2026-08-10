@@ -12,7 +12,15 @@ public static class ForegroundApplicationDetector
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr window, [Out] char[] text, int maximumCount);
+
+    public sealed record ForegroundApplicationInfo(string ProcessName, string WindowTitle);
+
     public static string? TryGetForegroundProcessName()
+        => TryGetForegroundApplication()?.ProcessName;
+
+    public static ForegroundApplicationInfo? TryGetForegroundApplication()
     {
         try
         {
@@ -21,7 +29,9 @@ public static class ForegroundApplicationDetector
                 return null;
 
             using Process process = Process.GetProcessById((int)processId);
-            return process.ProcessName;
+            var titleBuffer = new char[1024];
+            _ = GetWindowText(window, titleBuffer, titleBuffer.Length);
+            return new ForegroundApplicationInfo(process.ProcessName, new string(titleBuffer).TrimEnd('\0'));
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {

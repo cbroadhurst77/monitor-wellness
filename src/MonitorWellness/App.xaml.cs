@@ -52,7 +52,7 @@ public partial class App : Application
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
     private DateTime? _pauseUntilUtc;
-    private string? _lastForegroundProcessName;
+    private string? _lastForegroundApplicationContext;
     private string? _activeNativeDisplayRuleProcessName;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
@@ -280,6 +280,7 @@ public partial class App : Application
         // level as everyday actions (Settings, Migraine Mode) — shortens the list a first-time
         // user has to scan. See MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P2).
         var diagnosticsMenu = new ToolStripMenuItem("&Diagnostics");
+        diagnosticsMenu.DropDownItems.Add("Display Capability Passport...", null, (_, _) => ShowDisplayCapabilityWindow());
         diagnosticsMenu.DropDownItems.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
         diagnosticsMenu.DropDownItems.Add("Export Diagnostic Bundle...", null, (_, _) => ExportDiagnosticBundle());
         diagnosticsMenu.DropDownItems.Add("Open Logs Folder", null, (_, _) => OpenLogsFolder());
@@ -371,6 +372,13 @@ public partial class App : Application
     private static void ShowTroubleshootingWindow()
     {
         var window = new TroubleshootingWindow();
+        window.Show();
+        window.Activate();
+    }
+
+    private void ShowDisplayCapabilityWindow()
+    {
+        var window = new DisplayCapabilityWindow(_settings);
         window.Show();
         window.Activate();
     }
@@ -877,9 +885,11 @@ public partial class App : Application
         if (_migraine?.SuspendsNormalSchedule == true || _settingsPreviewActive || _pauseUntilUtc.HasValue)
             return; // migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now
 
+        ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
         ApplicationComfortRule? applicationRule = ApplicationComfortRules.FindForegroundRule(
             _settings.ApplicationComfortRules,
-            ForegroundApplicationDetector.TryGetForegroundProcessName());
+            foregroundApplication?.ProcessName,
+            foregroundApplication?.WindowTitle);
         if (applicationRule?.Action == ApplicationComfortActions.RestoreNativeDisplay)
         {
             ActivateNativeDisplayApplicationRule(applicationRule);
@@ -945,11 +955,14 @@ public partial class App : Application
         _applicationRuleTimer = new DispatcherTimer { Interval = ApplicationRulePollInterval };
         _applicationRuleTimer.Tick += (_, _) =>
         {
-            string? foregroundProcessName = ForegroundApplicationDetector.TryGetForegroundProcessName();
-            if (string.Equals(_lastForegroundProcessName, foregroundProcessName, StringComparison.OrdinalIgnoreCase))
+            ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
+            string? context = foregroundApplication is null
+                ? null
+                : $"{foregroundApplication.ProcessName}\u001f{foregroundApplication.WindowTitle}";
+            if (string.Equals(_lastForegroundApplicationContext, context, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            _lastForegroundProcessName = foregroundProcessName;
+            _lastForegroundApplicationContext = context;
             RunScheduleTick();
         };
         _applicationRuleTimer.Start();

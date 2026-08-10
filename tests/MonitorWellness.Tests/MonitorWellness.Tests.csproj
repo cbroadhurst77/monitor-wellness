@@ -7,8 +7,9 @@
          and System.Windows.Threading.DispatcherTimer directly (not just its now-fakeable
          GammaControllerManager/OverlayController dependencies, see HardwareTargets.cs),
          so testing it at all requires the Windows Desktop runtime here too. -->
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -45,15 +46,19 @@
     <Compile Include="..\..\src\MonitorWellness\Core\HistoryStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\FullscreenHeuristic.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightAdapter.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSensor.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AppSettings.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AppSettingsValidator.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\BrightnessSafety.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessMath.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\DdcCiBrightnessProbe.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MonitorEnumerator.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessSafety.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ApplicationComfortRule.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MigraineResponsePlans.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\SensoryComfortPlans.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSmoother.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\DisplayCapabilityReport.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderPolicy.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />

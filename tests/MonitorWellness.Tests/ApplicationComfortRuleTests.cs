@@ -40,4 +40,33 @@ public class ApplicationComfortRuleTests
 
         Assert.Null(ApplicationComfortRules.FindForegroundRule(new[] { rule }, "Photoshop"));
     }
+
+    [Fact]
+    public void RuleWithWindowTitle_MatchesOnlyItsNamedWorkspace()
+    {
+        var rule = new ApplicationComfortRule
+        {
+            ProcessName = "powerpnt",
+            WindowTitleContains = "Quarterly review",
+        };
+
+        Assert.NotNull(ApplicationComfortRules.FindForegroundRule(new[] { rule }, "POWERPNT.EXE", "Quarterly Review - PowerPoint"));
+        Assert.Null(ApplicationComfortRules.FindForegroundRule(new[] { rule }, "POWERPNT.EXE", "Team planning - PowerPoint"));
+    }
+
+    [Fact]
+    public void TitleScopedRule_TakesPrecedenceOverProcessWideRule()
+    {
+        var generic = new ApplicationComfortRule { ProcessName = "teams" };
+        var meeting = new ApplicationComfortRule { ProcessName = "teams", WindowTitleContains = "Quarterly review" };
+
+        ApplicationComfortRule? matched = ApplicationComfortRules.FindForegroundRule(
+            new[] { generic, meeting }, "teams.exe", "Quarterly review - Microsoft Teams");
+
+        Assert.Same(meeting, matched);
+        Assert.True(AppSettingsValidator.TryValidate(new AppSettings
+        {
+            ApplicationComfortRules = new List<ApplicationComfortRule> { generic, meeting },
+        }, out _));
+    }
 }
