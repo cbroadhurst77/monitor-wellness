@@ -69,4 +69,21 @@ public class ApplicationComfortRuleTests
             ApplicationComfortRules = new List<ApplicationComfortRule> { generic, meeting },
         }, out _));
     }
+
+    [Fact]
+    public void ComfortPlanRule_IsMatchedAndValidated()
+    {
+        var rule = new ApplicationComfortRule
+        {
+            ProcessName = "winword",
+            Action = ApplicationComfortActions.ApplySensoryComfortPlan,
+            ComfortPlanName = SensoryComfortPlans.Reading,
+        };
+
+        Assert.Same(rule, ApplicationComfortRules.FindForegroundRule(new[] { rule }, "winword.exe"));
+        Assert.True(AppSettingsValidator.TryValidate(new AppSettings
+        {
+            ApplicationComfortRules = new List<ApplicationComfortRule> { rule },
+        }, out _));
+    }
 }

@@ -50,8 +50,9 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - Optional **hardware brightness** for compatible external displays: every monitor must pass
   a reversible test first; approval follows its physical Windows device identity, and a failed
   command automatically quarantines the monitor and returns to the safer overlay fallback
-- **Application-aware comfort rules**: restore native colour, brightness and contrast while a
-  selected colour-critical editor, game, or media app is foreground, then resume safely
+- **Application-aware comfort rules**: either restore the native display or temporarily apply
+  a built-in comfort plan while a selected editor, game, meeting, document, or media app is
+  foreground, then safely resume the saved schedule
 - Ambient-light compensation is optional, sensor-only, and rate-limited so changes in room
   lighting adapt gradually; per-monitor dim and Kelvin matching adjustments preview live
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
@@ -94,7 +95,7 @@ utility and turn off all but one.
 
 v0.2.3. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (204 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (207 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not

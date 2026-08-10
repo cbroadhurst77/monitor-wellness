@@ -29,4 +29,16 @@ public class SensoryComfortPlansTests
         Assert.False(applied);
         Assert.Equal(0.91, settings.DayBrightness);
     }
+
+    [Fact]
+    public void TryGetSchedule_ReturnsTemporaryColourCriticalValues()
+    {
+        bool found = SensoryComfortPlans.TryGetSchedule(SensoryComfortPlans.ColourCritical, out SensoryComfortSchedule schedule);
+
+        Assert.True(found);
+        Assert.Equal(6500, schedule.DayKelvin);
+        Assert.Equal(6500, schedule.NightKelvin);
+        Assert.Equal(1.0, schedule.DayBrightness);
+        Assert.Equal(1.0, schedule.DeepNightBrightness);
+    }
 }

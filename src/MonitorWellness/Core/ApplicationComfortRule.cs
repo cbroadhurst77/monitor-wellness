@@ -9,8 +9,15 @@ public static class ApplicationComfortActions
     /// </summary>
     public const string RestoreNativeDisplay = "RestoreNativeDisplay";
 
+    /// <summary>
+    /// Applies a named built-in comfort plan while the rule is matched, without changing the
+    /// user's saved schedule. The normal schedule resumes as soon as the app loses focus.
+    /// </summary>
+    public const string ApplySensoryComfortPlan = "ApplySensoryComfortPlan";
+
     public static bool IsSupported(string? action) =>
-        string.Equals(action, RestoreNativeDisplay, StringComparison.Ordinal);
+        string.Equals(action, RestoreNativeDisplay, StringComparison.Ordinal)
+        || string.Equals(action, ApplySensoryComfortPlan, StringComparison.Ordinal);
 }
 
 /// <summary>A local, user-created foreground-application comfort rule.</summary>
@@ -26,6 +33,10 @@ public sealed class ApplicationComfortRule
     public string? WindowTitleContains { get; set; }
 
     public string Action { get; set; } = ApplicationComfortActions.RestoreNativeDisplay;
+
+    /// <summary>Required only for <see cref="ApplicationComfortActions.ApplySensoryComfortPlan"/>.</summary>
+    public string? ComfortPlanName { get; set; }
+
     public bool IsEnabled { get; set; } = true;
 
     public ApplicationComfortRule Clone() => new()
@@ -33,6 +44,7 @@ public sealed class ApplicationComfortRule
         ProcessName = ProcessName,
         WindowTitleContains = WindowTitleContains,
         Action = Action,
+        ComfortPlanName = ComfortPlanName,
         IsEnabled = IsEnabled,
     };
 }

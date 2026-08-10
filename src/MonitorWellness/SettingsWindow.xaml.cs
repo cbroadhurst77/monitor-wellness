@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using MonitorWellness.Core;
 using CheckBox = System.Windows.Controls.CheckBox;
+using ComboBox = System.Windows.Controls.ComboBox;
 using TextBox = System.Windows.Controls.TextBox;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
@@ -1144,6 +1145,8 @@ public partial class SettingsWindow : Window
         public required Grid Container { get; init; }
         public required TextBox ProcessNameBox { get; init; }
         public required TextBox WindowTitleBox { get; init; }
+        public required ComboBox ActionBox { get; init; }
+        public required ComboBox ComfortPlanBox { get; init; }
         public required CheckBox EnabledBox { get; init; }
     }
 
@@ -1170,6 +1173,8 @@ public partial class SettingsWindow : Window
     private ApplicationRuleRow AddApplicationRuleRow(ApplicationComfortRule rule)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1213,7 +1218,62 @@ public partial class SettingsWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(remove, "Remove application comfort rule");
         Grid.SetColumn(remove, 3);
 
-        var row = new ApplicationRuleRow { Container = grid, ProcessNameBox = processName, WindowTitleBox = windowTitle, EnabledBox = enabled };
+        var action = new ComboBox
+        {
+            MinWidth = 164,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        action.Items.Add(new ComboBoxItem { Content = "Restore native display", Tag = ApplicationComfortActions.RestoreNativeDisplay });
+        action.Items.Add(new ComboBoxItem { Content = "Use comfort plan", Tag = ApplicationComfortActions.ApplySensoryComfortPlan });
+        action.SelectedItem = action.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
+            string.Equals(item.Tag as string, rule.Action, StringComparison.Ordinal))
+            ?? action.Items.OfType<ComboBoxItem>().First();
+        System.Windows.Automation.AutomationProperties.SetName(action, "Application comfort action");
+
+        var comfortPlan = new ComboBox
+        {
+            MinWidth = 142,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        foreach (string plan in new[] { SensoryComfortPlans.Balanced, SensoryComfortPlans.Reading, SensoryComfortPlans.ColourCritical, SensoryComfortPlans.EarlySensitivity, SensoryComfortPlans.Recovery })
+            comfortPlan.Items.Add(new ComboBoxItem { Content = plan, Tag = plan });
+        comfortPlan.SelectedItem = comfortPlan.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
+            string.Equals(item.Tag as string, rule.ComfortPlanName, StringComparison.Ordinal))
+            ?? comfortPlan.Items.OfType<ComboBoxItem>().First();
+        System.Windows.Automation.AutomationProperties.SetName(comfortPlan, "Temporary sensory comfort plan");
+
+        var configuration = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        configuration.Children.Add(new TextBlock { Text = "When matched:", VerticalAlignment = VerticalAlignment.Center });
+        configuration.Children.Add(action);
+        configuration.Children.Add(comfortPlan);
+        Grid.SetRow(configuration, 1);
+        Grid.SetColumn(configuration, 1);
+        Grid.SetColumnSpan(configuration, 2);
+
+        void UpdateComfortPlanAvailability()
+        {
+            bool usesComfortPlan = string.Equals((action.SelectedItem as ComboBoxItem)?.Tag as string,
+                ApplicationComfortActions.ApplySensoryComfortPlan, StringComparison.Ordinal);
+            comfortPlan.IsEnabled = usesComfortPlan;
+            comfortPlan.Opacity = usesComfortPlan ? 1.0 : 0.55;
+        }
+        action.SelectionChanged += (_, _) => UpdateComfortPlanAvailability();
+        UpdateComfortPlanAvailability();
+
+        var row = new ApplicationRuleRow
+        {
+            Container = grid,
+            ProcessNameBox = processName,
+            WindowTitleBox = windowTitle,
+            ActionBox = action,
+            ComfortPlanBox = comfortPlan,
+            EnabledBox = enabled,
+        };
         remove.Click += (_, _) =>
         {
             ApplicationRulesList.Children.Remove(grid);
@@ -1224,6 +1284,7 @@ public partial class SettingsWindow : Window
         grid.Children.Add(processName);
         grid.Children.Add(windowTitle);
         grid.Children.Add(remove);
+        grid.Children.Add(configuration);
         ApplicationRulesList.Children.Add(grid);
         _applicationRuleRows.Add(row);
         return row;
@@ -1574,7 +1635,7 @@ public partial class SettingsWindow : Window
         }
 
         var applicationRules = new List<ApplicationComfortRule>();
-        var configuredProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var configuredRuleContexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (ApplicationRuleRow row in _applicationRuleRows)
         {
             if (!ApplicationComfortRules.TryNormalizeProcessName(row.ProcessNameBox.Text, out string processName))
@@ -1582,17 +1643,23 @@ public partial class SettingsWindow : Window
                 error = "Application rules need an executable name only, e.g. photoshop.exe or vlc.";
                 return false;
             }
-            if (!configuredProcesses.Add(processName))
+            string? windowTitleContains = string.IsNullOrWhiteSpace(row.WindowTitleBox.Text) ? null : row.WindowTitleBox.Text.Trim();
+            if (!configuredRuleContexts.Add($"{processName}\u001f{windowTitleContains ?? ""}"))
             {
-                error = $"There is already an application rule for {processName}.";
+                error = $"There is already an application rule for {processName} with the same window-title condition.";
                 return false;
             }
 
             applicationRules.Add(new ApplicationComfortRule
             {
                 ProcessName = processName,
-                WindowTitleContains = string.IsNullOrWhiteSpace(row.WindowTitleBox.Text) ? null : row.WindowTitleBox.Text.Trim(),
-                Action = ApplicationComfortActions.RestoreNativeDisplay,
+                WindowTitleContains = windowTitleContains,
+                Action = (row.ActionBox.SelectedItem as ComboBoxItem)?.Tag as string
+                    ?? ApplicationComfortActions.RestoreNativeDisplay,
+                ComfortPlanName = string.Equals((row.ActionBox.SelectedItem as ComboBoxItem)?.Tag as string,
+                    ApplicationComfortActions.ApplySensoryComfortPlan, StringComparison.Ordinal)
+                    ? (row.ComfortPlanBox.SelectedItem as ComboBoxItem)?.Tag as string
+                    : null,
                 IsEnabled = row.EnabledBox.IsChecked == true,
             });
         }

@@ -8,6 +8,11 @@ recent work.
 
 ## Unreleased
 
+### Added
+- Application-aware comfort rules can now apply a temporary built-in comfort plan while a
+  chosen app or title-matched window is in the foreground. This does not save or overwrite the
+  person's normal schedule; switching away restores it automatically.
+
 ## 0.2.3 — Sensory safety and comfort update
 
 ### Added

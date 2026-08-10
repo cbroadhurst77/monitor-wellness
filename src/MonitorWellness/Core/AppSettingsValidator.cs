@@ -115,9 +115,13 @@ public static class AppSettingsValidator
             if (rule is null || !ApplicationComfortRules.TryNormalizeProcessName(rule.ProcessName, out string normalized)
                 || !ApplicationComfortActions.IsSupported(rule.Action)
                 || rule.WindowTitleContains?.Length > 200
-                || rule.WindowTitleContains?.Any(char.IsControl) == true)
+                || rule.WindowTitleContains?.Any(char.IsControl) == true
+                || (string.Equals(rule.Action, ApplicationComfortActions.ApplySensoryComfortPlan, StringComparison.Ordinal)
+                    && !SensoryComfortPlans.IsSupported(rule.ComfortPlanName))
+                || (string.Equals(rule.Action, ApplicationComfortActions.RestoreNativeDisplay, StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(rule.ComfortPlanName)))
             {
-                return Invalid("Application comfort rules must use a valid executable name, optional safe window-title condition, and supported action.", out error);
+                return Invalid("Application comfort rules must use a valid executable name, optional safe window-title condition, and a complete supported action.", out error);
             }
             string titleCondition = rule.WindowTitleContains?.Trim() ?? "";
             if (!ruleContexts.Add($"{normalized}\u001f{titleCondition}"))

@@ -54,6 +54,7 @@ public partial class App : Application
     private DateTime? _pauseUntilUtc;
     private string? _lastForegroundApplicationContext;
     private string? _activeNativeDisplayRuleProcessName;
+    private string? _activeComfortPlanRuleDescription;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -139,7 +140,7 @@ public partial class App : Application
 
         _gammaManager = new GammaControllerManager();
         _overlay = new OverlayController();
-        _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, ComputeScheduleTarget, FullscreenDetector.IsForegroundWindowLikelyFullscreen);
+        _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, () => ComputeScheduleTarget(), FullscreenDetector.IsForegroundWindowLikelyFullscreen);
         _migraine.StateChanged += OnMigraineStateChanged;
         _migraine.PossibleFullscreenConflict += () => _trayIcon?.ShowBalloonTip(
             10_000,
@@ -760,6 +761,8 @@ public partial class App : Application
 
         if (_pauseUntilUtc is DateTime pauseUntil)
             return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
+        if (_activeComfortPlanRuleDescription is not null)
+            return $"Currently: {_activeComfortPlanRuleDescription}.";
         if (_activeNativeDisplayRuleProcessName is not null)
             return $"Currently: Native display restored for {_activeNativeDisplayRuleProcessName}.";
 
@@ -779,11 +782,16 @@ public partial class App : Application
     /// own color shifts from black toward DeepNightOverlayColorHex, approximating the extra
     /// warmth research supports close to bedtime that gamma ramp can't reach on its own.
     /// </summary>
-    private (int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, System.Windows.Media.Color DimColor) ComputeScheduleTarget()
+    private (int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, System.Windows.Media.Color DimColor) ComputeScheduleTarget(SensoryComfortSchedule? scheduleOverride = null)
     {
+        int dayKelvin = scheduleOverride?.DayKelvin ?? _settings.DayKelvin;
+        int nightKelvin = scheduleOverride?.NightKelvin ?? _settings.NightKelvin;
+        double dayBrightness = scheduleOverride?.DayBrightness ?? _settings.DayBrightness;
+        double nightBrightnessSetting = scheduleOverride?.NightBrightness ?? _settings.NightBrightness;
+        double deepNightBrightness = scheduleOverride?.DeepNightBrightness ?? _settings.DeepNightBrightness;
         double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
-        int kelvin = ScheduleCurve.GetTargetKelvin(elevation, _settings.DayKelvin, _settings.NightKelvin);
-        double nightBrightness = ScheduleCurve.GetTargetBrightness(elevation, _settings.DayBrightness, _settings.NightBrightness);
+        int kelvin = ScheduleCurve.GetTargetKelvin(elevation, dayKelvin, nightKelvin);
+        double nightBrightness = ScheduleCurve.GetTargetBrightness(elevation, dayBrightness, nightBrightnessSetting);
 
         double deepNightFactor = ScheduleCurve.GetDeepNightFactor(elevation);
         if (!string.IsNullOrWhiteSpace(_settings.BedtimeLocal) && TimeSpan.TryParse(_settings.BedtimeLocal, out var bedtime))
@@ -791,7 +799,7 @@ public partial class App : Application
             double bedtimeFactor = ScheduleCurve.GetBedtimeFactor(DateTime.Now, bedtime);
             deepNightFactor = Math.Max(deepNightFactor, bedtimeFactor);
         }
-        double globalBrightness = Lerp(nightBrightness, _settings.DeepNightBrightness, deepNightFactor);
+        double globalBrightness = Lerp(nightBrightness, deepNightBrightness, deepNightFactor);
 
         if (_settings.MatchAmbientLight)
         {
@@ -892,6 +900,7 @@ public partial class App : Application
             foregroundApplication?.WindowTitle);
         if (applicationRule?.Action == ApplicationComfortActions.RestoreNativeDisplay)
         {
+            _activeComfortPlanRuleDescription = null;
             ActivateNativeDisplayApplicationRule(applicationRule);
             return;
         }
@@ -902,7 +911,23 @@ public partial class App : Application
             _activeNativeDisplayRuleProcessName = null;
         }
 
-        var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget();
+        SensoryComfortSchedule? scheduleOverride = null;
+        if (applicationRule?.Action == ApplicationComfortActions.ApplySensoryComfortPlan
+            && SensoryComfortPlans.TryGetSchedule(applicationRule.ComfortPlanName, out SensoryComfortSchedule planSchedule))
+        {
+            scheduleOverride = planSchedule;
+            string description = $"{applicationRule.ComfortPlanName} comfort plan for {applicationRule.ProcessName}";
+            if (!string.Equals(_activeComfortPlanRuleDescription, description, StringComparison.Ordinal))
+                DebugLog.Write($"Application comfort rule active: {description}.");
+            _activeComfortPlanRuleDescription = description;
+        }
+        else if (_activeComfortPlanRuleDescription is not null)
+        {
+            DebugLog.Write($"Application comfort rule ended for {_activeComfortPlanRuleDescription}; resuming the saved schedule.");
+            _activeComfortPlanRuleDescription = null;
+        }
+
+        var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget(scheduleOverride);
 
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
         {

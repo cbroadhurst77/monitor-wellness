@@ -77,6 +77,25 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void ComfortPlanApplicationRule_RequiresKnownPlan()
+    {
+        var settings = new AppSettings
+        {
+            ApplicationComfortRules = new List<ApplicationComfortRule>
+            {
+                new()
+                {
+                    ProcessName = "winword",
+                    Action = ApplicationComfortActions.ApplySensoryComfortPlan,
+                    ComfortPlanName = "Unknown",
+                },
+            },
+        };
+
+        Assert.False(AppSettingsValidator.TryValidate(settings, out _));
+    }
+
+    [Fact]
     public void BrightnessBelowSafetyFloor_IsRejected()
     {
         var settings = new AppSettings { DayBrightness = AppSettingsValidator.MinimumSafeBrightness - 0.01 };

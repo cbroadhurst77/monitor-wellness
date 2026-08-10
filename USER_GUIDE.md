@@ -73,8 +73,10 @@ your display identity or reminder behaviour.
 ## App-aware comfort rules
 
 In **Settings → Profiles & History**, add an executable name such as `photoshop.exe` or
-`powerpnt`. While it is in the foreground, the app restores native colour and brightness; the
-normal schedule resumes after you switch away.
+`powerpnt`. For each rule, choose either **Restore native display** (useful for colour-critical
+work) or **Use comfort plan** (for example, Reading while Word is active). A comfort plan is
+temporary: it does not alter saved settings, and the normal schedule resumes after you switch
+away.
 
 An optional window-title phrase narrows a rule to a named meeting, presentation, or document.
 For the same executable, a matching title-specific rule takes precedence over the general rule.
