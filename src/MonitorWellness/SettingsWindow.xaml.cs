@@ -970,6 +970,7 @@ public partial class SettingsWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var label = new TextBlock { Text = ShortDeviceName(deviceName), VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(label, 0);
@@ -1010,11 +1011,23 @@ public partial class SettingsWindow : Window
             Grid.SetColumn(kelvinOffsetBox, 4);
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;
 
+            var testHardwareBrightnessButton = new System.Windows.Controls.Button
+            {
+                Content = "Test HW",
+                Padding = new Thickness(6, 2, 6, 2),
+                Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
+            };
+            System.Windows.Automation.AutomationProperties.SetName(testHardwareBrightnessButton, $"Test hardware brightness for {ShortDeviceName(deviceName)}");
+            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName);
+            Grid.SetColumn(testHardwareBrightnessButton, 5);
+
             row.Children.Add(label);
             row.Children.Add(excludeBox);
             row.Children.Add(colorExcludeBox);
             row.Children.Add(multiplierBox);
             row.Children.Add(kelvinOffsetBox);
+            row.Children.Add(testHardwareBrightnessButton);
             rows.Add(row);
         }
 
@@ -1048,6 +1061,38 @@ public partial class SettingsWindow : Window
     private static string ShortDeviceName(string deviceName) => deviceName[(deviceName.LastIndexOf('\\') + 1)..];
 
     private void IdentifyButton_Click(object sender, RoutedEventArgs e) => _overlay.IdentifyMonitors(TimeSpan.FromSeconds(6));
+
+    private void TestHardwareBrightness(string deviceName)
+    {
+        if (System.Windows.MessageBox.Show(
+                this,
+                $"Monitor Wellness will temporarily reduce {ShortDeviceName(deviceName)}'s physical backlight by a small amount, then restore the exact previous value after at most 10 seconds. This does not enable hardware dimming for the schedule. Continue?",
+                "Test hardware brightness",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information,
+                MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+
+        if (!DdcCiBrightnessProbe.TryOpenTestSession(deviceName, out DdcCiBrightnessTestSession? session, out string error) || session is null)
+        {
+            System.Windows.MessageBox.Show(this, $"Hardware brightness test isn't available: {error}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        using (session)
+        {
+            if (!session.TryDimForTest(out error))
+            {
+                System.Windows.MessageBox.Show(this, $"Hardware brightness test couldn't start: {error}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var dialog = new HardwareBrightnessTestDialog { Owner = this };
+            dialog.ShowDialog();
+            if (dialog.Confirmed)
+                System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. It is still disabled for normal scheduling until you explicitly opt in.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
 
     private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {

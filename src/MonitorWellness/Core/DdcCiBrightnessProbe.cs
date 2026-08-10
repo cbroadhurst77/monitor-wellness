@@ -20,7 +20,7 @@ public static class DdcCiBrightnessProbe
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct PhysicalMonitorNative
+    internal struct PhysicalMonitorNative
     {
         public IntPtr Handle;
 
@@ -39,6 +39,12 @@ public static class DdcCiBrightnessProbe
 
     [DllImport("dxva2.dll", SetLastError = true)]
     private static extern bool GetMonitorCapabilities(IntPtr monitor, out uint capabilities, out uint supportedColorTemperatures);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    private static extern bool GetMonitorBrightness(IntPtr monitor, out uint minimumBrightness, out uint currentBrightness, out uint maximumBrightness);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    private static extern bool SetMonitorBrightness(IntPtr monitor, uint brightness);
 
     [DllImport("dxva2.dll", SetLastError = true)]
     private static extern bool DestroyPhysicalMonitors(uint monitorCount, [In] PhysicalMonitorNative[] physicalMonitors);
@@ -65,23 +71,54 @@ public static class DdcCiBrightnessProbe
         return capabilities;
     }
 
+    /// <summary>
+    /// Opens a compatible monitor for the short, user-requested test only. The returned session
+    /// restores its exact original brightness when disposed and is not used by normal scheduling.
+    /// </summary>
+    public static bool TryOpenTestSession(string deviceName, out DdcCiBrightnessTestSession? session, out string error)
+    {
+        session = null;
+        error = "";
+        Screen? screen = Screen.AllScreens.FirstOrDefault(candidate =>
+            string.Equals(candidate.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+        if (screen is null)
+        {
+            error = "That display is no longer connected.";
+            return false;
+        }
+
+        try
+        {
+            if (!TryOpenPhysicalMonitors(screen, out PhysicalMonitorNative[] physicalMonitors, out error))
+                return false;
+
+            var brightnessHandles = physicalMonitors
+                .Where(physicalMonitor => GetMonitorCapabilities(physicalMonitor.Handle, out uint capabilities, out _)
+                    && (capabilities & MonitorCapabilitiesBrightness) != 0)
+                .Select(physicalMonitor => physicalMonitor.Handle)
+                .ToArray();
+            if (brightnessHandles.Length == 0)
+            {
+                _ = DestroyPhysicalMonitors((uint)physicalMonitors.Length, physicalMonitors);
+                error = "This display does not report DDC/CI brightness support.";
+                return false;
+            }
+
+            session = new DdcCiBrightnessTestSession(physicalMonitors, brightnessHandles);
+            return true;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or SEHException)
+        {
+            error = "DDC/CI is unavailable on this Windows installation.";
+            DebugLog.Write($"DDC/CI test session unavailable for {deviceName}: {ex.Message}");
+            return false;
+        }
+    }
+
     private static DdcCiBrightnessCapability ProbeScreen(Screen screen)
     {
-        var point = new PointNative
-        {
-            X = screen.Bounds.Left + screen.Bounds.Width / 2,
-            Y = screen.Bounds.Top + screen.Bounds.Height / 2,
-        };
-        IntPtr displayMonitor = MonitorFromPoint(point, MonitorDefaultToNearest);
-        if (displayMonitor == IntPtr.Zero)
-            return new DdcCiBrightnessCapability(screen.DeviceName, screen.Primary, false, "Windows did not return a monitor handle.");
-
-        if (!GetNumberOfPhysicalMonitorsFromHMONITOR(displayMonitor, out uint monitorCount) || monitorCount == 0)
-            return new DdcCiBrightnessCapability(screen.DeviceName, screen.Primary, false, "This display does not expose physical-monitor controls.");
-
-        var physicalMonitors = new PhysicalMonitorNative[monitorCount];
-        if (!GetPhysicalMonitorsFromHMONITOR(displayMonitor, monitorCount, physicalMonitors))
-            return new DdcCiBrightnessCapability(screen.DeviceName, screen.Primary, false, "Windows could not open this display's physical-monitor controls.");
+        if (!TryOpenPhysicalMonitors(screen, out PhysicalMonitorNative[] physicalMonitors, out string error))
+            return new DdcCiBrightnessCapability(screen.DeviceName, screen.Primary, false, error);
 
         try
         {
@@ -95,10 +132,126 @@ public static class DdcCiBrightnessProbe
         }
         finally
         {
-            _ = DestroyPhysicalMonitors(monitorCount, physicalMonitors);
+            _ = DestroyPhysicalMonitors((uint)physicalMonitors.Length, physicalMonitors);
         }
     }
+
+    private static bool TryOpenPhysicalMonitors(Screen screen, out PhysicalMonitorNative[] physicalMonitors, out string error)
+    {
+        physicalMonitors = Array.Empty<PhysicalMonitorNative>();
+        error = "";
+        var point = new PointNative
+        {
+            X = screen.Bounds.Left + screen.Bounds.Width / 2,
+            Y = screen.Bounds.Top + screen.Bounds.Height / 2,
+        };
+        IntPtr displayMonitor = MonitorFromPoint(point, MonitorDefaultToNearest);
+        if (displayMonitor == IntPtr.Zero)
+        {
+            error = "Windows did not return a monitor handle.";
+            return false;
+        }
+
+        if (!GetNumberOfPhysicalMonitorsFromHMONITOR(displayMonitor, out uint monitorCount) || monitorCount == 0)
+        {
+            error = "This display does not expose physical-monitor controls.";
+            return false;
+        }
+
+        physicalMonitors = new PhysicalMonitorNative[monitorCount];
+        if (GetPhysicalMonitorsFromHMONITOR(displayMonitor, monitorCount, physicalMonitors))
+            return true;
+
+        error = "Windows could not open this display's physical-monitor controls.";
+        physicalMonitors = Array.Empty<PhysicalMonitorNative>();
+        return false;
+    }
+
+    internal static bool TryGetMonitorBrightness(IntPtr monitor, out uint minimum, out uint current, out uint maximum)
+        => GetMonitorBrightness(monitor, out minimum, out current, out maximum);
+
+    internal static bool TrySetMonitorBrightness(IntPtr monitor, uint brightness) => SetMonitorBrightness(monitor, brightness);
+
+    internal static void DestroyPhysicalMonitorHandles(PhysicalMonitorNative[] physicalMonitors)
+        => _ = DestroyPhysicalMonitors((uint)physicalMonitors.Length, physicalMonitors);
 }
 
 /// <summary>Read-only per-display result returned by <see cref="DdcCiBrightnessProbe"/>.</summary>
 public sealed record DdcCiBrightnessCapability(string DeviceName, bool IsPrimary, bool IsSupported, string Detail);
+
+/// <summary>Owns DDC/CI monitor handles for one short, reversible user test.</summary>
+public sealed class DdcCiBrightnessTestSession : IDisposable
+{
+    private sealed record OriginalBrightness(IntPtr Handle, uint Value, uint Minimum, uint Maximum);
+
+    private readonly DdcCiBrightnessProbe.PhysicalMonitorNative[] _physicalMonitors;
+    private readonly IntPtr[] _brightnessHandles;
+    private IReadOnlyList<OriginalBrightness>? _originalBrightness;
+    private bool _disposed;
+
+    internal DdcCiBrightnessTestSession(DdcCiBrightnessProbe.PhysicalMonitorNative[] physicalMonitors, IntPtr[] brightnessHandles)
+    {
+        _physicalMonitors = physicalMonitors;
+        _brightnessHandles = brightnessHandles;
+    }
+
+    /// <summary>Applies a small dim-only change and records exact values for automatic restore.</summary>
+    public bool TryDimForTest(out string error)
+    {
+        error = "";
+        var originalBrightness = new List<OriginalBrightness>();
+        foreach (IntPtr handle in _brightnessHandles)
+        {
+            if (!DdcCiBrightnessProbe.TryGetMonitorBrightness(handle, out uint minimum, out uint current, out uint maximum) || minimum > maximum)
+            {
+                error = "Windows could not read this monitor's current brightness.";
+                return false;
+            }
+
+            double normalizedCurrent = maximum == minimum ? 1.0 : (double)(current - minimum) / (maximum - minimum);
+            if (!HardwareBrightnessMath.TryGetSafeTestBrightness(normalizedCurrent, out _))
+            {
+                error = "This monitor is already too dim for a safe hardware-brightness test. Increase its physical brightness first.";
+                return false;
+            }
+
+            originalBrightness.Add(new OriginalBrightness(handle, current, minimum, maximum));
+        }
+
+        _originalBrightness = originalBrightness;
+        foreach (OriginalBrightness original in originalBrightness)
+        {
+            double normalizedCurrent = original.Maximum == original.Minimum ? 1.0 : (double)(original.Value - original.Minimum) / (original.Maximum - original.Minimum);
+            HardwareBrightnessMath.TryGetSafeTestBrightness(normalizedCurrent, out double testBrightness);
+            if (!DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, HardwareBrightnessMath.ToNativeBrightness(testBrightness, original.Minimum, original.Maximum)))
+            {
+                Restore();
+                error = "Windows could not apply the temporary hardware brightness test.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Restores the exact physical brightness values captured before the test.</summary>
+    public void Restore()
+    {
+        if (_originalBrightness is null)
+            return;
+
+        foreach (OriginalBrightness original in _originalBrightness)
+            _ = DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, original.Value);
+        _originalBrightness = null;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        Restore();
+        DdcCiBrightnessProbe.DestroyPhysicalMonitorHandles(_physicalMonitors);
+    }
+}
