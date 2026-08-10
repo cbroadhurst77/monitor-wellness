@@ -55,6 +55,7 @@ public partial class App : Application
     private string? _lastForegroundApplicationContext;
     private string? _activeNativeDisplayRuleProcessName;
     private string? _activeComfortPlanRuleDescription;
+    private string? _manualComfortPlanName;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -240,6 +241,7 @@ public partial class App : Application
         menu.Items.Add("Start a &20-second focus break", null, (_, _) => ShowBreakFocusWindow());
         _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
+        menu.Items.Add(BuildQuickComfortPlansMenu());
         menu.Items.Add(new ToolStripSeparator());
         bool autoStartCurrentlyRegistered = AutoStartManager.IsRegistered();
         if (_settings.AutoStartEnabled && !autoStartCurrentlyRegistered)
@@ -636,6 +638,11 @@ public partial class App : Application
     private void EmergencyRestoreDisplay()
     {
         DebugLog.Write("Emergency Restore Screen activated");
+        if (_manualComfortPlanName is not null)
+        {
+            DebugLog.Write($"Emergency Restore Screen cleared temporary comfort plan: {_manualComfortPlanName}.");
+            _manualComfortPlanName = null;
+        }
         _migraine?.RestoreImmediately();
         _hardwareBrightness.RestoreAll();
         _overlay?.Clear();
@@ -761,10 +768,12 @@ public partial class App : Application
 
         if (_pauseUntilUtc is DateTime pauseUntil)
             return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
-        if (_activeComfortPlanRuleDescription is not null)
-            return $"Currently: {_activeComfortPlanRuleDescription}.";
         if (_activeNativeDisplayRuleProcessName is not null)
             return $"Currently: Native display restored for {_activeNativeDisplayRuleProcessName}.";
+        if (_manualComfortPlanName is not null)
+            return $"Currently: {_manualComfortPlanName} comfort plan selected temporarily.";
+        if (_activeComfortPlanRuleDescription is not null)
+            return $"Currently: {_activeComfortPlanRuleDescription}.";
 
         double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
         string phase = elevation <= ScheduleCurve.DeepNightThresholdDeg ? "Deep Night mode"
@@ -888,6 +897,60 @@ public partial class App : Application
         RunScheduleTick();
     }
 
+    /// <summary>
+    /// A tray-level, non-persistent way to use the same conservative built-in plans available
+    /// in Settings. This is intentionally separate from saved profiles: it is a quick personal
+    /// comfort choice, and returning to the saved schedule is always one click away.
+    /// </summary>
+    private ToolStripMenuItem BuildQuickComfortPlansMenu()
+    {
+        var menu = new ToolStripMenuItem("Temporary &Comfort Plan");
+        foreach (string plan in new[]
+        {
+            SensoryComfortPlans.Balanced,
+            SensoryComfortPlans.Reading,
+            SensoryComfortPlans.ColourCritical,
+            SensoryComfortPlans.EarlySensitivity,
+            SensoryComfortPlans.Recovery,
+        })
+        {
+            var item = new ToolStripMenuItem(plan) { Tag = plan };
+            item.Click += (_, _) => SelectManualComfortPlan(plan);
+            menu.DropDownItems.Add(item);
+        }
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        menu.DropDownItems.Add("Return to saved schedule", null, (_, _) => ClearManualComfortPlan());
+        menu.DropDownOpening += (_, _) =>
+        {
+            foreach (ToolStripMenuItem item in menu.DropDownItems.OfType<ToolStripMenuItem>())
+            {
+                if (item.Tag is string plan)
+                    item.Checked = string.Equals(plan, _manualComfortPlanName, StringComparison.Ordinal);
+            }
+        };
+        return menu;
+    }
+
+    private void SelectManualComfortPlan(string plan)
+    {
+        if (!SensoryComfortPlans.IsSupported(plan))
+            return;
+
+        _manualComfortPlanName = plan;
+        DebugLog.Write($"Temporary comfort plan selected: {plan}.");
+        RunScheduleTick();
+    }
+
+    private void ClearManualComfortPlan()
+    {
+        if (_manualComfortPlanName is null)
+            return;
+
+        DebugLog.Write($"Temporary comfort plan cleared: {_manualComfortPlanName}.");
+        _manualComfortPlanName = null;
+        RunScheduleTick();
+    }
+
     private void RunScheduleTick()
     {
         if (_migraine?.SuspendsNormalSchedule == true || _settingsPreviewActive || _pauseUntilUtc.HasValue)
@@ -912,7 +975,13 @@ public partial class App : Application
         }
 
         SensoryComfortSchedule? scheduleOverride = null;
-        if (applicationRule?.Action == ApplicationComfortActions.ApplySensoryComfortPlan
+        if (_manualComfortPlanName is not null
+            && SensoryComfortPlans.TryGetSchedule(_manualComfortPlanName, out SensoryComfortSchedule manualPlanSchedule))
+        {
+            scheduleOverride = manualPlanSchedule;
+            _activeComfortPlanRuleDescription = null;
+        }
+        else if (applicationRule?.Action == ApplicationComfortActions.ApplySensoryComfortPlan
             && SensoryComfortPlans.TryGetSchedule(applicationRule.ComfortPlanName, out SensoryComfortSchedule planSchedule))
         {
             scheduleOverride = planSchedule;

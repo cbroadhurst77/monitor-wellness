@@ -12,6 +12,9 @@ recent work.
 - Application-aware comfort rules can now apply a temporary built-in comfort plan while a
   chosen app or title-matched window is in the foreground. This does not save or overwrite the
   person's normal schedule; switching away restores it automatically.
+- The tray menu now offers **Temporary Comfort Plan** for an immediate, non-persistent switch
+  to Balanced, Reading, Colour-critical, Early sensitivity, or Recovery. Emergency Restore
+  clears the temporary plan as part of returning the display to normal.
 
 ## 0.2.3 — Sensory safety and comfort update
 

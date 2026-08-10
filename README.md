@@ -64,8 +64,9 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - **Display Capability Passport** in Diagnostics: a local, read-only explanation of each
   display's physical identity, DDC/CI eligibility, HDR state, and safest brightness backend;
   it deliberately reports PWM, temporal dithering, spectrum, and medical suitability as unknown
-- Built-in, editable sensory comfort plans for balanced work, reading, colour-critical work,
-  early sensitivity, and recovery—comfort starting points, not treatment recommendations
+- Built-in sensory comfort plans for balanced work, reading, colour-critical work, early
+  sensitivity, and recovery—preview them in Settings or choose one temporarily from the tray;
+  comfort starting points, not treatment recommendations
 
 ## A note on how dimming works
 

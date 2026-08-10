@@ -385,7 +385,7 @@
                             <ComboBox x:Name="BuiltInComfortPlanComboBox" Grid.Column="0" Margin="0,0,8,0" SelectedIndex="0" AutomationProperties.Name="Built-in sensory comfort plan">
                                 <ComboBoxItem Tag="Balanced" Content="Balanced — normal day/night comfort"/>
                                 <ComboBoxItem Tag="Reading" Content="Reading — softer daytime contrast"/>
-                                <ComboBoxItem Tag="ColourCritical" Content="Colour-critical — native white and brightness"/>
+                                <ComboBoxItem Tag="ColourCritical" Content="Colour-critical — least-adjusted starting point"/>
                                 <ComboBoxItem Tag="EarlySensitivity" Content="Early sensitivity — gentler starting point"/>
                                 <ComboBoxItem Tag="Recovery" Content="Recovery — lower-stimulation starting point"/>
                             </ComboBox>

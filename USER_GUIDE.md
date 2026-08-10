@@ -17,7 +17,8 @@ it is not a medical device and does not diagnose, treat, or prevent a condition.
 
 Press **Ctrl+Alt+Shift+R** at any time, or choose **Emergency Restore Screen** from the tray
 menu. It clears the app's tint and dimming, restores native gamma and any approved hardware
-brightness, then pauses the schedule for one hour. This is the quickest recovery route.
+brightness, clears any temporary comfort plan, then pauses the schedule for one hour. This is
+the quickest recovery route.
 
 Normal scheduling keeps the primary display at a visible floor. A deliberate 0% live preview
 is different: it asks first, lasts at most 15 seconds, and returns to 20% automatically. Press
@@ -65,6 +66,15 @@ In **Settings → Profiles & History**, use **Built-in comfort plans** to previe
 Reading, Colour-critical, Early sensitivity, or Recovery settings. These are editable starting
 points, not treatment recommendations. Previewing does not save; use **Save** only after you
 have adjusted and accepted the result.
+
+For a quick, non-persistent change, open **tray icon → Temporary Comfort Plan** and select a
+plan. It stays active until you choose **Return to saved schedule**, select a different plan,
+or use Emergency Restore Screen. A matching application rule set to **Restore native display**
+still takes precedence for colour-critical work.
+
+For work that needs an actually unmodified display, use **Restore native display** in an
+application rule or **Pause Schedule**. The Colour-critical plan is a least-adjusted comfort
+starting point, not a substitute for native colour management.
 
 Profiles save colour, brightness, and Migraine Mode choices for quick switching. Location,
 monitor setup, and break reminders stay outside profiles so a profile cannot silently change
