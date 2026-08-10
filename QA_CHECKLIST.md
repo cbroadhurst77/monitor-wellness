@@ -78,8 +78,8 @@ release blocker; anything under "Nice to confirm" is lower priority.
       — confirm gamma/overlay rebuild without a crash and without leaving a stuck tint
       on any screen
 - [ ] Sleep/resume: confirm color and dim state are correctly reapplied on wake
-- [ ] While dimming is active, open/close a notification, Game Bar, and an always-on-top app;
-      confirm the overlay returns above ordinary desktop windows within two seconds
+- [ ] While dimming is active, repeatedly open/close ordinary windows, notifications, Game
+      Bar, and an always-on-top app; confirm the screen never flashes or pulses
 - [ ] Confirm the normal schedule never dims the Windows primary display below its 20% safety
       floor, even with a per-monitor dim multiplier above 1.0
 

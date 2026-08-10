@@ -13,6 +13,9 @@
 
 #define MyAppName "Monitor Wellness"
 #define MyAppVersion "0.2.2"
+#ifndef MyPublishDir
+  #define MyPublishDir "..\publish"
+#endif
 #define MyAppPublisher "Monitor Wellness"
 #define MyAppExeName "MonitorWellness.exe"
 #define MyTaskName "MonitorWellness"
@@ -44,7 +47,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\publish\MonitorWellness.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MyPublishDir}\MonitorWellness.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

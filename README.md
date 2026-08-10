@@ -60,9 +60,7 @@ flicker. If a future version adds direct hardware (DDC/CI) brightness control, t
 opt-in specifically so this flicker-free default isn't lost for anyone who came to this app
 because of light sensitivity.
 
-While a dim overlay is visible, Monitor Wellness also reasserts its always-on-top placement
-every two seconds to recover from notifications, game bars, and other topmost windows. Some
-exclusive-fullscreen, protected-video, and HDR paths remain outside an ordinary desktop
+Some exclusive-fullscreen, protected-video, and HDR paths remain outside an ordinary desktop
 window's control; use Emergency Restore Screen if a display ever becomes difficult to use.
 
 ## Known conflicts with other color-management tools
