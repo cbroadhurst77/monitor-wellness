@@ -41,6 +41,7 @@ public partial class App : Application
     private DispatcherTimer? _timer;
     private DispatcherTimer? _applicationRuleTimer;
     private DispatcherTimer? _breakReminderTimer;
+    private BreakFocusWindow? _breakFocusWindow;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
@@ -235,6 +236,7 @@ public partial class App : Application
         pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
             PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
         menu.Items.Add(pauseMenu);
+        menu.Items.Add("Start a &20-second focus break", null, (_, _) => ShowBreakFocusWindow());
         _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -483,29 +485,42 @@ public partial class App : Application
         _breakReminderTimer = new DispatcherTimer { Interval = interval };
         _breakReminderTimer.Tick += (_, _) =>
         {
-            // Skip while migraine mode is active -- someone already dealing with that doesn't
-            // need an unrelated interruption layered on top. The timer keeps running on its
-            // normal interval rather than resetting, so it resumes nudging once migraine mode
-            // ends rather than needing a full interval to elapse again. Also skip while a
-            // fullscreen app (video, game, screen share) likely owns the screen -- reuses the
-            // same heuristic MigraineModeController already relies on for its own fullscreen check.
+            // Skip while migraine mode is active, a fullscreen app likely owns the screen, or
+            // Windows says the person has stepped away. The timer continues on its regular
+            // cadence so returning from a real break never triggers an immediate catch-up prompt.
             bool migraineActive = _migraine?.IsActive == true;
             bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
-            if (!migraineActive && !likelyFullscreen)
+            TimeSpan idleDuration = migraineActive || likelyFullscreen ? TimeSpan.Zero : UserIdleDetector.GetIdleDuration();
+            BreakReminderDecision decision = BreakReminderPolicy.Decide(migraineActive, likelyFullscreen, idleDuration);
+            if (decision == BreakReminderDecision.Show)
             {
                 DebugLog.Write("BreakReminder: tick fired, showing balloon");
                 _trayIcon?.ShowBalloonTip(
                     8_000,
                     "Monitor Wellness",
-                    "Time for a break — look at something about 20 feet away for 20 seconds (the 20-20-20 rule).",
+                    "Time for a break — look at something about 20 feet away for 20 seconds. Use the tray menu if you'd like a quiet timer.",
                     ToolTipIcon.Info);
             }
             else
             {
-                DebugLog.Write($"BreakReminder: tick fired but skipped (migraineActive={migraineActive}, likelyFullscreen={likelyFullscreen})");
+                DebugLog.Write($"BreakReminder: tick fired but skipped ({decision}, idle={idleDuration.TotalSeconds:F0}s)");
             }
         };
         _breakReminderTimer.Start();
+    }
+
+    private void ShowBreakFocusWindow()
+    {
+        if (_breakFocusWindow is not null)
+        {
+            _breakFocusWindow.Activate();
+            return;
+        }
+
+        _breakFocusWindow = new BreakFocusWindow();
+        _breakFocusWindow.Closed += (_, _) => _breakFocusWindow = null;
+        _breakFocusWindow.Show();
+        _breakFocusWindow.Activate();
     }
 
     /// <summary>
@@ -1010,6 +1025,7 @@ public partial class App : Application
         _timer?.Stop();
         _applicationRuleTimer?.Stop();
         _breakReminderTimer?.Stop();
+        _breakFocusWindow?.Close();
         _pauseTimer?.Stop();
         _startupBalloonTimer?.Stop();
         _hotkey?.Dispose();

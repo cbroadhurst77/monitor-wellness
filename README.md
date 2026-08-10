@@ -57,6 +57,9 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
   once a day at most, checks for a newer release and links to it; never downloads or
   installs anything automatically
+- Optional, idle-aware 20-20-20 break reminders that stay quiet during migraine mode,
+  full-screen work, or after you have stepped away; the tray menu can start a simple,
+  always-dismissible 20-second focus timer
 
 ## A note on how dimming works
 
@@ -85,7 +88,7 @@ utility and turn off all but one.
 
 v0.2.2. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (175 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (195 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not
@@ -94,6 +97,9 @@ architecture decisions, and [EVALUATION.md](EVALUATION.md) for an honest assessm
 engineering maturity and the actual strength of the scientific claims behind the
 color/brightness choices — including where evidence is solid, where it's mixed, and where a
 design choice is a reasonable comfort feature rather than a proven intervention.
+
+Commercial release prerequisites, including code signing, external hardware QA, localisation,
+and enterprise deployment decisions, are tracked in [RELEASE_READINESS.md](RELEASE_READINESS.md).
 
 ## Support
 

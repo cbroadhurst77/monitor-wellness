@@ -128,3 +128,8 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] Export History (CSV) opens cleanly in Excel/a text editor
 - [ ] Profiles: Save As / Load / Delete all work as expected
 - [ ] Break reminder balloon fires on schedule and is skipped during Migraine Mode
+- [ ] Break reminder is also skipped while a full-screen app is foreground and after two or
+      more minutes away from the keyboard; it must not produce an immediate catch-up balloon
+      on return
+- [ ] Start a 20-second focus break from the tray. Confirm the timer is optional, can be
+      dismissed with the button or Escape, and never dims the screen or captures input

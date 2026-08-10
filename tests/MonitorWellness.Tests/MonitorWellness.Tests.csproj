@@ -54,6 +54,7 @@
     <Compile Include="..\..\src\MonitorWellness\Core\ApplicationComfortRule.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MigraineResponsePlans.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSmoother.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderPolicy.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
