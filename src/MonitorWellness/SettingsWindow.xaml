@@ -282,6 +282,14 @@
                         </StackPanel>
                         <TextBlock Text="Color/opacity/contrast changes above preview live too — this is what your screen will look like when migraine mode is triggered. The hotkey/tray toggle still work normally while this window is open." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                         <TextBlock Text="We turn Migraine Mode on instantly, and always fade it back off slowly over about 20 seconds — sudden brightness changes can themselves be uncomfortable, so we designed around that on purpose." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <StackPanel Margin="0,0,0,8">
+                            <Label Content="Hotkey / tray response" Target="{Binding ElementName=MigraineDefaultPlanComboBox}"/>
+                            <ComboBox x:Name="MigraineDefaultPlanComboBox" HorizontalAlignment="Left" MinWidth="260" AutomationProperties.Name="Default migraine comfort response">
+                                <ComboBoxItem Tag="Gentle">Gentle — early light sensitivity</ComboBoxItem>
+                                <ComboBoxItem Tag="Strong">Strong — full configured comfort</ComboBoxItem>
+                            </ComboBox>
+                            <TextBlock Text="This only chooses the default for the hotkey and tray click. The tray menu still lets you choose either response. Both are personal comfort options, not medical treatment." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
                         <StackPanel Margin="0,0,0,4">
                             <TextBlock Text="Turn off automatically after this many minutes"/>
                             <Slider x:Name="MigraineAutoRevertSlider" Minimum="0" Maximum="240" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="MigraineAutoRevertSlider_ValueChanged"

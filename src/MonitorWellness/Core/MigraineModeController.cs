@@ -199,7 +199,7 @@ public sealed class MigraineModeController
     public void Toggle()
     {
         if (IsActive) Deactivate();
-        else Activate();
+        else Activate(MigraineResponsePlans.IsMild(_settings.DefaultMigraineResponsePlan));
     }
 
     /// <summary>

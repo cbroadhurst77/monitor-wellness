@@ -54,6 +54,14 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void InvalidDefaultMigraineResponse_IsRejected()
+    {
+        var settings = new AppSettings { DefaultMigraineResponsePlan = "Unknown" };
+
+        Assert.False(AppSettingsValidator.TryValidate(settings, out _));
+    }
+
+    [Fact]
     public void DuplicateApplicationComfortRules_AreRejected()
     {
         var settings = new AppSettings

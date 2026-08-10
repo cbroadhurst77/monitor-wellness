@@ -78,6 +78,8 @@ release blocker; anything under "Nice to confirm" is lower priority.
 ## Migraine Mode
 
 - [ ] Tray left-click, hotkey, and tray menu all trigger it; visual change is instant
+- [ ] Set the default response to Gentle, then use tray left-click and the global hotkey;
+      confirm both use the gentler response while the tray's explicit Strong command remains full intensity
 - [ ] Deactivation always fades smoothly over ~20s, never abrupt
 - [ ] Auto-revert timer (if set) actually fires
 - [ ] Rating prompt appears after deactivation when both History and the rating prompt

@@ -106,6 +106,19 @@ public class MigraineModeControllerTests
     }
 
     [Fact]
+    public void Toggle_UsesConfiguredDefaultResponsePlan()
+    {
+        var settings = CreateSettings();
+        settings.DefaultMigraineResponsePlan = MigraineResponsePlans.Gentle;
+        var controller = CreateController(settings, new FakeColorTemperatureTarget(), new FakeOverlayTarget());
+
+        controller.Toggle();
+
+        Assert.True(controller.IsActive);
+        Assert.True(controller.IsMild);
+    }
+
+    [Fact]
     public void Activate_WithAutoRevertDisabled_LeavesAutoRevertAtUtcNull()
     {
         var settings = CreateSettings();

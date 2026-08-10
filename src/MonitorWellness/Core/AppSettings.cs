@@ -111,6 +111,13 @@ public sealed class AppSettings
     public double MigraineContrastReduction { get; set; } = 0.15;
 
     /// <summary>
+    /// The response used by the primary migraine hotkey and tray toggle. Gentle is intended
+    /// for early sensitivity; Strong applies the full personally configured comfort settings.
+    /// These are comfort presets, not medical treatment plans.
+    /// </summary>
+    public string DefaultMigraineResponsePlan { get; set; } = MigraineResponsePlans.Strong;
+
+    /// <summary>
     /// GlobalHotkey modifier flags (MOD_CONTROL|MOD_ALT|MOD_SHIFT etc.) for toggling migraine
     /// mode. Default is Ctrl+Alt+Shift+M rather than the old prototype's Ctrl+Alt+M, since
     /// that combination was found to conflict with another app during Week 3 testing.
@@ -234,6 +241,7 @@ public sealed class AppSettings
         MigraineOverlayColorHex = MigraineOverlayColorHex,
         MigraineOverlayOpacity = MigraineOverlayOpacity,
         MigraineContrastReduction = MigraineContrastReduction,
+        DefaultMigraineResponsePlan = DefaultMigraineResponsePlan,
         MigraineHotkeyModifiers = MigraineHotkeyModifiers,
         MigraineHotkeyKey = MigraineHotkeyKey,
         MigraineAutoRevertMinutes = MigraineAutoRevertMinutes,
@@ -274,6 +282,7 @@ public sealed class AppSettings
         MigraineOverlayColorHex = copy.MigraineOverlayColorHex;
         MigraineOverlayOpacity = copy.MigraineOverlayOpacity;
         MigraineContrastReduction = copy.MigraineContrastReduction;
+        DefaultMigraineResponsePlan = copy.DefaultMigraineResponsePlan;
         MigraineHotkeyModifiers = copy.MigraineHotkeyModifiers;
         MigraineHotkeyKey = copy.MigraineHotkeyKey;
         MigraineAutoRevertMinutes = copy.MigraineAutoRevertMinutes;

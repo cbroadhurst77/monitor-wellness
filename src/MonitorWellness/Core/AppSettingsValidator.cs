@@ -38,6 +38,8 @@ public static class AppSettingsValidator
             return Invalid($"Brightness must be between {MinimumSafeBrightness:P0} and 100%; opacity and contrast must be finite and within their supported ranges.", out error);
         if (!IsValidColor(settings.DeepNightOverlayColorHex) || !IsValidColor(settings.MigraineOverlayColorHex))
             return Invalid("Overlay colors must be valid color values.", out error);
+        if (!MigraineResponsePlans.IsSupported(settings.DefaultMigraineResponsePlan))
+            return Invalid("The default migraine response plan is invalid.", out error);
         if (!string.IsNullOrWhiteSpace(settings.BedtimeLocal)
             && (!TimeSpan.TryParse(settings.BedtimeLocal, out TimeSpan bedtime) || bedtime < TimeSpan.Zero || bedtime >= TimeSpan.FromDays(1)))
             return Invalid("Bedtime must be a valid time between 00:00 and 23:59.", out error);

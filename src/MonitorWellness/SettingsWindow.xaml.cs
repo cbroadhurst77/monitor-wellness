@@ -235,7 +235,7 @@ public partial class SettingsWindow : Window
         try
         {
             var events = HistoryStore.Load();
-            var lines = new List<string> { "TimestampUtc,EventType,Mild,DurationSeconds,Rating" };
+            var lines = new List<string> { "TimestampUtc,EventType,GentleResponse,DurationSeconds,Rating" };
             lines.AddRange(events.Select(evt => string.Join(",",
                 evt.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
                 evt.EventType,
@@ -262,7 +262,7 @@ public partial class SettingsWindow : Window
         var summary = HistorySummarizer.Summarize(HistoryStore.Load(), DateTime.UtcNow);
         HistorySummaryText.Text = summary.TotalActivations == 0
             ? "No Migraine Mode activations recorded yet."
-            : $"{summary.TotalActivations} total activation(s) ({summary.FullCount} full, {summary.MildCount} mild) — " +
+            : $"{summary.TotalActivations} total activation(s) ({summary.FullCount} strong, {summary.MildCount} gentle) — " +
               $"{summary.ActivationsLast7Days} in the last 7 days, {summary.ActivationsLast30Days} in the last 30." +
               (summary.AverageDurationMinutes is double avg ? $" Average duration: {avg:F0} min." : "") +
               (summary.PauseCount > 0 ? $" Schedule paused {summary.PauseCount} time(s)." : "") +
@@ -285,6 +285,7 @@ public partial class SettingsWindow : Window
         MigraineColorBox.Text = source.MigraineOverlayColorHex;
         MigraineOpacitySlider.Value = source.MigraineOverlayOpacity;
         MigraineContrastSlider.Value = source.MigraineContrastReduction;
+        SelectMigraineResponsePlan(source.DefaultMigraineResponsePlan);
         MigraineAutoRevertSlider.Value = source.MigraineAutoRevertMinutes;
         PlaySoundCheckBox.IsChecked = source.PlaySoundOnMigraineToggle;
 
@@ -298,6 +299,29 @@ public partial class SettingsWindow : Window
 
         DeepNightBrightnessSlider.Value = source.DeepNightBrightness;
         DeepNightColorBox.Text = source.DeepNightOverlayColorHex;
+    }
+
+    private void SelectMigraineResponsePlan(string plan)
+    {
+        foreach (ComboBoxItem item in MigraineDefaultPlanComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, plan, StringComparison.Ordinal))
+            {
+                MigraineDefaultPlanComboBox.SelectedItem = item;
+                return;
+            }
+        }
+
+        MigraineDefaultPlanComboBox.SelectedIndex = 1; // Strong is the safe backwards-compatible default.
+    }
+
+    private bool TryGetMigraineResponsePlan(out string plan, out string error)
+    {
+        plan = (MigraineDefaultPlanComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+        error = MigraineResponsePlans.IsSupported(plan)
+            ? ""
+            : "Choose a valid default migraine response.";
+        return string.IsNullOrEmpty(error);
     }
 
     /// <summary>
@@ -1321,6 +1345,8 @@ public partial class SettingsWindow : Window
 
         if (!TryValidateBedtime(out string? bedtimeLocal, out error))
             return false;
+        if (!TryGetMigraineResponsePlan(out string defaultMigraineResponsePlan, out error))
+            return false;
 
         snapshot.DayKelvin = dayKelvin;
         snapshot.NightKelvin = nightKelvin;
@@ -1331,6 +1357,7 @@ public partial class SettingsWindow : Window
         snapshot.MigraineOverlayColorHex = migraineColorHex;
         snapshot.MigraineOverlayOpacity = MigraineOpacitySlider.Value;
         snapshot.MigraineContrastReduction = MigraineContrastSlider.Value;
+        snapshot.DefaultMigraineResponsePlan = defaultMigraineResponsePlan;
         snapshot.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
         snapshot.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
         snapshot.BedtimeLocal = bedtimeLocal;
@@ -1481,6 +1508,8 @@ public partial class SettingsWindow : Window
         TryValidateMigraineColorHex(out string migraineColorHex, out _);
         TryValidateDeepNightColorHex(out string deepNightColorHex, out _);
         TryValidateBedtime(out string? bedtimeLocal, out _);
+        if (!TryGetMigraineResponsePlan(out string defaultMigraineResponsePlan, out error))
+            return false;
 
         var multipliers = new Dictionary<string, double>();
         foreach (var (deviceName, box) in _multiplierBoxes)
@@ -1541,6 +1570,7 @@ public partial class SettingsWindow : Window
         _settings.MigraineOverlayColorHex = migraineColorHex;
         _settings.MigraineOverlayOpacity = migraineOpacity;
         _settings.MigraineContrastReduction = MigraineContrastSlider.Value;
+        _settings.DefaultMigraineResponsePlan = defaultMigraineResponsePlan;
         _settings.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
         _settings.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
         _settings.BedtimeLocal = bedtimeLocal;

@@ -32,6 +32,9 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   research on light and migraine photophobia; see [EVALUATION.md](EVALUATION.md)) via a
   global hotkey or the tray menu, with a gradual fade back to normal on deactivation, and an
   optional auto-off timer (disabled by default — a real migraine can last hours)
+- Choose the hotkey/tray's default **Gentle** (early sensitivity) or **Strong** (full
+  configured comfort) response; the local history distinguishes the two without making
+  medical claims about either
 - **Pause the schedule** for 30 min / 1 hour / 2 hours / until tomorrow — useful for
   color-sensitive work like photo/video editing
 - **Emergency Restore Screen** via `Ctrl+Alt+Shift+R` or the tray menu — immediately clears
