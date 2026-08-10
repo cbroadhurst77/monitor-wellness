@@ -309,6 +309,8 @@
                         <Button x:Name="IdentifyButton" Content="Identify Monitors" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" Click="IdentifyButton_Click"/>
                         <TextBlock Text="Dim amount: 1.0 matches the normal schedule exactly. Color offset: shifts just this monitor warmer or cooler than the others (try -300 if it looks too warm)." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                         <TextBlock Text="Safety: the primary display stays at or above 20% during the normal schedule. Use Emergency Restore Screen (Ctrl+Alt+Shift+R) if any display becomes difficult to use." FontSize="14" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="HardwareBrightnessReadinessText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   AutomationProperties.LiveSetting="Polite"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

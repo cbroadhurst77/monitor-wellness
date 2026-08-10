@@ -959,6 +959,7 @@ public partial class SettingsWindow : Window
         _colorExcludeBoxes.Clear();
         _multiplierBoxes.Clear();
         _kelvinOffsetBoxes.Clear();
+        RefreshHardwareBrightnessReadiness();
 
         var rows = new List<UIElement>();
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))
@@ -1018,6 +1019,30 @@ public partial class SettingsWindow : Window
         }
 
         MonitorsList.ItemsSource = rows;
+    }
+
+    /// <summary>
+    /// Detects DDC/CI capability without changing any monitor state. Hardware brightness will
+    /// remain disabled until a later explicit, reversible per-monitor test is implemented.
+    /// </summary>
+    private void RefreshHardwareBrightnessReadiness()
+    {
+        HardwareBrightnessReadinessText.Text = "Checking whether your monitors support optional hardware brightness…";
+        _ = Task.Run(DdcCiBrightnessProbe.GetCapabilities).ContinueWith(task => Dispatcher.Invoke(() =>
+        {
+            if (task.IsFaulted)
+            {
+                DebugLog.Write($"Hardware brightness capability probe failed: {task.Exception}");
+                HardwareBrightnessReadinessText.Text = "Optional hardware brightness could not be checked. Monitor Wellness will continue using its overlay dimmer.";
+                return;
+            }
+
+            var capabilities = task.Result;
+            int supported = capabilities.Count(capability => capability.IsSupported);
+            HardwareBrightnessReadinessText.Text = supported == 0
+                ? "Optional hardware brightness: no compatible DDC/CI monitor was detected. The flicker-free overlay remains in use."
+                : $"Optional hardware brightness: {supported} of {capabilities.Count} monitor(s) report DDC/CI support. It is not enabled yet; a future test will require your confirmation before changing a monitor's backlight.";
+        }));
     }
 
     private static string ShortDeviceName(string deviceName) => deviceName[(deviceName.LastIndexOf('\\') + 1)..];
