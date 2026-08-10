@@ -39,4 +39,21 @@ public class HardwareBrightnessSafetyTests
         Assert.False(HardwareBrightnessSafety.IsApproved(settings, monitor));
         Assert.False(HardwareBrightnessSafety.MarkVerified(settings, monitor));
     }
+
+    [Fact]
+    public void AmbiguousHardwareIdentity_IsRemovedForEveryMatchingDisplay()
+    {
+        var monitors = new[]
+        {
+            new MonitorInfo(@"\\.\DISPLAY1", "First", true, "MONITOR\\DUPLICATE"),
+            new MonitorInfo(@"\\.\DISPLAY2", "Second", false, "monitor\\duplicate"),
+            new MonitorInfo(@"\\.\DISPLAY3", "Third", false, "MONITOR\\UNIQUE"),
+        };
+
+        List<MonitorInfo> filtered = MonitorEnumerator.RemoveAmbiguousHardwareIdentities(monitors);
+
+        Assert.Equal(string.Empty, filtered[0].HardwareDeviceId);
+        Assert.Equal(string.Empty, filtered[1].HardwareDeviceId);
+        Assert.Equal("MONITOR\\UNIQUE", filtered[2].HardwareDeviceId);
+    }
 }

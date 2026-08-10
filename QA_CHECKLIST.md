@@ -58,6 +58,10 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] Confirm a previously approved hardware-brightness monitor is still correctly identified
       after reconnecting through a dock or different port; its approval must follow the physical
       monitor, not a `DISPLAYn` number
+- [ ] On a hybrid-GPU or docked machine, confirm every active display receives a distinct
+      physical identity before enabling scheduled hardware brightness. If Windows reports a
+      duplicate identity, Monitor Wellness must keep hardware brightness disabled for all
+      matching displays and retain the overlay fallback.
 - [ ] Force or simulate one DDC/CI command failure. Confirm the monitor is quarantined, no
       further automatic hardware commands are attempted, and overlay dimming remains usable
 - [ ] Kelvin safety warning appears/disappears correctly at the low end of the Day/Night

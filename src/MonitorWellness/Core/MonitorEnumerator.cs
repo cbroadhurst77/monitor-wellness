@@ -63,7 +63,33 @@ public static class MonitorEnumerator
             monitors.Add(new MonitorInfo(device.DeviceName, device.DeviceString, isPrimary, GetHardwareDeviceId(device.DeviceName)));
         }
 
-        return monitors;
+        return RemoveAmbiguousHardwareIdentities(monitors);
+    }
+
+    /// <summary>
+    /// Windows can report the same child-monitor identity for more than one desktop surface
+    /// (notably on hybrid-GPU or docked systems). That is not a usable physical identity: an
+    /// approval granted after testing one display could otherwise enable DDC/CI writes to a
+    /// different one. Preserve only identities that are unique in the active topology and
+    /// deliberately fail closed for every ambiguous surface.
+    /// </summary>
+    internal static List<MonitorInfo> RemoveAmbiguousHardwareIdentities(IEnumerable<MonitorInfo> monitors)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+        List<MonitorInfo> materialized = monitors.ToList();
+        var ambiguousIds = materialized
+            .Where(monitor => !string.IsNullOrWhiteSpace(monitor.HardwareDeviceId))
+            .GroupBy(monitor => monitor.HardwareDeviceId.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return materialized
+            .Select(monitor => !string.IsNullOrWhiteSpace(monitor.HardwareDeviceId)
+                && ambiguousIds.Contains(monitor.HardwareDeviceId.Trim())
+                ? monitor with { HardwareDeviceId = string.Empty }
+                : monitor)
+            .ToList();
     }
 
     private static string GetHardwareDeviceId(string displayDeviceName)

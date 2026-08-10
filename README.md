@@ -88,7 +88,7 @@ utility and turn off all but one.
 
 v0.2.2. A full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (195 automated tests, all passing), and run for real on one Windows 11 3-monitor
+built, tested (196 automated tests, all passing), and run for real on one Windows 11 3-monitor
 dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not
