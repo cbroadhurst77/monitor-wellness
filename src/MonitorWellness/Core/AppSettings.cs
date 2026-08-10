@@ -79,6 +79,9 @@ public sealed class AppSettings
     /// </summary>
     public Dictionary<string, HardwareBrightnessSafetyState> HardwareBrightnessSafetyByMonitor { get; set; } = new();
 
+    /// <summary>Local rules that temporarily restore the native display for selected applications.</summary>
+    public List<ApplicationComfortRule> ApplicationComfortRules { get; set; } = new();
+
     /// <summary>
     /// Migraine mode overlay tint. A muted, desaturated green rather than the amber/red used
     /// in the original prototype — this is a deliberate research-backed choice, not a
@@ -227,6 +230,7 @@ public sealed class AppSettings
         MonitorKelvinOffset = new Dictionary<string, int>(MonitorKelvinOffset),
         HardwareBrightnessEnabledMonitors = new List<string>(HardwareBrightnessEnabledMonitors),
         HardwareBrightnessSafetyByMonitor = HardwareBrightnessSafety.CloneStates(HardwareBrightnessSafetyByMonitor),
+        ApplicationComfortRules = ApplicationComfortRules.Select(rule => rule.Clone()).ToList(),
         MigraineOverlayColorHex = MigraineOverlayColorHex,
         MigraineOverlayOpacity = MigraineOverlayOpacity,
         MigraineContrastReduction = MigraineContrastReduction,
@@ -266,6 +270,7 @@ public sealed class AppSettings
         MonitorKelvinOffset = copy.MonitorKelvinOffset;
         HardwareBrightnessEnabledMonitors = copy.HardwareBrightnessEnabledMonitors;
         HardwareBrightnessSafetyByMonitor = copy.HardwareBrightnessSafetyByMonitor;
+        ApplicationComfortRules = copy.ApplicationComfortRules;
         MigraineOverlayColorHex = copy.MigraineOverlayColorHex;
         MigraineOverlayOpacity = copy.MigraineOverlayOpacity;
         MigraineContrastReduction = copy.MigraineContrastReduction;

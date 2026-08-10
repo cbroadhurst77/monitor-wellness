@@ -51,6 +51,7 @@
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessMath.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\MonitorEnumerator.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessSafety.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\ApplicationComfortRule.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />

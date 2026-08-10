@@ -56,6 +56,7 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, TextBox> _multiplierBoxes = new();
     private readonly Dictionary<string, TextBox> _kelvinOffsetBoxes = new();
     private readonly Dictionary<string, CheckBox> _hardwareBrightnessBoxes = new();
+    private readonly List<ApplicationRuleRow> _applicationRuleRows = new();
 
     private uint _pendingHotkeyModifiers;
     private uint _pendingHotkeyKey;
@@ -154,6 +155,7 @@ public partial class SettingsWindow : Window
         LoadPreferencesFrom(_settings);
 
         BuildMonitorRows();
+        BuildApplicationRuleRows();
         RefreshProfilesComboBox();
 
         LoadWorldMapImage();
@@ -1088,6 +1090,83 @@ public partial class SettingsWindow : Window
 
     private static string ShortDeviceName(string deviceName) => deviceName[(deviceName.LastIndexOf('\\') + 1)..];
 
+    private sealed class ApplicationRuleRow
+    {
+        public required Grid Container { get; init; }
+        public required TextBox ProcessNameBox { get; init; }
+        public required CheckBox EnabledBox { get; init; }
+    }
+
+    private void BuildApplicationRuleRows()
+    {
+        ApplicationRulesList.Children.Clear();
+        _applicationRuleRows.Clear();
+        foreach (ApplicationComfortRule rule in _settings.ApplicationComfortRules)
+            AddApplicationRuleRow(rule);
+    }
+
+    private void AddApplicationRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_applicationRuleRows.Count >= 100)
+        {
+            System.Windows.MessageBox.Show(this, "You can save up to 100 application rules.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        ApplicationRuleRow row = AddApplicationRuleRow(new ApplicationComfortRule());
+        row.ProcessNameBox.Focus();
+    }
+
+    private ApplicationRuleRow AddApplicationRuleRow(ApplicationComfortRule rule)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var enabled = new CheckBox
+        {
+            Content = "Enabled",
+            IsChecked = rule.IsEnabled,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        System.Windows.Automation.AutomationProperties.SetName(enabled, "Enable application comfort rule");
+        Grid.SetColumn(enabled, 0);
+
+        var processName = new TextBox
+        {
+            Text = rule.ProcessName,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Executable name only, e.g. photoshop.exe or vlc.",
+        };
+        System.Windows.Automation.AutomationProperties.SetName(processName, "Application executable name");
+        Grid.SetColumn(processName, 1);
+
+        var remove = new System.Windows.Controls.Button
+        {
+            Content = "Remove",
+            Padding = new Thickness(8, 2, 8, 2),
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        System.Windows.Automation.AutomationProperties.SetName(remove, "Remove application comfort rule");
+        Grid.SetColumn(remove, 2);
+
+        var row = new ApplicationRuleRow { Container = grid, ProcessNameBox = processName, EnabledBox = enabled };
+        remove.Click += (_, _) =>
+        {
+            ApplicationRulesList.Children.Remove(grid);
+            _applicationRuleRows.Remove(row);
+        };
+
+        grid.Children.Add(enabled);
+        grid.Children.Add(processName);
+        grid.Children.Add(remove);
+        ApplicationRulesList.Children.Add(grid);
+        _applicationRuleRows.Add(row);
+        return row;
+    }
+
     private void IdentifyButton_Click(object sender, RoutedEventArgs e) => _overlay.IdentifyMonitors(TimeSpan.FromSeconds(6));
 
     private void TestHardwareBrightness(string deviceName, MonitorInfo? monitor, CheckBox hardwareBrightnessBox)
@@ -1424,7 +1503,30 @@ public partial class SettingsWindow : Window
                 return false;
             }
             if (offset != 0)
-                kelvinOffsets[deviceName] = offset;
+            kelvinOffsets[deviceName] = offset;
+        }
+
+        var applicationRules = new List<ApplicationComfortRule>();
+        var configuredProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (ApplicationRuleRow row in _applicationRuleRows)
+        {
+            if (!ApplicationComfortRules.TryNormalizeProcessName(row.ProcessNameBox.Text, out string processName))
+            {
+                error = "Application rules need an executable name only, e.g. photoshop.exe or vlc.";
+                return false;
+            }
+            if (!configuredProcesses.Add(processName))
+            {
+                error = $"There is already an application rule for {processName}.";
+                return false;
+            }
+
+            applicationRules.Add(new ApplicationComfortRule
+            {
+                ProcessName = processName,
+                Action = ApplicationComfortActions.RestoreNativeDisplay,
+                IsEnabled = row.EnabledBox.IsChecked == true,
+            });
         }
 
         // All parsed successfully — commit to the live settings object.
@@ -1446,6 +1548,7 @@ public partial class SettingsWindow : Window
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;
         _settings.MonitorKelvinOffset = kelvinOffsets;
+        _settings.ApplicationComfortRules = applicationRules;
         var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors()
             .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         foreach (var (deviceName, hardwareBox) in _hardwareBrightnessBoxes)

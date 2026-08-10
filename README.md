@@ -47,6 +47,8 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - Optional **hardware brightness** for compatible external displays: every monitor must pass
   a reversible test first; approval follows its physical Windows device identity, and a failed
   command automatically quarantines the monitor and returns to the safer overlay fallback
+- **Application-aware comfort rules**: restore native colour, brightness and contrast while a
+  selected colour-critical editor, game, or media app is foreground, then resume safely
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
   once a day at most, checks for a newer release and links to it; never downloads or
   installs anything automatically

@@ -54,6 +54,21 @@ public class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void DuplicateApplicationComfortRules_AreRejected()
+    {
+        var settings = new AppSettings
+        {
+            ApplicationComfortRules = new List<ApplicationComfortRule>
+            {
+                new() { ProcessName = "photoshop" },
+                new() { ProcessName = "Photoshop.exe" },
+            },
+        };
+
+        Assert.False(AppSettingsValidator.TryValidate(settings, out _));
+    }
+
+    [Fact]
     public void BrightnessBelowSafetyFloor_IsRejected()
     {
         var settings = new AppSettings { DayBrightness = AppSettingsValidator.MinimumSafeBrightness - 0.01 };

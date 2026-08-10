@@ -71,6 +71,9 @@ release blocker; anything under "Nice to confirm" is lower priority.
       four
 - [ ] Flip Windows' light/dark theme **while a window is already open** — confirm it
       re-themes live rather than needing a reopen
+- [ ] Add an application comfort rule (e.g. `notepad.exe`), Save, and switch to that app.
+      Confirm overlays, gamma changes, and opted-in hardware brightness restore; switch away
+      and confirm the normal schedule resumes without flashing
 
 ## Migraine Mode
 

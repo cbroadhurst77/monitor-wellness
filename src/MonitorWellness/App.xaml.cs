@@ -27,6 +27,7 @@ namespace MonitorWellness;
 public partial class App : Application
 {
     private static readonly TimeSpan ScheduleTickInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ApplicationRulePollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan IdentifyDuration = TimeSpan.FromSeconds(6);
     private static readonly TimeSpan EmergencyRestorePauseDuration = TimeSpan.FromHours(1);
     private const uint EmergencyRestoreModifiers = GlobalHotkey.MOD_CONTROL | GlobalHotkey.MOD_ALT | GlobalHotkey.MOD_SHIFT;
@@ -38,6 +39,7 @@ public partial class App : Application
     private System.Drawing.Icon? _iconOff;
     private System.Drawing.Icon? _iconOn;
     private DispatcherTimer? _timer;
+    private DispatcherTimer? _applicationRuleTimer;
     private DispatcherTimer? _breakReminderTimer;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
@@ -48,6 +50,8 @@ public partial class App : Application
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
     private DateTime? _pauseUntilUtc;
+    private string? _lastForegroundProcessName;
+    private string? _activeNativeDisplayRuleProcessName;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -292,6 +296,8 @@ public partial class App : Application
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
         _timer.Tick += (_, _) => RunScheduleTick();
         _timer.Start();
+
+        StartApplicationRuleMonitoring();
 
         RunScheduleTick();
         RebuildBreakReminderTimer();
@@ -730,6 +736,8 @@ public partial class App : Application
 
         if (_pauseUntilUtc is DateTime pauseUntil)
             return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
+        if (_activeNativeDisplayRuleProcessName is not null)
+            return $"Currently: Native display restored for {_activeNativeDisplayRuleProcessName}.";
 
         double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
         string phase = elevation <= ScheduleCurve.DeepNightThresholdDeg ? "Deep Night mode"
@@ -848,6 +856,21 @@ public partial class App : Application
         if (_migraine?.SuspendsNormalSchedule == true || _settingsPreviewActive || _pauseUntilUtc.HasValue)
             return; // migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now
 
+        ApplicationComfortRule? applicationRule = ApplicationComfortRules.FindForegroundRule(
+            _settings.ApplicationComfortRules,
+            ForegroundApplicationDetector.TryGetForegroundProcessName());
+        if (applicationRule?.Action == ApplicationComfortActions.RestoreNativeDisplay)
+        {
+            ActivateNativeDisplayApplicationRule(applicationRule);
+            return;
+        }
+
+        if (_activeNativeDisplayRuleProcessName is not null)
+        {
+            DebugLog.Write($"Application comfort rule ended for {_activeNativeDisplayRuleProcessName}; resuming the schedule.");
+            _activeNativeDisplayRuleProcessName = null;
+        }
+
         var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget();
 
         foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
@@ -894,6 +917,35 @@ public partial class App : Application
             double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
             _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°";
         }
+    }
+
+    private void StartApplicationRuleMonitoring()
+    {
+        _applicationRuleTimer = new DispatcherTimer { Interval = ApplicationRulePollInterval };
+        _applicationRuleTimer.Tick += (_, _) =>
+        {
+            string? foregroundProcessName = ForegroundApplicationDetector.TryGetForegroundProcessName();
+            if (string.Equals(_lastForegroundProcessName, foregroundProcessName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _lastForegroundProcessName = foregroundProcessName;
+            RunScheduleTick();
+        };
+        _applicationRuleTimer.Start();
+    }
+
+    private void ActivateNativeDisplayApplicationRule(ApplicationComfortRule rule)
+    {
+        if (string.Equals(_activeNativeDisplayRuleProcessName, rule.ProcessName, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _activeNativeDisplayRuleProcessName = rule.ProcessName;
+        DebugLog.Write($"Application comfort rule active for {rule.ProcessName}: restoring native display state.");
+        _hardwareBrightness.RestoreAll();
+        _overlay?.Clear();
+        _gammaManager?.ResetAllToIdentity();
+        if (_trayIcon is not null)
+            _trayIcon.Text = $"Monitor Wellness — native display for {rule.ProcessName}";
     }
 
     private void PersistHardwareBrightnessQuarantines(
@@ -950,6 +1002,7 @@ public partial class App : Application
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _timer?.Stop();
+        _applicationRuleTimer?.Stop();
         _breakReminderTimer?.Stop();
         _pauseTimer?.Stop();
         _startupBalloonTimer?.Stop();

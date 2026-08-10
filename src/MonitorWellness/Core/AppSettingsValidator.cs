@@ -51,9 +51,12 @@ public static class AppSettingsValidator
             || settings.MonitorDimMultiplier is null || settings.MonitorKelvinOffset is null
             || settings.HardwareBrightnessEnabledMonitors is null || settings.HardwareBrightnessSafetyByMonitor is null)
             return Invalid("Monitor settings collections cannot be null.", out error);
+        if (settings.ApplicationComfortRules is null)
+            return Invalid("Application comfort rules cannot be null.", out error);
         if (!ValidateMonitorMultipliers(settings.MonitorDimMultiplier, out error)
             || !ValidateMonitorOffsets(settings.MonitorKelvinOffset, out error)
-            || !ValidateHardwareBrightnessSafety(settings.HardwareBrightnessSafetyByMonitor, out error))
+            || !ValidateHardwareBrightnessSafety(settings.HardwareBrightnessSafetyByMonitor, out error)
+            || !ValidateApplicationComfortRules(settings.ApplicationComfortRules, out error))
             return false;
 
         return true;
@@ -93,6 +96,27 @@ public static class AppSettingsValidator
                 return Invalid("A hardware-brightness monitor cannot be approved while quarantined.", out error);
             if (state.QuarantineReason?.Length > 500)
                 return Invalid("Hardware brightness quarantine information is too long.", out error);
+        }
+
+        error = "";
+        return true;
+    }
+
+    private static bool ValidateApplicationComfortRules(List<ApplicationComfortRule> rules, out string error)
+    {
+        if (rules.Count > 100)
+            return Invalid("No more than 100 application comfort rules can be saved.", out error);
+
+        var processes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (ApplicationComfortRule? rule in rules)
+        {
+            if (rule is null || !ApplicationComfortRules.TryNormalizeProcessName(rule.ProcessName, out string normalized)
+                || !ApplicationComfortActions.IsSupported(rule.Action))
+            {
+                return Invalid("Application comfort rules must use a valid executable name and supported action.", out error);
+            }
+            if (!processes.Add(normalized))
+                return Invalid("Each application can have only one comfort rule.", out error);
         }
 
         error = "";
