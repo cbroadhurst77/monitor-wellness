@@ -44,6 +44,7 @@ public partial class App : Application
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
+    private readonly AmbientLightSmoother _ambientLightSmoother = new();
     private MigraineModeController? _migraine;
     private GlobalHotkey? _hotkey;
     private GlobalHotkey? _emergencyRestoreHotkey;
@@ -779,9 +780,14 @@ public partial class App : Application
             if (lux.HasValue)
             {
                 double dayFactor = ScheduleCurve.GetDayFactor(elevation);
-                double adjustment = AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor;
+                double adjustment = _ambientLightSmoother.Update(
+                    AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor);
                 globalBrightness = Math.Clamp(globalBrightness + adjustment, 0.0, 1.0);
             }
+        }
+        else
+        {
+            _ambientLightSmoother.Reset();
         }
 
         var dimColor = LerpColor(

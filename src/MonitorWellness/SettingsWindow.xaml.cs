@@ -1033,12 +1033,20 @@ public partial class SettingsWindow : Window
 
             double multiplier = _settings.MonitorDimMultiplier.TryGetValue(deviceName, out var m) ? m : 1.0;
             var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture), ToolTip = "Dim multiplier (1.0 = follow the global schedule exactly)." };
+            multiplierBox.TextChanged += (_, _) =>
+            {
+                if (_loaded) QueuePreview("day");
+            };
             System.Windows.Automation.AutomationProperties.SetName(multiplierBox, $"Dim multiplier for {ShortDeviceName(deviceName)}");
             Grid.SetColumn(multiplierBox, 3);
             _multiplierBoxes[deviceName] = multiplierBox;
 
             int kelvinOffset = _settings.MonitorKelvinOffset.TryGetValue(deviceName, out var k) ? k : 0;
             var kelvinOffsetBox = new TextBox { Text = kelvinOffset.ToString(CultureInfo.InvariantCulture), Margin = new Thickness(4, 0, 0, 0), ToolTip = "Kelvin offset for this monitor only — e.g. -300 if it reads warmer than the others at the same setting." };
+            kelvinOffsetBox.TextChanged += (_, _) =>
+            {
+                if (_loaded) QueuePreview("day");
+            };
             System.Windows.Automation.AutomationProperties.SetName(kelvinOffsetBox, $"Kelvin offset for {ShortDeviceName(deviceName)}");
             Grid.SetColumn(kelvinOffsetBox, 4);
             _kelvinOffsetBoxes[deviceName] = kelvinOffsetBox;

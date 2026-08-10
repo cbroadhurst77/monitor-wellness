@@ -52,6 +52,8 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   command automatically quarantines the monitor and returns to the safer overlay fallback
 - **Application-aware comfort rules**: restore native colour, brightness and contrast while a
   selected colour-critical editor, game, or media app is foreground, then resume safely
+- Ambient-light compensation is optional, sensor-only, and rate-limited so changes in room
+  lighting adapt gradually; per-monitor dim and Kelvin matching adjustments preview live
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
   once a day at most, checks for a newer release and links to it; never downloads or
   installs anything automatically
