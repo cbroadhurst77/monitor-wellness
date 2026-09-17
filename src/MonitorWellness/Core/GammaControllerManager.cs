@@ -11,6 +11,11 @@ namespace MonitorWellness.Core;
 /// </summary>
 public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarget
 {
+    // Guards _controllers: OnDisplaySettingsChanged can rebuild it off the UI thread when
+    // Application.Current is null (e.g. during shutdown), concurrently with a schedule-tick
+    // read on the UI thread — named as a risk but never reproduced in INDEPENDENT_REAUDIT.md.
+    // The lock removes the theoretical race instead of relying on timing.
+    private readonly object _lock = new();
     private readonly Dictionary<string, GammaRampController> _controllers = new();
     private bool _disposed;
 
@@ -22,10 +27,6 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        // Same reasoning as OverlayController's identical guard: SystemEvents isn't
-        // guaranteed to raise on the UI thread, and the shared _controllers dictionary isn't
-        // thread-safe against a concurrent read from App's schedule tick. See
-        // INDEPENDENT_REAUDIT.md for why this was named as a risk but never reproduced.
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
             dispatcher.Invoke(RebuildControllers);
@@ -38,31 +39,37 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         var current = new HashSet<string>(MonitorEnumerator.GetActiveMonitors().Select(m => m.DeviceName));
         DebugLog.Write($"GammaControllerManager rebuild: {current.Count} active monitor(s): [{string.Join(", ", current)}]");
 
-        foreach (var stale in _controllers.Keys.Except(current).ToList())
+        lock (_lock)
         {
-            _controllers[stale].Dispose();
-            _controllers.Remove(stale);
-        }
-
-        foreach (var deviceName in current)
-        {
-            if (_controllers.ContainsKey(deviceName))
-                continue;
-
-            try
+            foreach (var stale in _controllers.Keys.Except(current).ToList())
             {
-                _controllers[deviceName] = new GammaRampController(deviceName);
+                _controllers[stale].Dispose();
+                _controllers.Remove(stale);
             }
-            catch (InvalidOperationException)
+
+            foreach (var deviceName in current)
             {
-                // Monitor doesn't support a gamma-ramp-capable device context; skip it
-                // rather than crashing the whole app.
+                if (_controllers.ContainsKey(deviceName))
+                    continue;
+
+                try
+                {
+                    _controllers[deviceName] = new GammaRampController(deviceName);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Monitor doesn't support a gamma-ramp-capable device context; skip it
+                    // rather than crashing the whole app.
+                }
             }
         }
     }
 
-    /// <summary>The current live set of controllers — not a snapshot, so callers always see monitors added/removed after construction.</summary>
-    public IReadOnlyCollection<GammaRampController> Controllers => _controllers.Values;
+    /// <summary>A snapshot of the current controllers, safe to enumerate even if a display-topology change rebuilds the live set concurrently.</summary>
+    public IReadOnlyCollection<GammaRampController> Controllers
+    {
+        get { lock (_lock) return _controllers.Values.ToList(); }
+    }
 
     /// <summary>
     /// Rebuilds device contexts after a sleep/resume cycle. Some driver configurations
@@ -76,14 +83,20 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
     public void ApplyToAll(int kelvin, double contrastReduction)
     {
         foreach (var controller in Controllers)
-            controller.ApplyColorTemperatureWithContrast(kelvin, contrastReduction);
+        {
+            if (!controller.ApplyColorTemperatureWithContrast(kelvin, contrastReduction))
+                DebugLog.Write($"GammaControllerManager.ApplyToAll: rejected for {controller.DeviceName} (kelvin={kelvin}, contrast={contrastReduction}).");
+        }
     }
 
     /// <summary>Immediately restores all controllable gamma ramps to their native identity state.</summary>
     public void ResetAllToIdentity()
     {
         foreach (var controller in Controllers)
-            controller.ResetToIdentity();
+        {
+            if (!controller.ResetToIdentity())
+                DebugLog.Write($"GammaControllerManager.ResetAllToIdentity: reset rejected for {controller.DeviceName}.");
+        }
     }
 
     public void Dispose()
@@ -92,11 +105,14 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         _disposed = true;
 
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-        foreach (var controller in _controllers.Values)
+        lock (_lock)
         {
-            controller.ResetToIdentity();
-            controller.Dispose();
+            foreach (var controller in _controllers.Values)
+            {
+                controller.ResetToIdentity();
+                controller.Dispose();
+            }
+            _controllers.Clear();
         }
-        _controllers.Clear();
     }
 }

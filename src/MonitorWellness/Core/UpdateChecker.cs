@@ -1,4 +1,6 @@
+using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 
 namespace MonitorWellness.Core;
@@ -21,6 +23,10 @@ public sealed record UpdateInfo(Version Version, string TagName, Uri ReleaseUrl)
 public static class UpdateChecker
 {
     private const string ReleasesApiUrl = "https://api.github.com/repos/cbroadhurst77/monitor-wellness/releases/latest";
+    // Same bound and reasoning as GeocodingService.MaximumResponseBytes: this is the other
+    // network call in the app, and a misbehaving/compromised endpoint on the response path
+    // shouldn't be able to make it buffer an unbounded body into memory.
+    private const int MaximumResponseBytes = 64 * 1024;
     private static readonly Uri FallbackReleaseUrl = new("https://github.com/cbroadhurst77/monitor-wellness/releases/latest");
 
     private static readonly HttpClient Client = CreateClient();
@@ -45,15 +51,25 @@ public static class UpdateChecker
     {
         try
         {
-            using var response = await Client.GetAsync(ReleasesApiUrl, cancellationToken);
+            using var response = await Client.GetAsync(ReleasesApiUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 DebugLog.Write($"UpdateChecker: GitHub API returned HTTP {(int)response.StatusCode}");
                 return null;
             }
+            if (response.Content.Headers.ContentLength is long contentLength && contentLength > MaximumResponseBytes)
+            {
+                DebugLog.Write("UpdateChecker: response exceeded the allowed size");
+                return null;
+            }
 
-            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            string? json = await ReadResponseAtMostAsync(response.Content, cancellationToken);
+            if (json is null)
+            {
+                DebugLog.Write("UpdateChecker: response exceeded the allowed size");
+                return null;
+            }
+            using var doc = JsonDocument.Parse(json);
 
             if (!doc.RootElement.TryGetProperty("tag_name", out var tagProp) || tagProp.GetString() is not string tagName || tagName.Length == 0)
             {
@@ -100,5 +116,22 @@ public static class UpdateChecker
 
         releaseUrl = FallbackReleaseUrl;
         return false;
+    }
+
+    private static async Task<string?> ReadResponseAtMostAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        byte[] readBuffer = new byte[8 * 1024];
+        int bytesRead;
+        while ((bytesRead = await stream.ReadAsync(readBuffer, cancellationToken)) > 0)
+        {
+            if (buffer.Length + bytesRead > MaximumResponseBytes)
+                return null;
+
+            buffer.Write(readBuffer, 0, bytesRead);
+        }
+
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 }

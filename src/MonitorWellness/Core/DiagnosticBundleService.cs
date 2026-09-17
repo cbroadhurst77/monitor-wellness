@@ -19,12 +19,29 @@ public static class DiagnosticBundleService
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        using var archive = ZipFile.Open(destinationPath, ZipArchiveMode.Create);
-        WriteText(archive, "README.txt", "This user-requested diagnostic bundle contains technical environment data and the local debug log. It does not include settings, location, history, or saved profiles. Review debug.log before sharing it.");
-        WriteText(archive, "environment.txt", BuildEnvironmentReport());
+        // Write to a temp file and move it into place only once every entry succeeded — a
+        // crash/exception partway through (e.g. BuildEnvironmentReport hitting a flaky
+        // DDC/CI or monitor-enumeration call) must not leave a truncated-but-openable zip at
+        // the exact path the user chose and may go on to share as "the diagnostic bundle."
+        string tempPath = Path.Combine(directory ?? Path.GetTempPath(), $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (var archive = ZipFile.Open(tempPath, ZipArchiveMode.Create))
+            {
+                WriteText(archive, "README.txt", "This user-requested diagnostic bundle contains technical environment data and the local debug log. It does not include settings, location, history, or saved profiles. Review debug.log before sharing it.");
+                WriteText(archive, "environment.txt", BuildEnvironmentReport());
 
-        if (File.Exists(DebugLog.FilePath))
-            archive.CreateEntryFromFile(DebugLog.FilePath, "debug.log", CompressionLevel.Optimal);
+                if (File.Exists(DebugLog.FilePath))
+                    archive.CreateEntryFromFile(DebugLog.FilePath, "debug.log", CompressionLevel.Optimal);
+            }
+
+            File.Move(tempPath, destinationPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
     }
 
     private static string BuildEnvironmentReport()

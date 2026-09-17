@@ -85,12 +85,22 @@ public static class ProfileStore
         }
     }
 
-    public static void Delete(string name)
+    /// <summary>Returns false (and logs why) instead of throwing if the file is locked/read-only/ACL'd — unlike Save/Load, this had no failure handling at all, so a transient failure would go uncaught out of the caller.</summary>
+    public static bool Delete(string name)
     {
         string path = PathFor(name);
-        if (File.Exists(path))
-            File.Delete(path);
-        DebugLog.Write($"ProfileStore: deleted profile '{name}'");
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            DebugLog.Write($"ProfileStore: deleted profile '{name}'");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"ProfileStore: FAILED to delete profile '{name}': {ex.Message}");
+            return false;
+        }
     }
 
     public static bool TryValidateName(string? name, out string error)

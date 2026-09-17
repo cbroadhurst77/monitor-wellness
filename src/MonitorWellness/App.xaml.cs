@@ -58,6 +58,7 @@ public partial class App : Application
     private string? _activeComfortPlanRuleDescription;
     private string? _manualComfortPlanName;
     private bool _fullscreenPresentationGuardActive;
+    private bool _migraineWasActive;
     private readonly HashSet<string> _compatibilityFallbackDevices = new(StringComparer.OrdinalIgnoreCase);
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
@@ -116,18 +117,24 @@ public partial class App : Application
             DebugLog.Write($"UNHANDLED DISPATCHER EXCEPTION: {args.Exception}");
             args.Handled = true;
 
-            if (_crashLoopDetector.RecordAndCheckIsLooping(DateTime.UtcNow))
-            {
-                _trayIcon?.ShowBalloonTip(
-                    15_000,
-                    "Monitor Wellness",
-                    "Something's gone wrong repeatedly. Please restart Monitor Wellness — if it keeps happening, our log file can help us find out why.",
-                    ToolTipIcon.Error);
-                return;
-            }
-
+            // Everything below — including the crash-loop check and its own balloon call —
+            // is inside this try. It previously wasn't: if _crashLoopDetector or
+            // ShowBalloonTip itself threw (e.g. _trayIcon in a bad state), the exception
+            // would escape this handler entirely, and since this already runs inside
+            // dispatcher exception dispatch, args.Handled = true above wouldn't save it —
+            // the whole recovery/crash-loop mechanism defeated by the code meant to report it.
             try
             {
+                if (_crashLoopDetector.RecordAndCheckIsLooping(DateTime.UtcNow))
+                {
+                    _trayIcon?.ShowBalloonTip(
+                        15_000,
+                        "Monitor Wellness",
+                        "Something's gone wrong repeatedly. Please restart Monitor Wellness — if it keeps happening, our log file can help us find out why.",
+                        ToolTipIcon.Error);
+                    return;
+                }
+
                 _gammaManager?.ReapplyAfterWake();
                 if (_migraine?.IsActive == true)
                     _migraine.Activate(); // idempotent — reapplies in case gamma ramp/overlay state was left stale
@@ -269,7 +276,14 @@ public partial class App : Application
             {
                 autoStartItem.Checked = !wasOn;
                 _settings.AutoStartEnabled = !wasOn;
-                SettingsStore.Save(_settings);
+                try
+                {
+                    SettingsStore.Save(_settings);
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+                {
+                    DebugLog.Write($"Couldn't persist AutoStartEnabled after toggling: {ex.Message}");
+                }
             }
             else if (_trayIcon is not null)
             {
@@ -342,7 +356,17 @@ public partial class App : Application
         var update = await UpdateChecker.CheckForUpdateAsync();
 
         _settings.LastUpdateCheckUtc = DateTime.UtcNow;
-        SettingsStore.Save(_settings);
+        try
+        {
+            SettingsStore.Save(_settings);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            // This is a fire-and-forget async method (`_ = CheckForUpdatesIfDueAsync()`) —
+            // an unobserved exception here wouldn't crash the app, but it also wouldn't be
+            // logged anywhere, so a real save failure would go completely unnoticed.
+            DebugLog.Write($"Couldn't persist LastUpdateCheckUtc: {ex.Message}");
+        }
 
         if (update is null || _trayIcon is null)
             return;
@@ -363,7 +387,17 @@ public partial class App : Application
         onboarding.Closed += (_, _) =>
         {
             _settings.HasCompletedOnboarding = true;
-            SettingsStore.Save(_settings);
+            try
+            {
+                SettingsStore.Save(_settings);
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                // A save failure here must not also block the startup balloon queue (HDR,
+                // f.lux conflict, hotkey conflict, auto-start drift) — those are independent
+                // of whether HasCompletedOnboarding persisted.
+                DebugLog.Write($"Couldn't persist onboarding completion: {ex.Message}");
+            }
             StartDrainingStartupBalloons();
         };
         onboarding.Show();
@@ -459,18 +493,33 @@ public partial class App : Application
             return;
         }
 
+        // Set, then guaranteed to be cleared by the catch below if anything here throws
+        // (constructing SettingsWindow does real work — monitor enumeration, an
+        // embedded-resource load — either of which can throw). Without this, a failed
+        // construction leaves _settingsWindow null (so no Closed handler ever exists to
+        // clear the flag) with _settingsPreviewActive stuck true, silently suspending the
+        // normal schedule for the rest of the session.
         _settingsPreviewActive = true;
-        _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved, ComputeStatusText);
-        if (!string.IsNullOrWhiteSpace(initialRuleProcessName))
-            _settingsWindow.AddApplicationRuleTemplate(initialRuleProcessName);
-        _settingsWindow.Closed += (_, _) =>
+        try
+        {
+            _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved, ComputeStatusText);
+            if (!string.IsNullOrWhiteSpace(initialRuleProcessName))
+                _settingsWindow.AddApplicationRuleTemplate(initialRuleProcessName);
+            _settingsWindow.Closed += (_, _) =>
+            {
+                _settingsWindow = null;
+                _settingsPreviewActive = false;
+                RunScheduleTick(); // clears any live preview left on screen the instant the window closes
+            };
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
+        }
+        catch
         {
             _settingsWindow = null;
             _settingsPreviewActive = false;
-            RunScheduleTick(); // clears any live preview left on screen the instant the window closes
-        };
-        _settingsWindow.Show();
-        _settingsWindow.Activate();
+            throw;
+        }
     }
 
     private void CaptureForegroundApplicationRule()
@@ -664,8 +713,15 @@ public partial class App : Application
             if (dontAskAgain)
             {
                 _settings.PromptForMigraineRating = false;
-                SettingsStore.Save(_settings);
-                DebugLog.Write("Migraine rating prompt: user chose 'Don't ask again'");
+                try
+                {
+                    SettingsStore.Save(_settings);
+                    DebugLog.Write("Migraine rating prompt: user chose 'Don't ask again'");
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+                {
+                    DebugLog.Write($"Couldn't persist PromptForMigraineRating=false: {ex.Message}");
+                }
             }
         });
         window.Show();
@@ -818,6 +874,23 @@ public partial class App : Application
     private void OnMigraineStateChanged()
     {
         if (_trayIcon is null || _migraine is null) return;
+
+        // The tray-icon swap below is easy to miss — especially for an activation nobody
+        // intended (e.g. the hotkey colliding with another app's own shortcut for the same
+        // combination), which otherwise silently suspends the whole day/night schedule with
+        // no obvious signal until someone happens to notice. Fires once per false->true
+        // transition, not on every StateChanged (which also fires on deactivate/fade-complete).
+        if (_migraine.IsActive && !_migraineWasActive)
+        {
+            _trayIcon.ShowBalloonTip(
+                6_000,
+                "Monitor Wellness",
+                _migraine.IsMild
+                    ? "Migraine relief turned ON (mild) — the normal day/night schedule is paused until you turn it off."
+                    : "Migraine relief turned ON — the normal day/night schedule is paused until you turn it off.",
+                ToolTipIcon.Info);
+        }
+        _migraineWasActive = _migraine.IsActive;
 
         _trayIcon.Icon = _migraine.IsActive ? _iconOn : _iconOff;
         string intensitySuffix = _migraine.IsMild ? " (Mild)" : "";

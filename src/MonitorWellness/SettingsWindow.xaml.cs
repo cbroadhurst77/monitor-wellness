@@ -720,8 +720,20 @@ public partial class SettingsWindow : Window
         if (slider is null || previewKind is null)
             return;
 
-        SetBrightnessForSafety(slider, SafePreviewBrightness);
-        PreviewSchedule(previewKind);
+        try
+        {
+            SetBrightnessForSafety(slider, SafePreviewBrightness);
+            PreviewSchedule(previewKind);
+        }
+        catch (Exception ex)
+        {
+            // This runs from the window's Closed handler (among other paths), registered
+            // before App's own Closed handler that clears _settingsPreviewActive and resumes
+            // the schedule. C# multicast delegates stop at the first handler that throws — an
+            // exception here would silently skip App's cleanup and leave the normal schedule
+            // suspended for the rest of the session, so this must never throw out.
+            DebugLog.Write($"RestoreBlackoutPreview failed: {ex}");
+        }
     }
 
     private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -1569,7 +1581,11 @@ public partial class SettingsWindow : Window
         if (result != MessageBoxResult.Yes)
             return;
 
-        ProfileStore.Delete(name);
+        if (!ProfileStore.Delete(name))
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't delete profile \"{name}\" — it may be open elsewhere or read-only.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         RefreshProfilesComboBox();
     }
 

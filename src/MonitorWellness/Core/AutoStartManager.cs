@@ -142,9 +142,20 @@ public static class AutoStartManager
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,
             });
-            process?.WaitForExit(30_000);
-            bool success = process?.ExitCode == 0;
-            DebugLog.Write($"AutoStartManager: schtasks {arguments} -> exit {process?.ExitCode}");
+            if (process is null)
+                return false;
+
+            // A slow UAC response (the user switches away, reads the prompt, etc.) is a
+            // plausible, ordinary way to exceed this wait — ExitCode must not be read unless
+            // WaitForExit actually reports the process has exited, or it throws.
+            if (!process.WaitForExit(30_000))
+            {
+                DebugLog.Write($"AutoStartManager: schtasks {arguments} did not exit within 30s (UAC prompt likely still pending); treating as failed.");
+                return false;
+            }
+
+            bool success = process.ExitCode == 0;
+            DebugLog.Write($"AutoStartManager: schtasks {arguments} -> exit {process.ExitCode}");
             return success;
         }
         catch (System.ComponentModel.Win32Exception ex)

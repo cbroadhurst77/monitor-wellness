@@ -17,6 +17,10 @@ public static class AppSettingsValidator
     private const int MaximumBreakReminderMinutes = 8 * 60;
     private const double MaximumMonitorDimMultiplier = 5.0;
     private const int MaximumMonitorKelvinOffset = 2_000;
+    // No real setup has anywhere near this many entries (a handful of physical monitors at
+    // most); this only guards against a corrupted/hand-edited settings.json driving an
+    // unbounded per-monitor collection into UI code that iterates it on every startup.
+    private const int MaximumMonitorEntries = 64;
 
     public static bool TryValidate(AppSettings? settings, out string error)
     {
@@ -53,6 +57,10 @@ public static class AppSettingsValidator
             || settings.MonitorDimMultiplier is null || settings.MonitorKelvinOffset is null
             || settings.HardwareBrightnessEnabledMonitors is null || settings.HardwareBrightnessSafetyByMonitor is null)
             return Invalid("Monitor settings collections cannot be null.", out error);
+        if (settings.ExcludedMonitors.Count > MaximumMonitorEntries || settings.ColorExcludedMonitors.Count > MaximumMonitorEntries
+            || settings.MonitorDimMultiplier.Count > MaximumMonitorEntries || settings.MonitorKelvinOffset.Count > MaximumMonitorEntries
+            || settings.HardwareBrightnessEnabledMonitors.Count > MaximumMonitorEntries || settings.HardwareBrightnessSafetyByMonitor.Count > MaximumMonitorEntries)
+            return Invalid($"No more than {MaximumMonitorEntries} entries are allowed per monitor setting.", out error);
         if (settings.ApplicationComfortRules is null)
             return Invalid("Application comfort rules cannot be null.", out error);
         if (!ValidateMonitorMultipliers(settings.MonitorDimMultiplier, out error)

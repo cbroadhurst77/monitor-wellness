@@ -28,6 +28,13 @@ public static class HistoryStore
         "MonitorWellness",
         "history.jsonl");
 
+    // Unlike debug.log this is opt-in, low-volume (one line per migraine/pause event, not
+    // per tick), and is the user's own readable record — so this caps at a much larger size
+    // than DebugLog's 2MB before rotating, purely so years of continuous use can't grow it
+    // without bound.
+    private const long MaxSizeBytes = 8 * 1024 * 1024;
+    private const long TrimToBytes = 2 * 1024 * 1024;
+
     private static readonly JsonSerializerOptions JsonOptions = new();
 
     /// <summary>Appends one event as a single JSON line — cheap to append without rewriting the whole file, unlike settings.json/profiles.</summary>
@@ -38,12 +45,36 @@ public static class HistoryStore
             string? directory = Path.GetDirectoryName(HistoryPath);
             if (directory is not null)
                 Directory.CreateDirectory(directory);
+            RotateIfTooLarge();
             File.AppendAllText(HistoryPath, JsonSerializer.Serialize(evt, JsonOptions) + Environment.NewLine);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Must never throw into a caller mid-flow (e.g. PauseScheduleFor/MigraineModeController)
+            // — a locked/ACL'd AppData folder logging this history event should not be able to
+            // leave unrelated app state (like a schedule pause) stuck half-applied.
             DebugLog.Write($"HistoryStore.Append failed: {ex.Message}");
         }
+    }
+
+    private static void RotateIfTooLarge()
+    {
+        var info = new FileInfo(HistoryPath);
+        if (!info.Exists || info.Length <= MaxSizeBytes)
+            return;
+
+        // Keep only the tail, starting at the first complete line, same approach as DebugLog.
+        byte[] tail;
+        using (var stream = new FileStream(HistoryPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            stream.Seek(-TrimToBytes, SeekOrigin.End);
+            tail = new byte[TrimToBytes];
+            stream.ReadExactly(tail);
+        }
+
+        int firstNewline = Array.IndexOf(tail, (byte)'\n');
+        int start = firstNewline >= 0 ? firstNewline + 1 : 0;
+        File.WriteAllBytes(HistoryPath, tail[start..]);
     }
 
     /// <summary>Loads every recorded event. A malformed individual line (e.g. from an interrupted write) is skipped rather than losing the rest of the history.</summary>
@@ -88,7 +119,7 @@ public static class HistoryStore
             if (File.Exists(HistoryPath))
                 File.Delete(HistoryPath);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DebugLog.Write($"HistoryStore.Clear failed: {ex.Message}");
         }

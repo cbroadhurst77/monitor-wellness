@@ -36,6 +36,10 @@ public partial class MigraineRatingWindow : Window
         _autoCloseTimer = new DispatcherTimer { Interval = AutoDismiss };
         _autoCloseTimer.Tick += (_, _) => Answer(null, dontAskAgain: false);
         _autoCloseTimer.Start();
+        // Without this, closing via Alt+F4/titlebar X (instead of a button, which already
+        // stops the timer via Answer) leaves the timer running: it fires 20s later, invokes
+        // the callback a second time, and calls Close() on an already-closed window.
+        Closed += (_, _) => _autoCloseTimer.Stop();
     }
 
     private void RatingButton_Click(object sender, RoutedEventArgs e)

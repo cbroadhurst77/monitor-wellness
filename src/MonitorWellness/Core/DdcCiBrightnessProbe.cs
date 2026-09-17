@@ -87,11 +87,11 @@ public static class DdcCiBrightnessProbe
             return false;
         }
 
+        if (!TryOpenPhysicalMonitors(screen, out PhysicalMonitorNative[] physicalMonitors, out error))
+            return false;
+
         try
         {
-            if (!TryOpenPhysicalMonitors(screen, out PhysicalMonitorNative[] physicalMonitors, out error))
-                return false;
-
             var brightnessHandles = physicalMonitors
                 .Where(physicalMonitor => GetMonitorCapabilities(physicalMonitor.Handle, out uint capabilities, out _)
                     && (capabilities & MonitorCapabilitiesBrightness) != 0)
@@ -109,6 +109,10 @@ public static class DdcCiBrightnessProbe
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or SEHException)
         {
+            // GetMonitorCapabilities can throw mid-enumeration (a flaky/crashing DDC/CI
+            // driver) — physicalMonitors was already opened above, so it must still be
+            // destroyed here or the handle leaks for the life of the process.
+            _ = DestroyPhysicalMonitors((uint)physicalMonitors.Length, physicalMonitors);
             error = "DDC/CI is unavailable on this Windows installation.";
             DebugLog.Write($"DDC/CI test session unavailable for {deviceName}: {ex.Message}");
             return false;
@@ -280,15 +284,28 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
         return true;
     }
 
-    /// <summary>Restores the exact physical brightness values captured before the test.</summary>
+    /// <summary>
+    /// Restores the exact physical brightness values captured before the test. A handle whose
+    /// write-back fails (e.g. a brief DDC/CI renegotiation) is kept in _originalBrightness
+    /// instead of being discarded, so a later Restore()/Dispose() call still has a chance to
+    /// retry it rather than silently leaving that monitor dimmed with nothing tracking it.
+    /// </summary>
     public void Restore()
     {
         if (_originalBrightness is null)
             return;
 
+        var stillPending = new List<OriginalBrightness>();
         foreach (OriginalBrightness original in _originalBrightness)
-            _ = DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, original.Value);
-        _originalBrightness = null;
+        {
+            if (!DdcCiBrightnessProbe.TrySetMonitorBrightness(original.Handle, original.Value))
+            {
+                DebugLog.Write("DdcCiBrightnessTestSession.Restore: failed to restore a monitor's original brightness; it will stay at the test value until retried.");
+                stillPending.Add(original);
+            }
+        }
+
+        _originalBrightness = stillPending.Count > 0 ? stillPending : null;
         _lastAppliedNormalizedBrightness = null;
     }
 
