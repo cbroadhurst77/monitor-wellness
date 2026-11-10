@@ -324,6 +324,7 @@ public partial class App : Application
 
         _startupFinished = true;
         _overlay.PrewarmWhenIdle(); // build the hidden overlay windows in idle time, so showing one later is instant
+        StartMemoryTrimming();
         _ = CheckForUpdatesIfDueAsync();
 
         // A tray app can run for weeks. The check itself still runs at most once a day
@@ -807,6 +808,28 @@ public partial class App : Application
             DebugLog.Write($"Diagnostic bundle export failed: {ex}");
             System.Windows.MessageBox.Show($"Couldn't create the diagnostic bundle: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private DispatcherTimer? _memoryTrimTimer;
+    private int _memoryTrimCount;
+
+    /// <summary>Gives the idle app's resident memory back to Windows once startup has settled, and again every so often. See MemoryTrimmer.</summary>
+    private void StartMemoryTrimming()
+    {
+        _memoryTrimTimer = new DispatcherTimer { Interval = MemoryTrimPolicy.FirstTrimDelay };
+        _memoryTrimTimer.Tick += (_, _) =>
+        {
+            _memoryTrimTimer!.Interval = MemoryTrimPolicy.Interval;
+            if (!MemoryTrimPolicy.ShouldTrimNow(_settingsWindow is not null))
+                return;
+
+            MemoryTrimmer.TrimResult result = MemoryTrimmer.Trim();
+            _memoryTrimCount++;
+            // The first trim, then about once an hour: enough to see it working without filling the log.
+            if (_memoryTrimCount == 1 || _memoryTrimCount % 6 == 0)
+                DebugLog.Write($"MemoryTrimmer: working set {result.BeforeBytes / (1024 * 1024)} MB -> {result.AfterBytes / (1024 * 1024)} MB (trim #{_memoryTrimCount}).");
+        };
+        _memoryTrimTimer.Start();
     }
 
     private static readonly TimeSpan DisplayReapplyDebounce = TimeSpan.FromMilliseconds(1500);
@@ -1332,6 +1355,7 @@ public partial class App : Application
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _displayReapplyTimer?.Stop();
+        _memoryTrimTimer?.Stop();
         AppDomain.CurrentDomain.UnhandledException -= OnAppDomainUnhandledException;
         _timer?.Stop();
         _applicationRuleTimer?.Stop();
