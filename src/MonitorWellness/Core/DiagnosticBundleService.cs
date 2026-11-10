@@ -28,11 +28,12 @@ public static class DiagnosticBundleService
         {
             using (var archive = ZipFile.Open(tempPath, ZipArchiveMode.Create))
             {
-                WriteText(archive, "README.txt", "This user-requested diagnostic bundle contains technical environment data and the local debug log. It does not include settings, location, history, or saved profiles. Review debug.log before sharing it.");
+                WriteText(archive, "README.txt", "This user-requested diagnostic bundle contains technical environment data and the local debug log. It does not include settings, location, history, or saved profiles. Your Windows account name is removed from file paths in the log, but the names of applications you created comfort rules for can still appear. Review debug.log before sharing it.");
                 WriteText(archive, "environment.txt", BuildEnvironmentReport());
 
-                if (File.Exists(DebugLog.FilePath))
-                    archive.CreateEntryFromFile(DebugLog.FilePath, "debug.log", CompressionLevel.Optimal);
+                string? log = ReadLogRedacted();
+                if (log is not null)
+                    WriteText(archive, "debug.log", log);
             }
 
             File.Move(tempPath, destinationPath, overwrite: true);
@@ -41,6 +42,25 @@ public static class DiagnosticBundleService
         {
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
+        }
+    }
+
+    /// <summary>Reads the log (the app may be appending to it, hence the shared read) with the Windows account name removed, including from lines written before redaction existed.</summary>
+    private static string? ReadLogRedacted()
+    {
+        try
+        {
+            if (!File.Exists(DebugLog.FilePath))
+                return null;
+
+            using var stream = new FileStream(DebugLog.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            return LogRedaction.Redact(reader.ReadToEnd());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"DiagnosticBundleService: couldn't read the log: {ex.Message}");
+            return null;
         }
     }
 

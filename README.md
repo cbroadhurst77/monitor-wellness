@@ -122,6 +122,22 @@ Bug reports and questions: [GitHub Issues](https://github.com/cbroadhurst77/moni
 For day-to-day setup, safety recovery, hardware-brightness testing, and accessibility guidance,
 see the [User Guide](USER_GUIDE.md).
 
+## Documentation map
+
+Current, user-facing: this README, [USER_GUIDE.md](USER_GUIDE.md), [CHANGELOG.md](CHANGELOG.md),
+[PRIVACY.md](PRIVACY.md), [ENTERPRISE_DEPLOYMENT.md](ENTERPRISE_DEPLOYMENT.md),
+[LOCALIZATION_AND_ACCESSIBILITY.md](LOCALIZATION_AND_ACCESSIBILITY.md).
+
+Development log and decisions (kept up to date): [IMPLEMENTATION.md](IMPLEMENTATION.md),
+[QA_CHECKLIST.md](QA_CHECKLIST.md), [RELEASE_READINESS.md](RELEASE_READINESS.md).
+
+Review history (point-in-time snapshots; findings may since have been fixed, so verify against
+the code before treating any item as open): [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md),
+[INDEPENDENT_REAUDIT.md](INDEPENDENT_REAUDIT.md), [GAP_ANALYSIS_2026-07.md](GAP_ANALYSIS_2026-07.md),
+[UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md),
+[EVALUATION.md](EVALUATION.md). Source comments cite these files by name, so they stay in the
+repository root.
+
 ## Building from source
 
 Requires the .NET 10 SDK (LTS) and Windows.

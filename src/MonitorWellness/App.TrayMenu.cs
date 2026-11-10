@@ -45,13 +45,19 @@ public partial class App
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(BuildQuickComfortPlansMenu());
         menu.Items.Add(new ToolStripSeparator());
-        bool autoStartCurrentlyRegistered = AutoStartManager.IsRegistered();
-        if (_settings.AutoStartEnabled && !autoStartCurrentlyRegistered)
+        AutoStartCheck autoStartCheck = AutoStartManager.CheckRegistration();
+        // "Unknown" (the check couldn't complete) must never be read as "no": keep the saved
+        // preference as the answer and say nothing, rather than raise a false alarm.
+        bool autoStartCurrentlyRegistered = autoStartCheck == AutoStartCheck.Registered
+            || (autoStartCheck == AutoStartCheck.Unknown && _settings.AutoStartEnabled);
+        if (autoStartCheck == AutoStartCheck.Unknown)
+            DebugLog.Write("Auto-start check could not be completed at startup; leaving the saved preference as it is.");
+        if (_settings.AutoStartEnabled && autoStartCheck is AutoStartCheck.NotRegistered or AutoStartCheck.Disabled)
         {
-            // The user turned this on at some point and it's since disappeared — e.g. a
-            // Windows update or IT policy silently removed the Task Scheduler entry. Worth
+            // The user turned this on at some point and it's since disappeared or been disabled —
+            // e.g. a Windows update or IT policy silently removed the Task Scheduler entry. Worth
             // saying so explicitly rather than letting auto-start just quietly stop working.
-            DebugLog.Write("Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is missing");
+            DebugLog.Write($"Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is {(autoStartCheck == AutoStartCheck.Disabled ? "disabled" : "missing")}");
             QueueStartupBalloon(
                 "Monitor Wellness",
                 "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
@@ -96,7 +102,7 @@ public partial class App
         var diagnosticsMenu = new ToolStripMenuItem("&Diagnostics");
         diagnosticsMenu.DropDownItems.Add("Display Capability Passport...", null, (_, _) => ShowDisplayCapabilityWindow());
         diagnosticsMenu.DropDownItems.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
-        diagnosticsMenu.DropDownItems.Add("Export Diagnostic Bundle...", null, (_, _) => ExportDiagnosticBundle());
+        diagnosticsMenu.DropDownItems.Add("Export Diagnostic Bundle...", null, async (_, _) => await ExportDiagnosticBundleAsync());
         diagnosticsMenu.DropDownItems.Add("Open Logs Folder", null, (_, _) => OpenLogsFolder());
         menu.Items.Add(diagnosticsMenu);
         menu.Items.Add(new ToolStripSeparator());

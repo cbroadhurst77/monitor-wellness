@@ -96,9 +96,11 @@ public partial class SettingsWindow
             return;
         }
 
-        var today = DateTime.UtcNow;
-        var sunrise = SolarCalculator.FindSunriseUtc(today, lat, lon);
-        var sunset = SolarCalculator.FindSunsetUtc(today, lat, lon);
+        // The person's calendar day (local midnight, expressed in UTC), not the UTC date, so
+        // "today" is right far from Greenwich and near the polar day/night edge cases.
+        DateTime localDayStartUtc = DateTime.Today.ToUniversalTime();
+        var sunrise = SolarCalculator.FindSunriseInWindowUtc(localDayStartUtc, lat, lon);
+        var sunset = SolarCalculator.FindSunsetInWindowUtc(localDayStartUtc, lat, lon);
 
         SunTimesText.Text = (sunrise, sunset) switch
         {

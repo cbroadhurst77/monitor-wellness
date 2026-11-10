@@ -11,10 +11,21 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class DebugLog
 {
-    private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MonitorWellness",
-        "debug.log");
+    /// <summary>
+    /// Environment variable that redirects the log to another folder. The test run sets it so
+    /// unit tests stop appending their activity to the person's real debug.log.
+    /// </summary>
+    public const string LogDirectoryVariable = "MONITORWELLNESS_LOG_DIR";
+
+    private static readonly string LogPath = ResolveLogPath(
+        Environment.GetEnvironmentVariable(LogDirectoryVariable),
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+
+    /// <summary>The log file location: the override folder if one is set, otherwise %AppData%\MonitorWellness. Pure and testable.</summary>
+    internal static string ResolveLogPath(string? overrideDirectory, string appDataDirectory)
+        => string.IsNullOrWhiteSpace(overrideDirectory)
+            ? Path.Combine(appDataDirectory, "MonitorWellness", "debug.log")
+            : Path.Combine(overrideDirectory.Trim(), "debug.log");
 
     private const long MaxSizeBytes = 2 * 1024 * 1024; // 2MB
     private const long TrimToBytes = 512 * 1024;       // keep the most recent 512KB when rotating
@@ -31,7 +42,7 @@ public static class DebugLog
                 Directory.CreateDirectory(directory);
 
             RotateIfTooLarge();
-            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
+            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {LogRedaction.Redact(message)}{Environment.NewLine}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

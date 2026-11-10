@@ -36,7 +36,7 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
 
     private void RebuildControllers()
     {
-        var monitors = MonitorEnumerator.GetActiveMonitors();
+        var monitors = MonitorEnumerator.GetActiveMonitors(forceRefresh: true); // a display change is exactly when a cached list is wrong
         var current = new HashSet<string>(monitors.Select(m => m.DeviceName));
         DebugLog.Write($"GammaControllerManager rebuild: {current.Count} active monitor(s): [{string.Join(", ", current)}]");
 
@@ -107,7 +107,7 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         foreach (var controller in Controllers)
         {
             if (!controller.ApplyColorTemperatureWithContrast(kelvin, contrastReduction))
-                DebugLog.Write($"GammaControllerManager.ApplyToAll: rejected for {controller.DeviceName} (kelvin={kelvin}, contrast={contrastReduction}).");
+                DebugLog.Write($"GammaControllerManager.ApplyToAll: rejected for {controller.DeviceName} (kelvin={kelvin}, contrast={contrastReduction}, Win32 error {controller.LastWin32Error}).");
         }
     }
 

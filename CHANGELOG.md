@@ -24,6 +24,27 @@ recent work.
   monitor you had approved is retried automatically a few times (30 minutes, 2 hours, 12 hours)
   before it asks you to re-test it.
 
+- Exporting a diagnostic bundle and opening the Display Capability Passport no longer freeze the
+  tray while the app probes each monitor; they run in the background.
+- Less constant background work: the app no longer looks up the foreground window every two
+  seconds when you have no app rules and the full-screen guard is off, and the monitor list is
+  reused for a couple of seconds instead of being re-queried several times a second during the
+  migraine fade-out.
+- The Windows account name is removed from file paths in the debug log and in diagnostic bundles
+  (including lines already in an existing log when a bundle is made).
+- The "Today: sunrise / sunset" line in Settings now uses your own calendar day, not the UTC
+  date, which was wrong for some locations far from Greenwich.
+- The auto-start diagnostics now say what the last result means (for example "the task is
+  running now") instead of showing a bare number.
+- No more false "auto-start seems to have been turned off" warnings at logon, and a faster
+  start: the app now asks Windows' Task Scheduler directly instead of waiting on a slow command,
+  and a check that can't complete is treated as "unknown", never as "off". A task that exists
+  but has been disabled is now reported as disabled.
+- A sensor that keeps failing (such as an ambient-light sensor) is now retried less often and
+  logged once with its real error, instead of filling the log with identical lines.
+- When Windows rejects a colour change, the app now re-creates its connection to that display
+  and retries once, and the log says whether it was a transient state or a value that is
+  genuinely too warm (it previously blamed the hardware for ordinary 5,000K values).
 - "Start with Windows" no longer silently fails when the administrator prompt is cancelled or
   blocked, and no longer sets up auto-start for the wrong account when a different
   administrator approves the prompt. In both cases it now uses a standard entry for your own

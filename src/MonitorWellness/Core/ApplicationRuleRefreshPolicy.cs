@@ -7,6 +7,17 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class ApplicationRuleRefreshPolicy
 {
+    /// <summary>
+    /// Whether the 2-second foreground check has any reason to run. With no enabled app rule, the
+    /// full-screen guard off and no rule state left to clear, every check would only look up the
+    /// foreground process to learn nothing, forever; skipping it removes that constant background work.
+    /// </summary>
+    public static bool ShouldPollForeground(bool fullscreenGuardEnabled, IEnumerable<ApplicationComfortRule> rules, bool anyRuleStateToClear)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        return fullscreenGuardEnabled || anyRuleStateToClear || rules.Any(rule => rule.IsEnabled);
+    }
+
     public static bool ShouldRefresh(
         ApplicationComfortRule? matchingRule,
         bool nativeDisplayRuleWasActive,
