@@ -96,6 +96,8 @@ public class SettingsWindowXamlTests
             Find<StackPanel>(window, "LocationDefaultBanner");
             Find<Button>(window, "ConfirmLondonButton");
             Find<CheckBox>(window, "ExcludeFromCaptureCheckBox");
+            Find<CheckBox>(window, "CheckForUpdatesCheckBox");
+            Find<CheckBox>(window, "CheckForPreReleasesCheckBox");
             Find<TabControl>(window, "SettingsTabs");
         });
 }

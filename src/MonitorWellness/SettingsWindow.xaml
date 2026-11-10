@@ -481,6 +481,8 @@
 
                         <TextBlock Text="Updates" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
                         <CheckBox x:Name="CheckForUpdatesCheckBox" Content="Check for new versions automatically (about once a day)" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="CheckForPreReleasesCheckBox" Content="Include pre-releases (every release so far is one)" IsChecked="True" Margin="24,0,0,4"
+                                  AutomationProperties.Name="Include pre-releases when checking for new versions"/>
                         <TextBlock Text="Off by default. When on, this only asks GitHub for the latest version number — no personal or usage data is sent. If a newer version exists you'll see a one-time notification with a link to it; nothing downloads or installs automatically." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <TextBlock x:Name="CurrentVersionText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap"/>
                     </StackPanel>

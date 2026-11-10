@@ -24,6 +24,14 @@ public static class AutoStartManager
 {
     public const string TaskName = "MonitorWellness";
 
+    /// <summary>
+    /// schtasks.exe by its full System32 path. Launching it by bare name makes Windows look in the
+    /// application's own folder first; in portable mode that is a folder the person can write to
+    /// (Downloads, say), so a planted schtasks.exe next to the app would run, and for create/delete
+    /// it would run elevated after the person approves the admin prompt.
+    /// </summary>
+    internal static string SchtasksPath => Path.Combine(Environment.SystemDirectory, "schtasks.exe");
+
     /// <summary>Per-user fallback used when Task Scheduler registration isn't possible (see <see cref="Register"/>). Needs no elevation.</summary>
     public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     public const string RunValueName = "MonitorWellness";
@@ -176,7 +184,7 @@ public static class AutoStartManager
         output = "";
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", arguments)
+            using var process = Process.Start(new ProcessStartInfo(SchtasksPath, arguments)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -348,7 +356,7 @@ public static class AutoStartManager
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", arguments)
+            using var process = Process.Start(new ProcessStartInfo(SchtasksPath, arguments)
             {
                 UseShellExecute = true,
                 Verb = "runas",

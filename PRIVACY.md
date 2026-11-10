@@ -40,8 +40,9 @@ that request.
 
 **2. Update check** (Settings → Profiles & History → Updates, **off by default**). If
 you turn this on, roughly once a day the app asks GitHub's public API for this
-repository's latest release tag — a plain request with no personal information, account
-identifiers, or usage data attached, just "what's the newest version." If a newer
+repository's recent release list (including pre-releases, unless you turn that off) — a plain
+request with no personal information, account identifiers, or usage data attached, just
+"what's the newest version." If a newer
 version exists you'll see a one-time notification linking to it; nothing downloads or
 installs automatically.
 

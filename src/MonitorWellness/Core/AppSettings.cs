@@ -278,6 +278,13 @@ public sealed class AppSettings
     /// </summary>
     public bool CheckForUpdatesEnabled { get; set; }
 
+    /// <summary>
+    /// Whether the update check also reports pre-releases. Defaults on: every release since 0.2.5 is
+    /// published as a pre-release, so with this off the check could never find a newer version.
+    /// Only meaningful when <see cref="CheckForUpdatesEnabled"/> is on.
+    /// </summary>
+    public bool UpdateNotifyPreReleases { get; set; } = true;
+
     /// <summary>Last time an update check actually ran, so it's throttled to roughly once/day regardless of how often the app is launched/restarted.</summary>
     public DateTime? LastUpdateCheckUtc { get; set; }
 
@@ -326,6 +333,7 @@ public sealed class AppSettings
         RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
         PreferOverlayOnlyOnCompatibilityDisplays = PreferOverlayOnlyOnCompatibilityDisplays,
         CheckForUpdatesEnabled = CheckForUpdatesEnabled,
+        UpdateNotifyPreReleases = UpdateNotifyPreReleases,
         LastUpdateCheckUtc = LastUpdateCheckUtc,
     };
 
@@ -376,6 +384,7 @@ public sealed class AppSettings
         RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
         PreferOverlayOnlyOnCompatibilityDisplays = copy.PreferOverlayOnlyOnCompatibilityDisplays;
         CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;
+        UpdateNotifyPreReleases = copy.UpdateNotifyPreReleases;
         LastUpdateCheckUtc = copy.LastUpdateCheckUtc;
     }
 }

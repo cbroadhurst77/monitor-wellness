@@ -93,6 +93,7 @@ public partial class SettingsWindow
         _settings.RestoreNativeDisplayInFullscreen = imported.RestoreNativeDisplayInFullscreen;
         _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
         _settings.ExcludeOverlayFromCapture = imported.ExcludeOverlayFromCapture;
+        _settings.UpdateNotifyPreReleases = imported.UpdateNotifyPreReleases;
 
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
@@ -109,6 +110,7 @@ public partial class SettingsWindow
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;
+        CheckForPreReleasesCheckBox.IsChecked = _settings.UpdateNotifyPreReleases;
 
         UpdateMapMarker();
         UpdateSunTimesDisplay();
