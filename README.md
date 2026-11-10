@@ -182,7 +182,9 @@ The script intentionally fails for unsigned, invalidly signed, or version-mismat
 ## Why Task Scheduler instead of a Registry Run key for auto-start?
 
 More robust across some edge cases a Run key doesn't handle well, and easier to cleanly
-remove on uninstall. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full reasoning behind
+remove on uninstall. Registering it needs one UAC prompt; if that is cancelled or blocked by
+IT policy (or a different administrator approves it), Monitor Wellness falls back to a
+standard per-user Run entry for your own account and tells you. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full reasoning behind
 this and other architecture decisions (gamma ramp vs. DDC/CI, overlay window design, why
 settings live in a JSON file instead of the registry, etc.).
 
