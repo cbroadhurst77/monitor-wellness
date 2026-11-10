@@ -83,6 +83,34 @@ public partial class OverlayWindow : Window
         return applied;
     }
 
+    /// <summary>True while the large identify-monitor label is up.</summary>
+    public bool IsShowingLabel => LabelText.Visibility == Visibility.Visible;
+
+    /// <summary>Creates the window's native handle without showing it, so it can be prepared in advance and shown instantly later.</summary>
+    public void PrepareHandle() => _ = new WindowInteropHelper(this).EnsureHandle();
+
+    /// <summary>True while the window is actually on screen.</summary>
+    public bool IsOnScreen => IsVisible;
+
+    /// <summary>Puts the (already prepared) window on screen if it isn't.</summary>
+    public void ShowIfHidden()
+    {
+        if (!IsVisible)
+            Show();
+    }
+
+    /// <summary>
+    /// Takes the window off screen if it is on screen. The window is kept, ready to be shown again.
+    /// (Hiding the native window behind WPF's back and re-showing it with ShowWindow was tried: it
+    /// showed up faster on average but with 180 ms to 1.1 s of jitter, because WPF then had to
+    /// render before the window drew. WPF's own Hide/Show after a warm-up is steady at about 270 ms.)
+    /// </summary>
+    public void HideIfShown()
+    {
+        if (IsVisible)
+            Hide();
+    }
+
     /// <summary>Positions and sizes this window to exactly cover the given physical-pixel bounds.</summary>
     public void PositionOver(System.Drawing.Rectangle bounds)
     {

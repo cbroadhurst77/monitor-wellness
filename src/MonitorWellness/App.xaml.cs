@@ -49,6 +49,8 @@ public partial class App : Application
     private readonly AmbientLightSmoother _ambientLightSmoother = new();
     private MigraineModeController? _migraine;
     private GlobalHotkey? _hotkey;
+    private uint _hotkeyModifiers;
+    private uint _hotkeyKey;
     private GlobalHotkey? _emergencyRestoreHotkey;
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
@@ -321,6 +323,7 @@ public partial class App : Application
             StartDrainingStartupBalloons();
 
         _startupFinished = true;
+        _overlay.PrewarmWhenIdle(); // build the hidden overlay windows in idle time, so showing one later is instant
         _ = CheckForUpdatesIfDueAsync();
 
         // A tray app can run for weeks. The check itself still runs at most once a day
@@ -380,7 +383,7 @@ public partial class App : Application
         if (_settings.LastUpdateCheckUtc is DateTime last && DateTime.UtcNow - last < UpdateCheckInterval)
             return;
 
-        var update = await UpdateChecker.CheckForUpdateAsync();
+        var update = await UpdateChecker.CheckForUpdateAsync(_settings.UpdateNotifyPreReleases);
 
         _settings.LastUpdateCheckUtc = DateTime.UtcNow;
         try
@@ -408,7 +411,7 @@ public partial class App : Application
         _trayIcon.ShowBalloonTip(
             10_000,
             "Monitor Wellness",
-            $"Monitor Wellness {update.Version.ToString(3)} is available (you have {typeof(App).Assembly.GetName().Version?.ToString(3)}). Click here to open the release page.",
+            $"Monitor Wellness {update.Version.ToString(3)}{(update.IsPreRelease ? " (pre-release)" : "")} is available (you have {typeof(App).Assembly.GetName().Version?.ToString(3)}). Click here to open the release page.",
             ToolTipIcon.Info);
     }
 
@@ -668,14 +671,37 @@ public partial class App : Application
     /// </summary>
     private void RebuildHotkey(bool isStartup = false)
     {
-        _hotkey?.Dispose();
+        uint modifiers = _settings.MigraineHotkeyModifiers;
+        uint key = _settings.MigraineHotkeyKey;
+        bool hadWorkingShortcut = _hotkey?.IsRegistered == true;
+        if (HotkeyRebindPolicy.IsUnchanged(hadWorkingShortcut, _hotkeyModifiers, _hotkeyKey, modifiers, key))
+            return;
 
-        _hotkey = new GlobalHotkey(_settings.MigraineHotkeyModifiers, _settings.MigraineHotkeyKey);
-        _hotkey.Pressed += () =>
+        // Try the new shortcut BEFORE giving up the old one. Releasing first meant that changing to a
+        // shortcut another app already owned left the person with no shortcut at all.
+        var candidate = new GlobalHotkey(modifiers, key);
+        candidate.Pressed += () =>
         {
             DebugLog.Write("Global hotkey pressed: toggling migraine mode");
             ToggleMigraineModeWithFeedback();
         };
+
+        if (HotkeyRebindPolicy.ChooseAfterAttempt(hadWorkingShortcut, candidate.IsRegistered) == HotkeyRebindChoice.KeepPreviousBecauseNewFailed)
+        {
+            candidate.Dispose();
+            DebugLog.Write("Hotkey rebind refused: the new shortcut is already used by another app; keeping the previous one.");
+            _trayIcon?.ShowBalloonTip(
+                10_000,
+                "Monitor Wellness",
+                "That shortcut is already used by another app, so Monitor Wellness is keeping your previous migraine shortcut. Pick a different one in Settings.",
+                ToolTipIcon.Warning);
+            return;
+        }
+
+        _hotkey?.Dispose();
+        _hotkey = candidate;
+        _hotkeyModifiers = modifiers;
+        _hotkeyKey = key;
 
         if (!_hotkey.IsRegistered && _trayIcon is not null)
         {

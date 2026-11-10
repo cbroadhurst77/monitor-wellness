@@ -6,6 +6,31 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+### Changed
+- The dimming overlay is now only on screen while it is actually dimming or tinting. In full daytime
+  there are no overlay windows over your monitors at all (before, three invisible full-screen windows
+  sat on top of everything all day). The app starts about 4 seconds faster (1.6 s instead of 5.9 s in
+  one test on three monitors) and uses roughly 120 MB less memory while idle.
+- Trade-off: because the overlay is no longer permanently on screen, the dimming part of migraine mode
+  now appears about a quarter of a second after the shortcut (about 0.27 s in testing; the colour and
+  contrast change is still immediate). The overlay windows are prepared in the background shortly after
+  the app starts so it stays that quick.
+
+### Fixed
+- The update check can now find newer versions. It asked GitHub only for the "latest" release,
+  which skips pre-releases, so it kept reporting 0.2.2 as the newest version and could never tell
+  anyone about 0.2.5 to 0.2.8. It now looks at recent releases and includes pre-releases by
+  default (Settings > Profiles & History, "Include pre-releases"; the update check itself is still
+  off unless you turn it on).
+- Changing the migraine shortcut to one another app already uses no longer leaves you with no
+  shortcut: the new one is tried first, and if it is taken the previous one is kept and you are
+  told.
+- Setting up or removing "Start with Windows" now runs Windows' own `schtasks.exe` by its full
+  system path instead of searching the app's folder first, which closes a way for a planted file
+  to run when the app is used from a folder you can write to (such as Downloads).
+
 ## 0.2.8 — Display recovery and diagnostics update
 
 ### Fixed

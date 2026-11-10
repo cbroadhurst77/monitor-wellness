@@ -177,6 +177,7 @@ public partial class SettingsWindow : Window
             : "No ambient light sensor was found on this device — most desktops don't have one (it's mostly a laptop/tablet feature), so this option will have no effect here even if turned on.";
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;
+        CheckForPreReleasesCheckBox.IsChecked = _settings.UpdateNotifyPreReleases;
         var runningVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         CurrentVersionText.Text = runningVersion is not null ? $"You're running version {runningVersion.ToString(3)}." : "";
         LoadScheduleSourceFrom(_settings);
@@ -380,6 +381,7 @@ public partial class SettingsWindow : Window
         _settings.PreferOverlayOnlyOnCompatibilityDisplays = CompatibilityOverlayOnlyCheckBox.IsChecked == true;
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;
         _settings.ExcludeOverlayFromCapture = ExcludeFromCaptureCheckBox.IsChecked == true;
+        _settings.UpdateNotifyPreReleases = CheckForPreReleasesCheckBox.IsChecked == true;
         _settings.ExcludedMonitors = _excludeBoxes
             .Where(kv => kv.Value.IsChecked == true)
             .Select(kv => kv.Key)

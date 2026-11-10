@@ -59,8 +59,8 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - Ambient-light compensation is optional, sensor-only, and rate-limited so changes in room
   lighting adapt gradually; per-monitor dim and Kelvin matching adjustments preview live
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
-  once a day at most, checks for a newer release and links to it; never downloads or
-  installs anything automatically
+  once a day at most, checks for a newer release (pre-releases included unless you turn that
+  off) and links to it; never downloads or installs anything automatically
 - Optional, idle-aware 20-20-20 break reminders that stay quiet during migraine mode,
   full-screen work, or after you have stepped away; the tray menu can start a simple,
   always-dismissible 20-second focus timer and snooze reminders for the current session

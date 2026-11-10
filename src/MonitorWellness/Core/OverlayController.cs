@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Forms;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -6,14 +7,22 @@ using Color = System.Windows.Media.Color;
 namespace MonitorWellness.Core;
 
 /// <summary>
-/// Owns one OverlayWindow per active monitor and keeps them in sync with the current
-/// display topology. Screen.DeviceName (e.g. "\\.\DISPLAY1") uses the same format as
-/// MonitorEnumerator's device names, so the two can be correlated directly.
+/// Owns the per-monitor dim/tint overlay windows and keeps them in sync with the current display
+/// topology. Screen.DeviceName (e.g. "\\.\DISPLAY1") uses the same format as MonitorEnumerator's
+/// device names, so the two can be correlated directly.
+///
+/// An overlay window is only on screen while it has something to show (see
+/// OverlayVisibilityPolicy). Windows are created lazily, and prepared in advance — hidden, in idle
+/// time after startup — so that showing one (migraine mode most of all, where someone mid-aura
+/// wants relief now) is instant and the app's startup isn't spent building three transparent
+/// full-screen windows that daytime never uses.
 /// </summary>
 public sealed class OverlayController : IDisposable, IOverlayTarget
 {
     private static readonly TimeSpan TopologyRefreshDebounce = TimeSpan.FromMilliseconds(250);
     private readonly Dictionary<string, OverlayWindow> _windows = new();
+    private readonly Dictionary<string, bool> _shown = new();
+    private IReadOnlyList<(string DeviceName, System.Drawing.Rectangle Bounds)> _screens = Array.Empty<(string, System.Drawing.Rectangle)>();
     private DispatcherTimer? _topologyRefreshTimer;
     private bool _disposed;
     private bool _excludeFromCapture = true;
@@ -32,7 +41,8 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
 
     public OverlayController()
     {
-        RebuildWindows();
+        RefreshScreens();
+        DebugLog.Write($"OverlayController: {_screens.Count} screen(s); overlay windows are created when needed.");
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
@@ -41,11 +51,10 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         VisualStabilityDiagnostics.RecordDisplayTopologySignal();
         // SystemEvents can raise this off the thread that subscribed (documented Windows
         // Forms/SystemEvents behavior, not guaranteed to always fire on the UI thread) —
-        // RebuildWindows constructs/closes WPF Window objects, which throw if touched from a
-        // non-owning thread. Confirmed as a real, plausible risk by INDEPENDENT_REAUDIT.md
-        // (never reproduced, since a real sleep/resume or hot-plug cycle can't be triggered
-        // from this dev session, but named there as a concrete hypothesis worth closing
-        // proactively rather than waiting to reproduce a crash first).
+        // touching WPF Window objects from a non-owning thread throws. Confirmed as a real,
+        // plausible risk by INDEPENDENT_REAUDIT.md (never reproduced, since a real sleep/resume
+        // or hot-plug cycle can't be triggered from a dev session, but named there as a concrete
+        // hypothesis worth closing proactively rather than waiting to reproduce a crash first).
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
             dispatcher.BeginInvoke(ScheduleTopologyRefresh);
@@ -56,7 +65,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     /// <summary>
     /// Display settings commonly arrive in a short burst while a dock, driver, or DPI setting
     /// settles. Rebuilding a topmost overlay for every notification can be perceived as a
-    /// flash, so one quiet, delayed rebuild replaces the whole burst.
+    /// flash, so one quiet, delayed refresh replaces the whole burst.
     /// </summary>
     private void ScheduleTopologyRefresh()
     {
@@ -74,55 +83,135 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         RebuildWindows();
     }
 
+    private void RefreshScreens()
+        => _screens = Screen.AllScreens.Select(screen => (screen.DeviceName, screen.Bounds)).ToList();
+
+    /// <summary>
+    /// After a display change: learn the new screens, close the windows of monitors that went away,
+    /// and move the rest. New monitors get no window yet; the next apply creates one if it needs one.
+    /// </summary>
     private void RebuildWindows()
     {
-        var currentDeviceNames = new HashSet<string>(Screen.AllScreens.Select(s => s.DeviceName));
-        DebugLog.Write($"RebuildWindows: {Screen.AllScreens.Length} screen(s) reported by Screen.AllScreens: [{string.Join(", ", currentDeviceNames)}]");
+        RefreshScreens();
+        var currentDeviceNames = new HashSet<string>(_screens.Select(screen => screen.DeviceName));
+        DebugLog.Write($"RebuildWindows: {_screens.Count} screen(s) reported by Screen.AllScreens: [{string.Join(", ", currentDeviceNames)}]; {_windows.Count} overlay window(s) exist");
 
-        // Drop windows for monitors that disappeared.
         foreach (var staleName in _windows.Keys.Except(currentDeviceNames).ToList())
         {
             _windows[staleName].Close();
             _windows.Remove(staleName);
+            _shown.Remove(staleName);
         }
 
-        // Add windows for monitors that appeared.
-        foreach (var screen in Screen.AllScreens)
+        foreach (var (deviceName, bounds) in _screens)
         {
-            if (_windows.ContainsKey(screen.DeviceName))
-                continue;
-
-            var window = new OverlayWindow();
-            window.Show();
-            window.SetCaptureExclusion(_excludeFromCapture);
-            window.PositionOver(screen.Bounds);
-            _windows[screen.DeviceName] = window;
-            DebugLog.Write($"Created overlay window for {screen.DeviceName}, bounds={screen.Bounds}");
-        }
-
-        // Existing windows may need repositioning (resolution/arrangement change).
-        foreach (var screen in Screen.AllScreens)
-        {
-            if (_windows.TryGetValue(screen.DeviceName, out var window))
-                window.PositionOver(screen.Bounds);
+            if (_windows.TryGetValue(deviceName, out var window))
+                window.PositionOver(bounds);
         }
     }
 
-    /// <summary>Device names currently tracked by an overlay window, for callers that need to target "every monitor" (e.g. migraine mode).</summary>
-    public IReadOnlyCollection<string> DeviceNames => _windows.Keys;
+    /// <summary>Every monitor's device name, whether or not it currently has an overlay window (callers use this to mean "every monitor", e.g. migraine mode).</summary>
+    public IReadOnlyCollection<string> DeviceNames => _screens.Select(screen => screen.DeviceName).ToList();
+
+    /// <summary>Returns the overlay window for a monitor, creating it if it doesn't exist yet. Creating it does not show it.</summary>
+    private OverlayWindow? EnsureWindow(string deviceName)
+    {
+        if (_windows.TryGetValue(deviceName, out var existing))
+            return existing;
+
+        foreach (var (name, bounds) in _screens)
+        {
+            if (!string.Equals(name, deviceName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var stopwatch = Stopwatch.StartNew();
+            var window = new OverlayWindow();
+            window.PrepareHandle();
+            window.SetCaptureExclusion(_excludeFromCapture);
+            window.PositionOver(bounds);
+            _windows[name] = window;
+            DebugLog.Write($"Created overlay window for {name}, bounds={bounds}, in {stopwatch.ElapsedMilliseconds} ms (not shown yet)");
+            return window;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Prepares the (hidden) overlay windows in idle time after startup, one per monitor, so the first
+    /// time one is needed it only has to be shown. Harmless if a window is needed sooner: it is
+    /// then created on the spot.
+    /// </summary>
+    public void PrewarmWhenIdle()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return;
+
+        foreach (var name in _screens.Select(screen => screen.DeviceName).ToList())
+            dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () => WarmUp(name, dispatcher));
+    }
+
+    /// <summary>
+    /// Creates a monitor's overlay window and takes it through its first show while it is still fully
+    /// transparent (so nothing is visible), then hides it again. WPF does most of its work the first
+    /// time a window is shown; paying that now, in idle time, instead of when migraine mode needs the
+    /// window, is what keeps showing it instant.
+    /// </summary>
+    private void WarmUp(string deviceName, Dispatcher dispatcher)
+    {
+        if (_disposed)
+            return;
+
+        OverlayWindow? window = EnsureWindow(deviceName);
+        if (window is null || window.IsOnScreen)
+            return; // unavailable, or already in use
+
+        var stopwatch = Stopwatch.StartNew();
+        window.ShowIfHidden();
+        DebugLog.Write($"Overlay window for {deviceName}: first show took {stopwatch.ElapsedMilliseconds} ms (transparent, as a warm-up)");
+
+        dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            // Hide it again unless something started using it in the meantime.
+            if (!_disposed && !_shown.GetValueOrDefault(deviceName) && !window.IsShowingLabel)
+                window.HideIfShown();
+        });
+    }
 
     /// <summary>
     /// The single primitive both the normal day/night schedule and migraine mode's
     /// activate/fade logic apply through, so there's exactly one code path that touches
     /// window tint state. A monitor with no entry in <paramref name="byDevice"/> is left
     /// as-is (not reset) — callers always pass a complete map for the devices they care about.
+    /// A monitor whose amount is effectively zero has its overlay hidden, not just made transparent.
     /// </summary>
     public void Apply(IReadOnlyDictionary<string, (Color Color, double Opacity)> byDevice)
     {
-        foreach (var (deviceName, window) in _windows)
+        foreach (var (deviceName, _) in _screens)
         {
-            if (byDevice.TryGetValue(deviceName, out var setting))
-                window.SetTint(setting.Color, Math.Clamp(setting.Opacity, 0.0, 1.0));
+            if (!byDevice.TryGetValue(deviceName, out var setting))
+                continue;
+
+            double opacity = Math.Clamp(setting.Opacity, 0.0, 1.0);
+            bool wasShown = _shown.GetValueOrDefault(deviceName);
+            bool needed = OverlayVisibilityPolicy.NeedsOverlay(opacity, wasShown);
+            _shown[deviceName] = needed;
+
+            if (needed)
+            {
+                OverlayWindow? window = EnsureWindow(deviceName);
+                if (window is null)
+                    continue;
+
+                window.SetTint(setting.Color, opacity);   // before showing, so nothing flashes at the wrong tint
+                window.ShowIfHidden();
+            }
+            else if (_windows.TryGetValue(deviceName, out var existing))
+            {
+                existing.SetTint(System.Windows.Media.Colors.Transparent, 0.0);
+                existing.HideIfShown();
+            }
         }
     }
 
@@ -141,11 +230,15 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         Apply(byDevice);
     }
 
-    /// <summary>Immediately makes every dim/tint overlay transparent.</summary>
+    /// <summary>Immediately removes every dim/tint overlay from the screen.</summary>
     public void Clear()
     {
         foreach (var window in _windows.Values)
+        {
             window.SetTint(System.Windows.Media.Colors.Transparent, 0.0);
+            window.HideIfShown();
+        }
+        _shown.Clear();
     }
 
     /// <summary>
@@ -154,26 +247,35 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     /// </summary>
     public void IdentifyMonitors(TimeSpan duration)
     {
-        DebugLog.Write($"IdentifyMonitors invoked, {_windows.Count} window(s) tracked: [{string.Join(", ", _windows.Keys)}]");
+        DebugLog.Write($"IdentifyMonitors invoked, {_screens.Count} screen(s): [{string.Join(", ", _screens.Select(screen => screen.DeviceName))}]");
         try
         {
-            foreach (var (deviceName, window) in _windows)
+            foreach (var (deviceName, _) in _screens)
             {
+                OverlayWindow? window = EnsureWindow(deviceName);
+                if (window is null)
+                    continue;
+
                 // Path.GetFileName misparses "\\.\DISPLAY1" as a UNC path (treats "." as a
                 // server name and "DISPLAY1" as the share), returning "" — confirmed via
                 // tools/GammaCheck. Win32 device path strings aren't real paths, so Path
                 // methods shouldn't be used on them at all; a plain last-backslash split does.
                 string label = deviceName[(deviceName.LastIndexOf('\\') + 1)..];
-                DebugLog.Write($"ShowLabel('{label}') on {deviceName}, window.IsVisible={window.IsVisible}");
+                DebugLog.Write($"ShowLabel('{label}') on {deviceName}");
                 window.ShowLabel(label);
+                window.ShowIfHidden();
             }
 
             var timer = new DispatcherTimer { Interval = duration };
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
-                foreach (var window in _windows.Values)
+                foreach (var (deviceName, window) in _windows)
+                {
                     window.HideLabel();
+                    if (!_shown.GetValueOrDefault(deviceName))
+                        window.HideIfShown(); // it was only up to identify the monitor
+                }
             };
             timer.Start();
         }
@@ -193,5 +295,6 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
         foreach (var window in _windows.Values)
             window.Close();
         _windows.Clear();
+        _shown.Clear();
     }
 }
