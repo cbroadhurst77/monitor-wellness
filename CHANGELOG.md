@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.7 — Recovery, reliability and schedule update
 
 ### Fixed
 - If Monitor Wellness is closed abruptly (killed, crashed, or the PC loses power) while it has
