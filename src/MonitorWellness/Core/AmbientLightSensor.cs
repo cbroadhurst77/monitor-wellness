@@ -44,15 +44,28 @@ public static class AmbientLightSensor
 
     private static bool _loggedFirstLuxRead;
 
+    // A sensor that starts failing used to be re-read and re-logged on every 30-second tick (and
+    // 5 times a second while migraine mode faded out): 1,250 identical lines in one day, with no
+    // exception type. Now a failure backs the reads off and only some failures are logged.
+    private static readonly FailureThrottle Throttle = new();
+
     /// <summary>True if this device reports having an ambient light sensor at all.</summary>
     public static bool IsAvailable => Sensor.Value is not null;
 
     /// <summary>Current illuminance in lux, or null if there's no sensor or the read failed. Never throws.</summary>
-    public static double? TryGetCurrentLux()
+    public static double? TryGetCurrentLux() => TryGetCurrentLux(DateTime.UtcNow);
+
+    internal static double? TryGetCurrentLux(DateTime nowUtc)
     {
+        if (!Throttle.ShouldAttempt(nowUtc))
+            return null;
+
         try
         {
             double? lux = Sensor.Value?.GetCurrentReading()?.IlluminanceInLux;
+            int recoveredFrom = Throttle.RecordSuccess();
+            if (recoveredFrom > 0)
+                DebugLog.Write($"AmbientLightSensor: reading again after {recoveredFrom} failed attempt(s).");
             if (!_loggedFirstLuxRead)
             {
                 _loggedFirstLuxRead = true;
@@ -64,7 +77,8 @@ public static class AmbientLightSensor
         }
         catch (Exception ex)
         {
-            DebugLog.Write($"AmbientLightSensor.TryGetCurrentLux failed: {ex.Message}");
+            if (Throttle.RecordFailure(nowUtc))
+                DebugLog.Write($"AmbientLightSensor.TryGetCurrentLux failed ({Throttle.ConsecutiveFailures} in a row; backing off): {ex.GetType().Name} 0x{ex.HResult:X8}: {ex.Message}");
             return null;
         }
     }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Security;
 using Microsoft.Win32;
@@ -72,8 +73,41 @@ public static class AutoStartManager
     public static string BuildQueryVerboseArguments()
         => $"/query /tn \"{TaskName}\" /v /fo LIST";
 
-    /// <summary>True if auto-start is registered by either method (Task Scheduler, or the per-user Run key fallback). Does not require elevation.</summary>
-    public static bool IsRegistered() => IsTaskRegistered() || IsRunKeyRegistered();
+    /// <summary>
+    /// How long to wait for the <c>schtasks</c> fallback. The old fixed 5 seconds was too short at
+    /// logon, when the machine is busy: the wait timed out, reading the exit code threw, and a
+    /// task that existed was reported missing (43 false "auto-start was turned off" warnings in
+    /// the author's own log).
+    /// </summary>
+    private const int SchtasksQueryTimeoutMilliseconds = 15_000;
+
+    /// <summary>What <c>schtasks.exe</c> did, kept separate from what it means so the mapping can be tested.</summary>
+    public readonly record struct SchtasksResult(bool Started, bool Exited, int ExitCode);
+
+    /// <summary>
+    /// Maps a <c>schtasks /query</c> outcome to an answer. A process that never started or did not
+    /// finish is <see cref="AutoStartCheck.Unknown"/> — it says nothing about whether the task
+    /// exists. Pure and testable.
+    /// </summary>
+    public static AutoStartCheck ClassifySchtasksQuery(SchtasksResult result)
+        => !result.Started || !result.Exited
+            ? AutoStartCheck.Unknown
+            : result.ExitCode == 0 ? AutoStartCheck.Registered : AutoStartCheck.NotRegistered;
+
+    /// <summary>
+    /// Whether auto-start is registered by either method (Task Scheduler, or the per-user Run key
+    /// fallback), with "could not tell" kept distinct from "no". Does not require elevation.
+    /// </summary>
+    public static AutoStartCheck CheckRegistration()
+    {
+        AutoStartCheck task = CheckTask();
+        return task == AutoStartCheck.Registered || IsRunKeyRegistered()
+            ? AutoStartCheck.Registered
+            : task;
+    }
+
+    /// <summary>True only when auto-start is definitely registered; "unknown" counts as false here, so prefer <see cref="CheckRegistration"/> when a wrong "no" would cause a warning.</summary>
+    public static bool IsRegistered() => CheckRegistration() == AutoStartCheck.Registered;
 
     public static bool IsRunKeyRegistered()
     {
@@ -119,25 +153,64 @@ public static class AutoStartManager
         }
     }
 
-    /// <summary>True if the Task Scheduler auto-start task is currently registered. Does not require elevation.</summary>
-    public static bool IsTaskRegistered()
+    /// <summary>
+    /// The Task Scheduler entry's state. Asks the Task Scheduler service directly (fast, typed,
+    /// tells "missing" from "couldn't ask"); only if that is unavailable does it fall back to
+    /// <c>schtasks.exe</c>, with a timeout that is treated as unknown rather than as "missing".
+    /// </summary>
+    public static AutoStartCheck CheckTask()
     {
+        switch (TaskSchedulerQuery.TryGet(TaskName, out TaskInfo? info))
+        {
+            case TaskLookup.Found:
+                return info!.Enabled ? AutoStartCheck.Registered : AutoStartCheck.Disabled;
+            case TaskLookup.NotFound:
+                return AutoStartCheck.NotRegistered;
+        }
+
+        return ClassifySchtasksQuery(RunSchtasksQuery(BuildQueryArguments(), out _));
+    }
+
+    private static SchtasksResult RunSchtasksQuery(string arguments, out string output)
+    {
+        output = "";
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", BuildQueryArguments())
+            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", arguments)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             });
-            process?.WaitForExit(5000);
-            return process?.ExitCode == 0;
+            if (process is null)
+                return new SchtasksResult(false, false, -1);
+
+            // Read asynchronously: a synchronous ReadToEnd has no timeout and would hang the UI
+            // thread for as long as schtasks does.
+            Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+            _ = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(SchtasksQueryTimeoutMilliseconds))
+            {
+                DebugLog.Write($"AutoStartManager: schtasks {arguments} did not finish within {SchtasksQueryTimeoutMilliseconds / 1000}s; the answer is unknown.");
+                try
+                {
+                    process.Kill();
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // It exited on its own between the timeout and the kill; nothing to do.
+                }
+                return new SchtasksResult(true, false, -1);
+            }
+
+            output = standardOutput.Wait(2_000) ? standardOutput.Result : "";
+            return new SchtasksResult(true, true, process.ExitCode);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            DebugLog.Write($"AutoStartManager.IsRegistered check failed: {ex.Message}");
-            return false;
+            DebugLog.Write($"AutoStartManager: couldn't run schtasks: {ex.Message}");
+            return new SchtasksResult(false, false, -1);
         }
     }
 
@@ -187,7 +260,7 @@ public static class AutoStartManager
     public static bool Unregister()
     {
         bool runKeyGone = TryUnregisterRunKey();
-        if (!IsTaskRegistered())
+        if (CheckTask() == AutoStartCheck.NotRegistered)
             return runKeyGone;
         return RunElevated(BuildDeleteArguments()) && runKeyGone;
     }
@@ -219,36 +292,38 @@ public static class AutoStartManager
 
     private static AutoStartDiagnostics GetTaskDiagnostics()
     {
-        try
+        switch (TaskSchedulerQuery.TryGet(TaskName, out TaskInfo? info))
         {
-            using var process = Process.Start(new ProcessStartInfo("schtasks.exe", BuildQueryVerboseArguments())
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            string output = process?.StandardOutput.ReadToEnd() ?? "";
-            process?.WaitForExit(5000);
-
-            if (process?.ExitCode != 0)
+            case TaskLookup.Found:
+                return new AutoStartDiagnostics(
+                    IsRegistered: true,
+                    Status: info!.State,
+                    LastRunTime: FormatTime(info.LastRunLocal),
+                    LastResult: TaskSchedulerQuery.DescribeLastResult(info.LastResult),
+                    NextRunTime: FormatTime(info.NextRunLocal),
+                    RunAsUser: info.RunAsUser);
+            case TaskLookup.NotFound:
                 return new AutoStartDiagnostics(false, null, null, null, null);
+        }
 
-            var fields = ParseFields(output);
-            return new AutoStartDiagnostics(
-                IsRegistered: true,
-                Status: fields.GetValueOrDefault("Status"),
-                LastRunTime: fields.GetValueOrDefault("Last Run Time"),
-                LastResult: fields.GetValueOrDefault("Last Result"),
-                NextRunTime: fields.GetValueOrDefault("Next Run Time"),
-                RunAsUser: fields.GetValueOrDefault("Run As User"));
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            DebugLog.Write($"AutoStartManager.GetDiagnostics failed: {ex.Message}");
+        SchtasksResult result = RunSchtasksQuery(BuildQueryVerboseArguments(), out string output);
+        if (ClassifySchtasksQuery(result) != AutoStartCheck.Registered)
             return new AutoStartDiagnostics(false, null, null, null, null);
-        }
+
+        var fields = ParseFields(output);
+        return new AutoStartDiagnostics(
+            IsRegistered: true,
+            Status: fields.GetValueOrDefault("Status"),
+            LastRunTime: fields.GetValueOrDefault("Last Run Time"),
+            LastResult: DescribeLastResultText(fields.GetValueOrDefault("Last Result")),
+            NextRunTime: fields.GetValueOrDefault("Next Run Time"),
+            RunAsUser: fields.GetValueOrDefault("Run As User"));
     }
+
+    private static string? DescribeLastResultText(string? raw)
+        => int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int code) ? TaskSchedulerQuery.DescribeLastResult(code) : raw;
+
+    private static string? FormatTime(DateTime? time) => time?.ToString("g", CultureInfo.CurrentCulture);
 
     /// <summary>Parses schtasks' "/fo LIST" plain-text output into a label -&gt; value map. Pure and testable -- no process involved.</summary>
     public static Dictionary<string, string> ParseFields(string schtasksListOutput)
@@ -302,4 +377,15 @@ public static class AutoStartManager
             return false;
         }
     }
+}
+
+/// <summary>The answer to "is auto-start registered?", with "I couldn't tell" kept apart from "no".</summary>
+public enum AutoStartCheck
+{
+    Registered,
+    NotRegistered,
+    /// <summary>The Task Scheduler entry exists but is disabled, so it will never start the app.</summary>
+    Disabled,
+    /// <summary>The check could not be completed; nothing should be concluded from it.</summary>
+    Unknown,
 }

@@ -727,7 +727,7 @@ public partial class App : Application
             ? "Auto-start is registered as a standard sign-in entry for your account. It starts Monitor Wellness each time you sign in to Windows; Windows keeps no last-run history for this kind of entry."
             : $"Status: {diagnostics.Status ?? "unknown"}\n" +
               $"Last Run Time: {diagnostics.LastRunTime ?? "unknown"}\n" +
-              $"Last Result: {diagnostics.LastResult ?? "unknown"} (0 = last run succeeded)\n" +
+              $"Last Result: {diagnostics.LastResult ?? "unknown"}\n" +
               $"Next Run Time: {diagnostics.NextRunTime ?? "unknown"}\n\n" +
               "\"Last Run Time\" only updates after an actual Windows logon triggers the task " +
               "-- it won't change just from toggling \"Start with Windows\" or running the app " +
@@ -738,7 +738,7 @@ public partial class App : Application
             diagnostics.IsRegistered ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
-    private static void ExportDiagnosticBundle()
+    private static async Task ExportDiagnosticBundleAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -751,15 +751,19 @@ public partial class App : Application
 
         try
         {
-            DiagnosticBundleService.Create(dialog.FileName);
+            // Building the bundle probes every monitor over DDC/CI, which can take seconds; do it
+            // off the UI thread so the tray and any open window stay responsive.
+            string destination = dialog.FileName;
+            await Task.Run(() => DiagnosticBundleService.Create(destination));
             System.Windows.MessageBox.Show(
                 "Diagnostic bundle created. It contains technical environment data and debug.log, but not settings, location, history, or profiles. Review it before sharing.",
                 "Monitor Wellness",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception ex)
         {
+            // An explicit user action: report any failure instead of letting it vanish.
             DebugLog.Write($"Diagnostic bundle export failed: {ex}");
             System.Windows.MessageBox.Show($"Couldn't create the diagnostic bundle: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -1059,6 +1063,8 @@ public partial class App : Application
             IsForegroundFullscreen: FullscreenDetector.IsForegroundWindowLikelyFullscreen,
             FindForegroundRule: () =>
             {
+                if (!_settings.ApplicationComfortRules.Any(rule => rule.IsEnabled))
+                    return null; // no rule can match, so don't look up the foreground process at all
                 ForegroundApplicationDetector.ForegroundApplicationInfo? foreground = ForegroundApplicationDetector.TryGetForegroundApplication();
                 return ApplicationComfortRules.FindForegroundRule(_settings.ApplicationComfortRules, foreground?.ProcessName, foreground?.WindowTitle);
             },
@@ -1130,6 +1136,15 @@ public partial class App : Application
         _applicationRuleTimer = new DispatcherTimer { Interval = ApplicationRulePollInterval };
         _applicationRuleTimer.Tick += (_, _) =>
         {
+            bool anyRuleStateToClear = _activeNativeDisplayRuleProcessName is not null
+                || _activeComfortPlanRuleDescription is not null
+                || _fullscreenPresentationGuardActive;
+            if (!ApplicationRuleRefreshPolicy.ShouldPollForeground(_settings.RestoreNativeDisplayInFullscreen, _settings.ApplicationComfortRules, anyRuleStateToClear))
+            {
+                _lastForegroundApplicationContext = null; // nothing to watch for: skip the foreground lookup
+                return;
+            }
+
             ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
             bool fullscreenGuardShouldApply = _settings.RestoreNativeDisplayInFullscreen
                 && FullscreenDetector.IsForegroundWindowLikelyFullscreen();

@@ -73,6 +73,14 @@ public static class SolarCalculator
     public static DateTime? FindSunsetUtc(DateTime dateUtc, double latitudeDeg, double longitudeDeg)
         => FindElevationCrossing(dateUtc, latitudeDeg, longitudeDeg, ascending: false);
 
+    /// <summary>Sunrise within the 24 hours starting at an exact instant (for example local midnight expressed in UTC), so a "today" display follows the person's calendar day instead of the UTC date.</summary>
+    public static DateTime? FindSunriseInWindowUtc(DateTime windowStartUtc, double latitudeDeg, double longitudeDeg)
+        => FindElevationCrossingFrom(windowStartUtc, latitudeDeg, longitudeDeg, ascending: true);
+
+    /// <summary>Sunset within the 24 hours starting at an exact instant; see <see cref="FindSunriseInWindowUtc"/>.</summary>
+    public static DateTime? FindSunsetInWindowUtc(DateTime windowStartUtc, double latitudeDeg, double longitudeDeg)
+        => FindElevationCrossingFrom(windowStartUtc, latitudeDeg, longitudeDeg, ascending: false);
+
     /// <summary>
     /// Coarse scan across the day in 5-minute steps to bracket the crossing, then bisects
     /// within that bracket for sub-second precision. Simple and robust rather than a closed-
@@ -81,8 +89,10 @@ public static class SolarCalculator
     /// single 5-minute window for bisection to behave correctly.
     /// </summary>
     private static DateTime? FindElevationCrossing(DateTime dateUtc, double latitudeDeg, double longitudeDeg, bool ascending)
+        => FindElevationCrossingFrom(dateUtc.Date, latitudeDeg, longitudeDeg, ascending);
+
+    private static DateTime? FindElevationCrossingFrom(DateTime dayStart, double latitudeDeg, double longitudeDeg, bool ascending)
     {
-        DateTime dayStart = dateUtc.Date;
         const int stepMinutes = 5;
         int steps = (24 * 60) / stepMinutes;
 

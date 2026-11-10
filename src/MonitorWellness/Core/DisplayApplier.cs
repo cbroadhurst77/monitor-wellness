@@ -101,11 +101,10 @@ public sealed class DisplayApplier
         int targetKelvin = kelvin + offset;
         if (!controller.ApplyColorTemperature(targetKelvin))
         {
-            // Confirmed this actually happens in practice: a user-entered Kelvin value
-            // below this hardware's safe gamma ramp floor (~3300K, see the Week 1
-            // finding) gets silently rejected by the driver, leaving the display stuck
-            // at whatever color it last reached rather than transitioning.
-            DebugLog.Write($"ApplyColorTemperature({targetKelvin}) REJECTED by driver for {controller.DeviceName} — likely below this hardware's safe floor.");
+            // Two different causes look identical to the caller: a Kelvin value below this
+            // hardware's safe ramp floor (see the Week 1 finding), and a transient failure of an
+            // otherwise safe value. The log says which, with the Win32 error code.
+            DebugLog.Write($"ApplyColorTemperature rejected for {controller.DeviceName}: {GammaDiagnostics.DescribeRejection(targetKelvin, controller.LastWin32Error)}.");
         }
     }
 

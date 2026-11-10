@@ -144,7 +144,19 @@ public static class MonitorEnumerator
     private static extern int DisplayConfigGetTargetDeviceInfo(ref DisplayConfigTargetDeviceName requestPacket);
 
     /// <summary>Returns active desktop surfaces. Unsafe or ambiguous identities are empty.</summary>
-    public static List<MonitorInfo> GetActiveMonitors()
+    public static List<MonitorInfo> GetActiveMonitors(bool forceRefresh = false)
+    {
+        // The topology query is several Win32 calls per monitor and used to run on every schedule
+        // tick and five times a second during the migraine fade-out. The answer can't change that
+        // fast, so it is reused for two seconds; display-change handling asks for a fresh one.
+        if (forceRefresh)
+            ActiveMonitorsCache.Invalidate();
+        return new List<MonitorInfo>(ActiveMonitorsCache.Get(EnumerateActiveMonitors, DateTime.UtcNow));
+    }
+
+    private static readonly TimedCache<IReadOnlyList<MonitorInfo>> ActiveMonitorsCache = new(TimeSpan.FromSeconds(2));
+
+    private static List<MonitorInfo> EnumerateActiveMonitors()
     {
         IReadOnlyDictionary<string, string> hardwareIdsByDesktopDevice = GetHardwareIdsByDesktopDevice();
         var monitors = new List<MonitorInfo>();

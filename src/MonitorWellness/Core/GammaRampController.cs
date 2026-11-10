@@ -40,13 +40,16 @@ public sealed class GammaRampController : IDisposable
 
     public string DeviceName { get; }
 
+    /// <summary>The Win32 error from the most recent rejected write (after the retry), or 0. For diagnostics only.</summary>
+    public int LastWin32Error { get; private set; }
+
     /// <summary>The ramp this display had when the app took control of it; what "native" means for restore.</summary>
     public GammaRamp Baseline { get; }
 
     /// <summary>True if <see cref="Baseline"/> was read from the display, false if it fell back to the linear identity ramp.</summary>
     public bool BaselineWasCaptured { get; }
 
-    private readonly IntPtr _hdc;
+    private IntPtr _hdc;
     private bool _disposed;
 
     public GammaRampController(string deviceName)
@@ -149,7 +152,36 @@ public sealed class GammaRampController : IDisposable
         }
     }
 
-    private bool Write(GammaRamp ramp) => SetRamp(_hdc, ramp);
+    private bool Write(GammaRamp ramp)
+    {
+        if (SetRamp(_hdc, ramp))
+        {
+            LastWin32Error = 0;
+            return true;
+        }
+
+        int firstError = Marshal.GetLastWin32Error();
+
+        // A device context can go stale after a desktop, session or display-mode change, and a
+        // write through it fails even for perfectly safe values (the logs showed 5,000-5,400K
+        // being "rejected"). Create a fresh one and try once more before reporting a failure.
+        IntPtr fresh = CreateDC("DISPLAY", DeviceName, null, IntPtr.Zero);
+        if (fresh != IntPtr.Zero)
+        {
+            if (SetRamp(fresh, ramp))
+            {
+                DeleteDC(_hdc);
+                _hdc = fresh;
+                LastWin32Error = 0;
+                DebugLog.Write($"GammaRampController: write to {DeviceName} failed (Win32 error {firstError}) and succeeded after re-creating its device context.");
+                return true;
+            }
+            DeleteDC(fresh);
+        }
+
+        LastWin32Error = firstError;
+        return false;
+    }
 
     private static bool SetRamp(IntPtr hdc, GammaRamp ramp)
     {

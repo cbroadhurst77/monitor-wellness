@@ -28,7 +28,7 @@ public partial class SettingsWindow
         _hardwareBrightnessBoxes.Clear();
         RefreshHardwareBrightnessReadiness();
 
-        var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors()
+        var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors(forceRefresh: true)
             .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         var rows = new List<UIElement>();
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))
