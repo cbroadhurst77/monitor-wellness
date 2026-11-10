@@ -88,6 +88,34 @@ public static class ScheduleCurve
         return SmoothStep(tDown);
     }
 
+    /// <summary>
+    /// The bedtime blend when a wake-up time is known: full strength from bedtime until the wake-up
+    /// time (however long that is), then easing off over <paramref name="wakeEaseMinutes"/>, with
+    /// the usual ramp up over the <paramref name="rampMinutes"/> before the next bedtime. The
+    /// original <see cref="GetBedtimeFactor"/> guesses ten hours after bedtime instead.
+    /// </summary>
+    public static double GetBedtimeWakeFactor(DateTime nowLocal, TimeSpan bedtimeOfDay, TimeSpan wakeOfDay, double rampMinutes = 90, double wakeEaseMinutes = 30)
+    {
+        double sinceBedtime = Mod((nowLocal.TimeOfDay - bedtimeOfDay).TotalMinutes, 1440);
+        double asleepFor = Mod((wakeOfDay - bedtimeOfDay).TotalMinutes, 1440);
+        if (asleepFor < 1)
+            asleepFor = 1;
+
+        double factor = 0.0;
+        if (sinceBedtime < asleepFor)
+            factor = 1.0;
+        else if (sinceBedtime < asleepFor + wakeEaseMinutes)
+            factor = 1.0 - SmoothStep((sinceBedtime - asleepFor) / wakeEaseMinutes);
+
+        double minutesUntilBedtime = 1440 - sinceBedtime;
+        if (sinceBedtime > 0 && minutesUntilBedtime <= rampMinutes)
+            factor = Math.Max(factor, SmoothStep(1.0 - minutesUntilBedtime / rampMinutes));
+
+        return factor;
+    }
+
+    private static double Mod(double value, double modulus) => ((value % modulus) + modulus) % modulus;
+
     private static double InverseLerpClamped(double a, double b, double value)
         => Math.Clamp((value - a) / (b - a), 0.0, 1.0);
 

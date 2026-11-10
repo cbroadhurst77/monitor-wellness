@@ -191,6 +191,7 @@ public partial class SettingsWindow
     private void BedtimeEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
+        WakeTimeBox.IsEnabled = BedtimeBox.IsEnabled;
         if (_loaded) UpdateBedtimeWarning();
     }
 
@@ -224,6 +225,8 @@ public partial class SettingsWindow
     private bool UpdateBedtimeWarning()
     {
         bool valid = TryValidateBedtime(out _, out string error);
+        if (valid)
+            valid = TryValidateWakeTime(out _, out error);
         BedtimeWarning.Text = valid ? "" : error;
         BedtimeWarning.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
         return valid;

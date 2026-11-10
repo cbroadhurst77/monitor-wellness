@@ -40,6 +40,36 @@
             <TabItem Header="Schedule">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="12">
+                        <TextBlock Text="What drives the day/night schedule" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <RadioButton x:Name="ScheduleModeSunRadio" GroupName="ScheduleMode" IsChecked="True" Margin="0,0,0,4"
+                                     Content="The sun at my location (recommended)"
+                                     Checked="ScheduleMode_Changed"
+                                     AutomationProperties.Name="Follow the sun at my location"/>
+                        <RadioButton x:Name="ScheduleModeFixedRadio" GroupName="ScheduleMode" Margin="0,0,0,8"
+                                     Content="Fixed clock times (no location needed)"
+                                     Checked="ScheduleMode_Changed"
+                                     AutomationProperties.Name="Use fixed clock times instead of the sun"/>
+                        <StackPanel x:Name="FixedTimesPanel" Visibility="Collapsed" Margin="0,0,0,12">
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Label Grid.Row="0" Grid.Column="0" Content="Day starts (HH:mm)" Target="{Binding ElementName=FixedSunriseBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBox x:Name="FixedSunriseBox" Grid.Row="0" Grid.Column="1" Width="80" HorizontalAlignment="Left" TextChanged="FixedTimeBox_TextChanged"/>
+                                <Label Grid.Row="1" Grid.Column="0" Content="Evening starts (HH:mm)" Target="{Binding ElementName=FixedSunsetBox}" VerticalAlignment="Center" Margin="0,4,8,0"/>
+                                <TextBox x:Name="FixedSunsetBox" Grid.Row="1" Grid.Column="1" Width="80" HorizontalAlignment="Left" Margin="0,4,0,0" TextChanged="FixedTimeBox_TextChanged"/>
+                            </Grid>
+                            <TextBlock x:Name="FixedTimesWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
+                                       AutomationProperties.LiveSetting="Assertive"/>
+                            <TextBlock Text="The screen changes gradually around these times, the same way it does around sunrise and sunset, and deepens into night about two hours after the evening starts. Works for night shifts too: set the day to start in the evening. Your location below is not used while this is selected."
+                                       FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap"/>
+                        </StackPanel>
+
                         <TextBlock Text="Location" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
 
                         <TextBlock Text="Search for your town or postcode" FontSize="12" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,2"/>
@@ -201,9 +231,17 @@
                             <Label Grid.Column="0" Content="Bedtime (HH:mm)" Target="{Binding ElementName=BedtimeBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="BedtimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left" TextChanged="BedtimeBox_TextChanged"/>
                         </Grid>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0" Content="Wake-up time (HH:mm, optional)" Target="{Binding ElementName=WakeTimeBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox x:Name="WakeTimeBox" Grid.Column="1" Width="80" HorizontalAlignment="Left" TextChanged="WakeTimeBox_TextChanged"/>
+                        </Grid>
                         <TextBlock x:Name="BedtimeWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
                                    AutomationProperties.LiveSetting="Assertive"/>
-                        <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                        <TextBlock Text="Useful if you go to bed well before the sun reaches deep night (e.g. winter evenings) — whichever reaches deep night first, the sun or this clock time, takes effect. Leave unchecked to use the sun alone. With a wake-up time, the bedtime dimming ends then (easing off over half an hour); leave it blank and it holds for about ten hours after bedtime." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                         <Separator Margin="0,0,0,16"/>
 

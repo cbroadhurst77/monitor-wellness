@@ -178,6 +178,26 @@ public sealed class AppSettings
     public bool AutoStartEnabled { get; set; }
 
     /// <summary>
+    /// What drives the day/night schedule: the sun at <see cref="Latitude"/>/<see cref="Longitude"/>
+    /// (the default), or two fixed clock times (<see cref="FixedSunriseLocal"/>/<see cref="FixedSunsetLocal"/>)
+    /// for people who don't want to set a location. See ScheduleSource.
+    /// </summary>
+    public string ScheduleMode { get; set; } = ScheduleModes.Sun;
+
+    /// <summary>"HH:mm": when the day starts, for <see cref="ScheduleModes.FixedTimes"/>.</summary>
+    public string FixedSunriseLocal { get; set; } = FixedTimeSchedule.DefaultSunrise;
+
+    /// <summary>"HH:mm": when the evening starts, for <see cref="ScheduleModes.FixedTimes"/>.</summary>
+    public string FixedSunsetLocal { get; set; } = FixedTimeSchedule.DefaultSunset;
+
+    /// <summary>
+    /// Optional "HH:mm" local wake-up time, used with <see cref="BedtimeLocal"/>. The clock-based
+    /// deep-night blend holds from bedtime until this time, then eases off over half an hour.
+    /// Null keeps the original behaviour: hold for ten hours after bedtime. Ignored without a bedtime.
+    /// </summary>
+    public string? WakeTimeLocal { get; set; }
+
+    /// <summary>
     /// Optional "HH:mm" local bedtime. When set, ScheduleCurve.GetBedtimeFactor blends in
     /// deep-night warmth/dim on a clock-time schedule as well as the usual solar one, via
     /// Math.Max in App.ComputeScheduleTarget -- whichever reaches deep night first wins. Null
@@ -293,6 +313,10 @@ public sealed class AppSettings
         PlaySoundOnMigraineToggle = PlaySoundOnMigraineToggle,
         AutoStartEnabled = AutoStartEnabled,
         BedtimeLocal = BedtimeLocal,
+        WakeTimeLocal = WakeTimeLocal,
+        ScheduleMode = ScheduleMode,
+        FixedSunriseLocal = FixedSunriseLocal,
+        FixedSunsetLocal = FixedSunsetLocal,
         HasCompletedOnboarding = HasCompletedOnboarding,
         HistoryTrackingEnabled = HistoryTrackingEnabled,
         PromptForMigraineRating = PromptForMigraineRating,
@@ -339,6 +363,10 @@ public sealed class AppSettings
         PlaySoundOnMigraineToggle = copy.PlaySoundOnMigraineToggle;
         AutoStartEnabled = copy.AutoStartEnabled;
         BedtimeLocal = copy.BedtimeLocal;
+        WakeTimeLocal = copy.WakeTimeLocal;
+        ScheduleMode = copy.ScheduleMode;
+        FixedSunriseLocal = copy.FixedSunriseLocal;
+        FixedSunsetLocal = copy.FixedSunsetLocal;
         HasCompletedOnboarding = copy.HasCompletedOnboarding;
         HistoryTrackingEnabled = copy.HistoryTrackingEnabled;
         PromptForMigraineRating = copy.PromptForMigraineRating;

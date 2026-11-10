@@ -71,6 +71,7 @@ public partial class SettingsWindow
     {
         bool show = double.TryParse(LatitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lat)
             && double.TryParse(LongitudeBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double lon)
+            && ScheduleModeFixedRadio.IsChecked != true   // fixed clock times need no location
             && LocationStatus.IsUsingUnconfirmedDefault(lat, lon, _locationConfirmed);
 
         LocationDefaultBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;

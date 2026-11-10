@@ -47,6 +47,20 @@ public static class AppSettingsValidator
         if (!string.IsNullOrWhiteSpace(settings.BedtimeLocal)
             && (!TimeSpan.TryParse(settings.BedtimeLocal, out TimeSpan bedtime) || bedtime < TimeSpan.Zero || bedtime >= TimeSpan.FromDays(1)))
             return Invalid("Bedtime must be a valid time between 00:00 and 23:59.", out error);
+        if (!string.IsNullOrWhiteSpace(settings.WakeTimeLocal))
+        {
+            if (!FixedTimeSchedule.TryParseTimeOfDay(settings.WakeTimeLocal, out TimeSpan wake))
+                return Invalid("Wake-up time must be a valid time between 00:00 and 23:59.", out error);
+            if (!string.IsNullOrWhiteSpace(settings.BedtimeLocal)
+                && TimeSpan.TryParse(settings.BedtimeLocal, out TimeSpan bedtimeForWake)
+                && wake == bedtimeForWake)
+                return Invalid("Wake-up time must be different from bedtime.", out error);
+        }
+        if (!ScheduleModes.IsSupported(settings.ScheduleMode))
+            return Invalid("The schedule mode is not recognised.", out error);
+        if (string.Equals(settings.ScheduleMode, ScheduleModes.FixedTimes, StringComparison.Ordinal)
+            && FixedTimeSchedule.Validate(settings.FixedSunriseLocal, settings.FixedSunsetLocal) is string fixedTimesError)
+            return Invalid(fixedTimesError, out error);
         if (settings.MigraineAutoRevertMinutes is < 0 or > MaximumAutoRevertMinutes)
             return Invalid($"Migraine auto-revert must be between 0 and {MaximumAutoRevertMinutes} minutes.", out error);
         if (settings.BreakReminderIntervalMinutes is < 1 or > MaximumBreakReminderMinutes)

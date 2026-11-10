@@ -862,7 +862,7 @@ public partial class App : Application
         if (_activeComfortPlanRuleDescription is not null)
             return $"Currently: {_activeComfortPlanRuleDescription}.";
 
-        double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
+        double elevation = ScheduleSource.GetElevationDegrees(_settings, DateTime.UtcNow, DateTime.Now);
         string phase = elevation <= ScheduleCurve.DeepNightThresholdDeg ? "Deep Night mode"
             : elevation <= ScheduleCurve.NightThresholdDeg ? "Night mode"
             : elevation >= ScheduleCurve.DayThresholdDeg ? "Day mode"
@@ -901,7 +901,7 @@ public partial class App : Application
             _ambientLightSmoother.Reset();
         }
 
-        double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
+        double elevation = ScheduleSource.GetElevationDegrees(_settings, DateTime.UtcNow, DateTime.Now);
         ScheduleTarget target = ScheduleTargetCalculator.Compute(
             new ScheduleTargetInputs(
                 DayKelvin: scheduleOverride?.DayKelvin ?? _settings.DayKelvin,
@@ -911,6 +911,7 @@ public partial class App : Application
                 DeepNightBrightness: scheduleOverride?.DeepNightBrightness ?? _settings.DeepNightBrightness,
                 SolarElevationDegrees: elevation,
                 BedtimeLocal: _settings.BedtimeLocal,
+                WakeTimeLocal: _settings.WakeTimeLocal,
                 NowLocal: DateTime.Now,
                 DeepNightOverlayColorHex: _settings.DeepNightOverlayColorHex),
             ambientAdjustment);
@@ -1124,10 +1125,11 @@ public partial class App : Application
 
         if (_trayIcon is not null && _migraine?.IsActive != true)
         {
-            double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
+            double elevation = ScheduleSource.GetElevationDegrees(_settings, DateTime.UtcNow, DateTime.Now);
             // NotifyIcon.Text is limited to 63 characters; this stays well under it.
             string locationHint = LocationStatus.IsUsingUnconfirmedDefault(_settings) ? " · set location" : "";
-            _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°{locationHint}";
+            string source = ScheduleSource.UsesFixedTimes(_settings) ? "fixed times" : $"sun {elevation:F1}°";
+            _trayIcon.Text = $"Monitor Wellness — {kelvin}K, {source}{locationHint}";
         }
     }
 
