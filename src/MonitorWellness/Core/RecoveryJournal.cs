@@ -96,9 +96,7 @@ public sealed record BrightnessOriginalEntry(
 
 public static class RecoveryJournals
 {
-    private static readonly string Directory_ = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MonitorWellness");
+    private static readonly string Directory_ = AppDataFolder.FullPath;
 
     public static RecoveryJournal<GammaBaselineEntry> GammaBaselines { get; } =
         new(System.IO.Path.Combine(Directory_, "recovery-gamma.json"));

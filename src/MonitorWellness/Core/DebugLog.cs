@@ -17,8 +17,10 @@ public static class DebugLog
     /// </summary>
     public const string LogDirectoryVariable = "MONITORWELLNESS_LOG_DIR";
 
+    // The dedicated log override wins; otherwise the shared data-folder override (AppDataFolder),
+    // otherwise %AppData%\MonitorWellness.
     private static readonly string LogPath = ResolveLogPath(
-        Environment.GetEnvironmentVariable(LogDirectoryVariable),
+        Environment.GetEnvironmentVariable(LogDirectoryVariable) ?? Environment.GetEnvironmentVariable(AppDataFolder.Variable),
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 
     /// <summary>The log file location: the override folder if one is set, otherwise %AppData%\MonitorWellness. Pure and testable.</summary>

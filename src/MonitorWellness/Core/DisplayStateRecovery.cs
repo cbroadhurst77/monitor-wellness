@@ -83,7 +83,7 @@ public static class DisplayStateRecovery
         int restored = 0;
         foreach (BrightnessOriginalEntry entry in entries)
         {
-            if (DateTime.UtcNow - entry.SavedUtc > BrightnessJournalMaxAge)
+            if (IsStale(entry, DateTime.UtcNow))
             {
                 DebugLog.Write($"DisplayStateRecovery: discarded a stale hardware-brightness record for {entry.DeviceName}.");
                 continue;
@@ -106,8 +106,11 @@ public static class DisplayStateRecovery
         return (restored, remaining.Count);
     }
 
-    /// <summary>Prefers the stable hardware identity; falls back to the Windows device name when no identity was recorded.</summary>
-    private static string? ResolveDevice(IReadOnlyList<MonitorInfo> monitors, string hardwareDeviceId, string deviceName)
+    /// <summary>True for a brightness record too old to apply (the person has probably changed the brightness themselves since). Pure and testable.</summary>
+    internal static bool IsStale(BrightnessOriginalEntry entry, DateTime nowUtc) => nowUtc - entry.SavedUtc > BrightnessJournalMaxAge;
+
+    /// <summary>Prefers the stable hardware identity; falls back to the Windows device name when no identity was recorded. Pure and testable.</summary>
+    internal static string? ResolveDevice(IReadOnlyList<MonitorInfo> monitors, string hardwareDeviceId, string deviceName)
     {
         if (!string.IsNullOrWhiteSpace(hardwareDeviceId))
         {
@@ -117,8 +120,8 @@ public static class DisplayStateRecovery
                 return byIdentity.DeviceName;
         }
 
-        return monitors.Any(monitor => string.Equals(monitor.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
-            ? deviceName
-            : null;
+        return monitors
+            .FirstOrDefault(monitor => string.Equals(monitor.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase))
+            ?.DeviceName; // the display's own spelling, not the caller's
     }
 }
