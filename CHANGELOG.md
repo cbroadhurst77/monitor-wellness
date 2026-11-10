@@ -6,6 +6,27 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## 0.2.8 — Display recovery and diagnostics update
+
+### Fixed
+- After the display layout changes (docking, a monitor waking, a resolution or HDR change) or you
+  unlock your PC, the screen colour is now put back within about two seconds. Before, it could sit
+  at neutral for up to 30 seconds until the next scheduled update, and Windows sometimes rejected the
+  first colour change because the app was still holding an out-of-date connection to that display.
+- If the app crashes on a background thread, the error is now written to the log (it used to leave
+  no trace) and the app first tries to put your screen colour and monitor brightness back to normal.
+- Error details in the log now include line numbers, which makes problems much quicker to track down.
+
+### Changed
+- Displays running in Windows HDR are now detected individually and at any time, not only at
+  startup. While HDR is on for a display, Monitor Wellness only dims it and does not change its
+  colour (colour changes are not reliable there), and tells you once when that happens. Turning HDR
+  off brings colour warmth back. This follows the existing "overlay-only compatibility mode"
+  setting, so you can switch it off if you would rather try colour changes on HDR.
+- Internal: every file the app keeps now comes from one data-folder setting, which lets the
+  settings, profiles, history and diagnostic-bundle code be tested for real. Test coverage of those
+  went from none to about 80-90%.
+
 ## 0.2.7 — Recovery, reliability and schedule update
 
 ### Fixed
