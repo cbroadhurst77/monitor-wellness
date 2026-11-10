@@ -6,6 +6,15 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **Fewer redundant colour writes.** The 30-second tick used to rewrite every display's colour ramp (about 10 ms of driver work per display, on the UI thread). A display is now written only when the requested colour changed or the display no longer holds what we last set (another program reset it), and at least every 10 minutes regardless. Display changes, resume and unlock still rebuild the controllers and write for real.
+- **Less disk work during display-change bursts.** The crash-recovery journal is rewritten only when a display is added or removed, not on every layout notification (they arrived every ~6 seconds for minutes in one log).
+- **One display rebuild per burst.** Display-change notifications are now debounced (400 ms) in the gamma manager too, like the overlays and the schedule reapply already were, instead of rebuilding the controllers for every notification.
+- **Quieter log.** The 30-minute break-reminder tick is logged when its outcome changes, plus every 6 hours, instead of every time (it was about a fifth of the log).
+- **Colour reset by another program is fixed in seconds, not up to 30.** Every 5 seconds the app reads each display's ramp (about 1.5 ms) and reapplies its colour only if something else changed it (a game exiting, Night Light, an HDR toggle). Measured: recovery in 0.4–3.1 s. If something keeps resetting it (another colour tool), the quick check stands down for 10 minutes after 3 repairs in a minute so the two don't flicker, and the regular 30-second schedule carries on. Restoring the native colour (pause, native-display rule) turns the quick repair off, so it never forces our colour back.
+- **A failed update check is retried sooner.** A timeout or offline start used to count as "checked today" and delay the next attempt by a day. It is now retried at the next 6-hour poll or launch.
+
 ## 0.2.10 — Memory update
 
 ### Changed

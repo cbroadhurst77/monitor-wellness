@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace MonitorWellness.Core;
@@ -51,6 +52,15 @@ public sealed class GammaRampController : IDisposable
 
     private IntPtr _hdc;
     private bool _disposed;
+
+    // What the last real write asked for, what the display held right after it, and when. Lets a
+    // repeat of the same request skip the (about 10 ms) driver write when nothing has changed.
+    private GammaRamp? _lastRequested;
+    private GammaRamp? _lastReadBack;
+    private long _lastWriteTicks;
+
+    /// <summary>Real driver writes performed (skipped repeats don't count). For diagnostics and tests.</summary>
+    public int WriteCount { get; private set; }
 
     public GammaRampController(string deviceName)
     {
@@ -145,6 +155,7 @@ public sealed class GammaRampController : IDisposable
         if (fresh == IntPtr.Zero)
             return;
 
+        _lastRequested = null;   // a new context: write for real next time
         IntPtr old = _hdc;
         _hdc = fresh;
         if (old != IntPtr.Zero)
@@ -152,7 +163,34 @@ public sealed class GammaRampController : IDisposable
     }
 
     /// <summary>Restores the ramp this monitor had when the app took control of it (its calibration curve, or linear if none was detected).</summary>
-    public bool RestoreBaseline() => Write(Baseline);
+    public bool RestoreBaseline()
+    {
+        bool ok = Write(Baseline);
+        _lastRequested = null;   // restored means hands off: the quick reset check must not put our colour back
+        return ok;
+    }
+
+    /// <summary>
+    /// A cheap check (one ramp read, about 1.5 ms) for another program having reset this display's
+    /// colour since we last set it. If so, writes our last requested ramp again and returns true.
+    /// Does nothing before the first apply or after a restore.
+    /// </summary>
+    public bool RepairIfReset()
+    {
+        if (_disposed || _lastRequested is null || _lastReadBack is null)
+            return false;
+
+        GammaRamp? current = TryReadRamp(_hdc);
+        if (current is null || GammaRampMath.AreEqual(current, _lastReadBack))
+            return false;
+
+        if (!WriteForReal(_lastRequested))
+            return false;
+
+        _lastReadBack = TryReadRamp(_hdc);
+        _lastWriteTicks = Stopwatch.GetTimestamp();
+        return true;
+    }
 
     /// <summary>Writes a ramp to a display by device name without owning a controller; used by crash recovery.</summary>
     public static bool TryWriteRamp(string deviceName, GammaRamp ramp)
@@ -175,6 +213,26 @@ public sealed class GammaRampController : IDisposable
 
     private bool Write(GammaRamp ramp)
     {
+        if (_lastRequested is not null && _lastReadBack is not null
+            && GammaRampMath.CanSkipWrite(ramp, _lastRequested, _lastReadBack, TryReadRamp(_hdc), Stopwatch.GetElapsedTime(_lastWriteTicks)))
+        {
+            LastWin32Error = 0;
+            return true;
+        }
+
+        _lastRequested = null;
+        if (!WriteForReal(ramp))
+            return false;
+
+        _lastRequested = ramp;
+        _lastReadBack = TryReadRamp(_hdc);   // null if unreadable: then nothing is ever skipped
+        _lastWriteTicks = Stopwatch.GetTimestamp();
+        return true;
+    }
+
+    private bool WriteForReal(GammaRamp ramp)
+    {
+        WriteCount++;
         if (SetRamp(_hdc, ramp))
         {
             LastWin32Error = 0;

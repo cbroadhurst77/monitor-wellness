@@ -325,6 +325,7 @@ public partial class App : Application
         _startupFinished = true;
         _overlay.PrewarmWhenIdle(); // build the hidden overlay windows in idle time, so showing one later is instant
         StartMemoryTrimming();
+        StartResetWatch();
         _ = CheckForUpdatesIfDueAsync();
 
         // A tray app can run for weeks. The check itself still runs at most once a day
@@ -384,7 +385,13 @@ public partial class App : Application
         if (_settings.LastUpdateCheckUtc is DateTime last && DateTime.UtcNow - last < UpdateCheckInterval)
             return;
 
-        var update = await UpdateChecker.CheckForUpdateAsync(_settings.UpdateNotifyPreReleases);
+        var result = await UpdateChecker.CheckForUpdateAsync(_settings.UpdateNotifyPreReleases);
+        var update = result.Update;
+
+        // A failed check (offline at startup, a timeout) isn't recorded as done, so the next
+        // poll or launch retries it instead of the app going a whole day without checking.
+        if (result.Failed)
+            return;
 
         _settings.LastUpdateCheckUtc = DateTime.UtcNow;
         try
@@ -811,6 +818,30 @@ public partial class App : Application
     }
 
     private DispatcherTimer? _memoryTrimTimer;
+
+    private DispatcherTimer? _resetWatchTimer;
+    private readonly ResetRepairThrottle _resetRepairThrottle = new();
+
+    /// <summary>
+    /// Another program (a game exiting, Windows Night Light, an HDR toggle) can reset the colour
+    /// ramp without any display-change notification, which used to leave the screen wrong until
+    /// the next 30-second tick. Every few seconds this reads each ramp (about 1.5 ms) and reapplies
+    /// our colour only if it was changed. A throttle stops it from fighting another colour tool.
+    /// </summary>
+    private void StartResetWatch()
+    {
+        _resetWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _resetWatchTimer.Tick += (_, _) =>
+        {
+            if (_gammaManager is null || !_resetRepairThrottle.IsAllowed(DateTime.UtcNow))
+                return;
+
+            int repaired = _gammaManager.RepairResetDisplays();
+            if (repaired > 0 && _resetRepairThrottle.RecordRepairs(repaired, DateTime.UtcNow))
+                DebugLog.Write("Something keeps resetting the colour ramp (another colour tool?); the quick reset check is standing down for 10 minutes. The regular 30-second schedule still applies.");
+        };
+        _resetWatchTimer.Start();
+    }
     private int _memoryTrimCount;
 
     /// <summary>Gives the idle app's resident memory back to Windows once startup has settled, and again every so often. See MemoryTrimmer.</summary>

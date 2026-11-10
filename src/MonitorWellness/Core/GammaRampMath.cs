@@ -30,6 +30,28 @@ public sealed record GammaRamp(ushort[] Red, ushort[] Green, ushort[] Blue)
 /// </summary>
 public static class GammaRampMath
 {
+    /// <summary>How long a display may go without a real write even when nothing seems to have changed.</summary>
+    public static readonly TimeSpan MaxTimeWithoutWrite = TimeSpan.FromMinutes(10);
+
+    /// <summary>True when both ramps hold exactly the same values.</summary>
+    public static bool AreEqual(GammaRamp? a, GammaRamp? b)
+        => a is not null && b is not null
+           && a.Red.AsSpan().SequenceEqual(b.Red)
+           && a.Green.AsSpan().SequenceEqual(b.Green)
+           && a.Blue.AsSpan().SequenceEqual(b.Blue);
+
+    /// <summary>
+    /// Whether a write can be skipped: the same ramp was asked for last time, the display still holds
+    /// exactly what it held right after that write (so nothing reset it), and the last real write
+    /// isn't old. Drivers may round a ramp, so "current" is compared with the ramp read back after
+    /// our own write, not with the one requested.
+    /// </summary>
+    public static bool CanSkipWrite(GammaRamp requested, GammaRamp? lastRequested, GammaRamp? lastReadBack, GammaRamp? current, TimeSpan sinceLastWrite)
+        => sinceLastWrite < MaxTimeWithoutWrite
+           && AreEqual(requested, lastRequested)
+           && lastReadBack is not null
+           && AreEqual(current, lastReadBack);
+
     /// <summary>
     /// Guards against adopting a ramp that is itself a leftover of this app (or another tool)
     /// as the "native" baseline: a warm, dimmed or contrast-raised ramp fails these checks and
