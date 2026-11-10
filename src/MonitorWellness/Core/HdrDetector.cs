@@ -140,12 +140,20 @@ public static class HdrDetector
     /// mismatch) — an inability to check is treated the same as "no," since this is purely
     /// advisory and must never change startup behavior on its own.
     /// </summary>
-    public static bool IsAnyDisplayHdrEnabled()
+    public static bool IsAnyDisplayHdrEnabled() => GetHdrEnabledTargets().Count > 0;
+
+    /// <summary>
+    /// The active display targets (adapter + target id) that read back "advanced color enabled".
+    /// Empty both when none do and when the query fails, for the same reason as above. Lets a
+    /// caller work out *which* display is in HDR, not just whether any is.
+    /// </summary>
+    internal static HashSet<(uint LowPart, int HighPart, uint Id)> GetHdrEnabledTargets()
     {
+        var result = new HashSet<(uint LowPart, int HighPart, uint Id)>();
         try
         {
             if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out uint pathCount, out uint modeCount) != ERROR_SUCCESS || pathCount == 0)
-                return false;
+                return result;
 
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
@@ -153,7 +161,7 @@ public static class HdrDetector
                 modes[i].modeUnion = new byte[48];
 
             if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero) != ERROR_SUCCESS)
-                return false;
+                return result;
 
             for (int i = 0; i < pathCount; i++)
             {
@@ -169,18 +177,18 @@ public static class HdrDetector
                 };
 
                 if (DisplayConfigGetDeviceInfo(ref info) != ERROR_SUCCESS)
-                    continue; // this target doesn't support the query — skip it, don't fail the whole check
+                    continue; // this target doesn't support the query: skip it, don't fail the whole check
 
                 if (HasAdvancedColorEnabledFlag(info.colorInfoFlags))
-                    return true;
+                    result.Add((paths[i].targetInfo.adapterId.LowPart, paths[i].targetInfo.adapterId.HighPart, paths[i].targetInfo.id));
             }
-
-            return false;
         }
         catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or ArgumentException or SEHException)
         {
-            DebugLog.Write($"HdrDetector.IsAnyDisplayHdrEnabled check failed: {ex.Message}");
-            return false;
+            DebugLog.Write($"HdrDetector.GetHdrEnabledTargets check failed: {ex.Message}");
+            result.Clear();
         }
+
+        return result;
     }
 }

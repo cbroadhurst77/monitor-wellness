@@ -18,6 +18,9 @@ public sealed class DisplayApplier
     private readonly HardwareBrightnessControllerManager _hardware;
     private readonly HashSet<string> _compatibilityFallbackDevices = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Raised when a display first switches to overlay-only: (device name, reason, whether the reason is HDR).</summary>
+    public event Action<string, string, bool>? CompatibilityFallbackStarted;
+
     public DisplayApplier(
         AppSettings settings,
         GammaControllerManager gamma,
@@ -83,6 +86,7 @@ public sealed class DisplayApplier
             {
                 controller.RestoreBaseline();
                 DebugLog.Write($"Compatibility fallback active for {controller.DeviceName}: {compatibilityReason}");
+                CompatibilityFallbackStarted?.Invoke(controller.DeviceName, compatibilityReason, monitor.IsHdr);
             }
             return;
         }

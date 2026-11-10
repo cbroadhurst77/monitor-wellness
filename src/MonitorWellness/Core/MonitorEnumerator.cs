@@ -7,7 +7,7 @@ namespace MonitorWellness.Core;
 /// physical monitor device-interface path, which is more stable across dock/replug cycles than
 /// the transient <c>\\.\DISPLAYn</c> path used to address the desktop surface.
 /// </summary>
-public sealed record MonitorInfo(string DeviceName, string DeviceString, bool IsPrimary, string HardwareDeviceId);
+public sealed record MonitorInfo(string DeviceName, string DeviceString, bool IsPrimary, string HardwareDeviceId, bool IsHdr = false);
 
 /// <summary>
 /// Enumerates active desktop displays and resolves each one through Windows' CCD display
@@ -159,6 +159,7 @@ public static class MonitorEnumerator
     private static List<MonitorInfo> EnumerateActiveMonitors()
     {
         IReadOnlyDictionary<string, string> hardwareIdsByDesktopDevice = GetHardwareIdsByDesktopDevice();
+        HashSet<string> hdrDesktopDevices = GetHdrDesktopDevices();
         var monitors = new List<MonitorInfo>();
         uint deviceIndex = 0;
 
@@ -177,7 +178,8 @@ public static class MonitorEnumerator
                 device.DeviceName,
                 device.DeviceString,
                 (device.StateFlags & DisplayDevicePrimaryDevice) != 0,
-                hardwareDeviceId ?? string.Empty));
+                hardwareDeviceId ?? string.Empty,
+                hdrDesktopDevices.Contains(device.DeviceName)));
         }
 
         return RemoveAmbiguousHardwareIdentities(monitors);
@@ -205,6 +207,61 @@ public static class MonitorEnumerator
                 ? monitor with { HardwareDeviceId = string.Empty }
                 : monitor)
             .ToList();
+    }
+
+    /// <summary>The desktop devices (\\.\DISPLAYn) whose display Windows is currently running in HDR (advanced colour) mode.</summary>
+    private static HashSet<string> GetHdrDesktopDevices()
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<(uint LowPart, int HighPart, uint Id)> hdrTargets = HdrDetector.GetHdrEnabledTargets();
+        if (hdrTargets.Count == 0)
+            return result; // the common case: nothing more to look up
+
+        try
+        {
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                if (GetDisplayConfigBufferSizes(QueryDisplayConfigOnlyActivePaths, out uint pathCount, out uint modeCount) != ErrorSuccess || pathCount == 0)
+                    return result;
+
+                var paths = new DisplayConfigPathInfo[pathCount];
+                var modes = new DisplayConfigModeInfo[modeCount];
+                for (int index = 0; index < modes.Length; index++)
+                    modes[index].ModeUnion = new byte[48];
+
+                int queryResult = QueryDisplayConfig(QueryDisplayConfigOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (queryResult == ErrorInsufficientBuffer)
+                    continue;
+                if (queryResult != ErrorSuccess)
+                    return result;
+
+                foreach (DisplayConfigPathInfo path in paths.Take((int)pathCount))
+                {
+                    if (!hdrTargets.Contains((path.TargetInfo.AdapterId.LowPart, path.TargetInfo.AdapterId.HighPart, path.TargetInfo.Id)))
+                        continue;
+
+                    var sourceName = new DisplayConfigSourceDeviceName
+                    {
+                        Header = new DisplayConfigDeviceInfoHeader
+                        {
+                            Type = DisplayConfigDeviceInfoGetSourceName,
+                            Size = (uint)Marshal.SizeOf<DisplayConfigSourceDeviceName>(),
+                            AdapterId = path.SourceInfo.AdapterId,
+                            Id = path.SourceInfo.Id,
+                        },
+                    };
+                    if (DisplayConfigGetSourceDeviceInfo(ref sourceName) == ErrorSuccess)
+                        result.Add(sourceName.ViewGdiDeviceName);
+                }
+                return result;
+            }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or ArgumentException or SEHException)
+        {
+            DebugLog.Write($"MonitorEnumerator HDR lookup failed: {ex.Message}");
+        }
+
+        return result;
     }
 
     internal static IReadOnlyDictionary<string, string> BuildHardwareIdsByDesktopDevice(IEnumerable<DisplayTopologyPath> paths)

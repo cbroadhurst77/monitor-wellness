@@ -29,6 +29,9 @@
     <!-- Only affects `dotnet publish -p:PublishSingleFile=true` (self-contained). The framework +
          WPF/WinForms are bundled uncompressed otherwise (~190 MB exe). -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Symbols travel inside the exe. The separate .pdb was never shipped (the installer carries only
+         the exe), so every stack trace in a user's log had method names but no line numbers. -->
+    <DebugType>embedded</DebugType>
     <!-- WFAC010 assumes a WinForms-owned entry point (Application.SetHighDpiMode). This app
          is WPF-hosted, so Per-Monitor-V2 is declared in app.manifest instead - see the
          comment there. -->

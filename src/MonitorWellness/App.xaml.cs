@@ -126,6 +126,16 @@ public partial class App : Application
         // target), since an unhandled exception mid-tick is exactly the kind of moment that
         // could leave gamma ramp state stale. If exceptions keep recurring in a short window
         // (CrashLoopDetector), stop pretending everything's fine and tell the user visibly.
+        // Exceptions on the UI thread are handled just below. These two cover everything else: a
+        // background-thread crash used to leave no trace in the log at all, and left the screen
+        // tinted (or a monitor dimmed) until the app was started again.
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            DebugLog.Write($"UNOBSERVED TASK EXCEPTION: {args.Exception}");
+            args.SetObserved();
+        };
+
         DispatcherUnhandledException += (_, args) =>
         {
             DebugLog.Write($"UNHANDLED DISPATCHER EXCEPTION: {args.Exception}");
@@ -203,12 +213,15 @@ public partial class App : Application
             ToolTipIcon.Warning);
         _migraine.RatingRequested += ShowMigraineRatingPrompt;
         _displayApplier = new DisplayApplier(_settings, _gammaManager, _overlay, _hardwareBrightness);
+        _gammaManager.TopologyChanged += () => RequestDisplayReapply("the display layout changed");
+        _displayApplier.CompatibilityFallbackStarted += OnCompatibilityFallbackStarted;
         _breakReminder = new BreakReminderService(
             _settings,
             () => _migraine?.IsActive == true,
             (milliseconds, message, icon) => _trayIcon?.ShowBalloonTip(milliseconds, "Monitor Wellness", message, icon));
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        SystemEvents.SessionSwitch += OnSessionSwitch;
 
         _iconOff = LoadEmbeddedIcon("MonitorWellness.Assets.migraine_off.ico");
         _iconOn = LoadEmbeddedIcon("MonitorWellness.Assets.migraine_on.ico");
@@ -235,7 +248,9 @@ public partial class App : Application
             DebugLog.Write("An active display has Windows HDR (advanced color) enabled — gamma ramp behavior here is unverified");
             QueueStartupBalloon(
                 "Monitor Wellness",
-                "One of your displays has Windows HDR turned on. Color/brightness adjustments haven't been tested against HDR displays and may not look right — if something seems off, try turning HDR off for this monitor.",
+                _settings.PreferOverlayOnlyOnCompatibilityDisplays
+                    ? "One of your displays has Windows HDR turned on. Colour changes aren't reliable on HDR displays, so Monitor Wellness only dims that display and doesn't warm its colour. Turn HDR off for that display if you want colour warmth too."
+                    : "One of your displays has Windows HDR turned on. Color/brightness adjustments haven't been tested against HDR displays and may not look right — if something seems off, try turning HDR off for this monitor.",
                 ToolTipIcon.Warning);
         }
 
@@ -305,6 +320,7 @@ public partial class App : Application
         else
             StartDrainingStartupBalloons();
 
+        _startupFinished = true;
         _ = CheckForUpdatesIfDueAsync();
 
         // A tray app can run for weeks. The check itself still runs at most once a day
@@ -470,9 +486,7 @@ public partial class App : Application
     /// <summary>Opens %AppData%\MonitorWellness\ in Explorer — closes the gap where a user filing a bug report had to be told the exact path and find it manually (TECHNICAL_UX_REVIEW.md §7.2).</summary>
     private static void OpenLogsFolder()
     {
-        string folder = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MonitorWellness");
+        string folder = AppDataFolder.FullPath;
         System.IO.Directory.CreateDirectory(folder); // in case nothing has been logged/saved yet
         try
         {
@@ -767,6 +781,83 @@ public partial class App : Application
             DebugLog.Write($"Diagnostic bundle export failed: {ex}");
             System.Windows.MessageBox.Show($"Couldn't create the diagnostic bundle: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private static readonly TimeSpan DisplayReapplyDebounce = TimeSpan.FromMilliseconds(1500);
+    private DispatcherTimer? _displayReapplyTimer;
+    private bool _startupFinished;
+
+    /// <summary>
+    /// Reapplies the display shortly after something may have reset it (a display layout change, an
+    /// unlock). Several signals usually arrive together, so one quiet reapply replaces the burst.
+    /// </summary>
+    private void RequestDisplayReapply(string reason)
+    {
+        DebugLog.Write($"Display reapply requested: {reason}");
+        _displayReapplyTimer ??= new DispatcherTimer { Interval = DisplayReapplyDebounce };
+        _displayReapplyTimer.Tick -= OnDisplayReapplyTimerTick;
+        _displayReapplyTimer.Tick += OnDisplayReapplyTimerTick;
+        _displayReapplyTimer.Stop();
+        _displayReapplyTimer.Start();
+    }
+
+    private void OnDisplayReapplyTimerTick(object? sender, EventArgs e)
+    {
+        _displayReapplyTimer?.Stop();
+        if (_migraine?.IsActive == true)
+            _migraine.Reapply();
+        else
+            RunScheduleTick();
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        if (!CrashSafety.ShouldReapplyAfterSessionChange(e.Reason))
+            return;
+
+        // SystemEvents isn't guaranteed to raise on the UI thread.
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => OnSessionSwitch(sender, e));
+            return;
+        }
+        RequestDisplayReapply($"the Windows session changed ({e.Reason})");
+    }
+
+    /// <summary>Tells the person (once startup is over, and the startup HDR balloon already covers the rest) that a display just went overlay-only because HDR was turned on.</summary>
+    private void OnCompatibilityFallbackStarted(string deviceName, string reason, bool isHdr)
+    {
+        if (!isHdr || !_startupFinished || _trayIcon is null)
+            return;
+
+        string shortName = deviceName[(deviceName.LastIndexOf('\\') + 1)..];
+        _trayIcon.ShowBalloonTip(
+            10_000,
+            "Monitor Wellness",
+            $"Windows HDR is on for {shortName}, so Monitor Wellness is only dimming it and not changing its colour. Turn HDR off for that display to get colour warmth back.",
+            ToolTipIcon.Info);
+    }
+
+    /// <summary>
+    /// A background-thread exception is about to end the process. Log it (there was no record before)
+    /// and make a last attempt to give the person their screen back, since nothing will restore it
+    /// until the app is started again. The WPF overlay windows disappear with the process, so only
+    /// the colour ramps and any hardware brightness need handling.
+    /// </summary>
+    private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs args)
+    {
+        DebugLog.Write($"UNHANDLED EXCEPTION (process terminating={args.IsTerminating}): {args.ExceptionObject}");
+        if (!args.IsTerminating)
+            return;
+
+        int failures = CrashSafety.RunBestEffort(new (string, Action)[]
+        {
+            ("restore hardware brightness", () => _hardwareBrightness.RestoreAll()),
+            ("restore colour ramps", () => _gammaManager?.RestoreAllToBaseline()),
+        });
+        DebugLog.Write(failures == 0
+            ? "CrashSafety: display restored before exit."
+            : $"CrashSafety: {failures} restore step(s) failed; the recovery journal will finish the job at the next start.");
     }
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
@@ -1213,6 +1304,9 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        _displayReapplyTimer?.Stop();
+        AppDomain.CurrentDomain.UnhandledException -= OnAppDomainUnhandledException;
         _timer?.Stop();
         _applicationRuleTimer?.Stop();
         _breakReminder?.Dispose();

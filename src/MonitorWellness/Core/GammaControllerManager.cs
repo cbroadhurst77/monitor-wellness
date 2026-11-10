@@ -25,13 +25,29 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
+    /// <summary>
+    /// Raised (on the UI thread) after the controllers were rebuilt and their device contexts
+    /// refreshed because the display layout changed. Windows often resets the colour ramp when the
+    /// layout changes, so the app listens to this and reapplies the schedule instead of waiting up
+    /// to 30 seconds for the next timer tick.
+    /// </summary>
+    public event Action? TopologyChanged;
+
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
-            dispatcher.Invoke(RebuildControllers);
+            dispatcher.Invoke(HandleTopologyChange);
         else
-            RebuildControllers();
+            HandleTopologyChange();
+    }
+
+    private void HandleTopologyChange()
+    {
+        RebuildControllers();
+        foreach (var controller in Controllers)
+            controller.RefreshDeviceContext();
+        TopologyChanged?.Invoke();
     }
 
     private void RebuildControllers()

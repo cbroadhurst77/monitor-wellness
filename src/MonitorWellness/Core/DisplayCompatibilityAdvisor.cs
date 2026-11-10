@@ -35,6 +35,14 @@ public static class DisplayCompatibilityAdvisor
     {
         ArgumentNullException.ThrowIfNull(monitor);
 
+        // Colour-ramp (gamma) changes are not reliable while Windows runs a display in HDR, and HDR
+        // can be switched on at any time (Win+Alt+B), so this is judged on every look at the display.
+        if (monitor.IsHdr)
+        {
+            reason = "Windows HDR is turned on for this display, where colour-ramp changes are not reliable.";
+            return true;
+        }
+
         string description = $"{monitor.DeviceString} {monitor.HardwareDeviceId}";
         if (ContainsAny(description, RemoteOrVirtualIndicators))
         {

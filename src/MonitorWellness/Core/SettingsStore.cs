@@ -10,10 +10,7 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class SettingsStore
 {
-    private static readonly string SettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MonitorWellness",
-        "settings.json");
+    private static readonly string SettingsPath = Path.Combine(AppDataFolder.FullPath, "settings.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

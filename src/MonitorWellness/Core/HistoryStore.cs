@@ -23,10 +23,7 @@ public sealed record HistoryEvent(DateTime TimestampUtc, string EventType, bool?
 /// </summary>
 public static class HistoryStore
 {
-    private static readonly string HistoryPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MonitorWellness",
-        "history.jsonl");
+    private static readonly string HistoryPath = Path.Combine(AppDataFolder.FullPath, "history.jsonl");
 
     // Unlike debug.log this is opt-in, low-volume (one line per migraine/pause event, not
     // per tick), and is the user's own readable record — so this caps at a much larger size

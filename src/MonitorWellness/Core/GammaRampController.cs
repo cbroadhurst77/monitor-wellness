@@ -130,6 +130,27 @@ public sealed class GammaRampController : IDisposable
         return Write(GammaRampMath.ScaleWithContrast(Baseline, (rFactor, gFactor, bFactor), contrastReduction));
     }
 
+    /// <summary>
+    /// Replaces the device context with a fresh one. A context can go stale across a display-mode
+    /// or layout change (the rejected writes in real logs came seconds after such changes), so the
+    /// manager refreshes every context when the layout changes. Keeps the old one if a fresh one
+    /// can't be made.
+    /// </summary>
+    public void RefreshDeviceContext()
+    {
+        if (_disposed)
+            return;
+
+        IntPtr fresh = CreateDC("DISPLAY", DeviceName, null, IntPtr.Zero);
+        if (fresh == IntPtr.Zero)
+            return;
+
+        IntPtr old = _hdc;
+        _hdc = fresh;
+        if (old != IntPtr.Zero)
+            DeleteDC(old);
+    }
+
     /// <summary>Restores the ramp this monitor had when the app took control of it (its calibration curve, or linear if none was detected).</summary>
     public bool RestoreBaseline() => Write(Baseline);
 
