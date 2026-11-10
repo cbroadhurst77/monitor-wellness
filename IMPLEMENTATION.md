@@ -15,7 +15,12 @@ Target: shippable v1 in 4 weeks, solo, free/open source, Windows-only.
   `Dimmer.exe` — do not bundle the third-party binary, license unconfirmed).
 - **Hotkey**: `RegisterHotKey` P/Invoke, not a raw keyboard hook, not AutoHotkey.
 - **Settings**: JSON file under `%AppData%`, not the registry.
-- **Auto-start**: Task Scheduler entry, not a Run key.
+- **Auto-start**: Task Scheduler entry, not a Run key. *Amended 2026-11-10:* Task Scheduler
+  remains the primary method, but `AutoStartManager.Register()` falls back to a per-user
+  `HKCU\...\Run` value when the UAC prompt is cancelled/blocked, or when a different admin's
+  approval registered the task for the wrong account (detected via the task's "Run As User").
+  Without the fallback those cases ended with no auto-start at all, or an auto-start that never
+  fired for the person who asked.
 - **Installer**: Inno Setup.
 - **Distribution**: GitHub Releases.
 - **Location input**: superseded post-v1 — manual lat/long entry, town/postcode search

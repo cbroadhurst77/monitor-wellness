@@ -6,6 +6,56 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+### Fixed
+- If Monitor Wellness is closed abruptly (killed, crashed, or the PC loses power) while it has
+  changed your screen colour or a monitor's own brightness, it now puts both back the next time
+  it starts. Previously a monitor's dimmed brightness could be remembered as its "normal".
+- Native/restore now returns a calibrated display to its colour-calibration curve instead of a
+  plain linear one, so colour-accurate monitors keep their calibration when the schedule is
+  paused, excluded, or the app exits.
+- A "pause until tomorrow" or migraine auto-off that ended while the PC was asleep is now ended
+  as soon as the PC wakes, rather than running on.
+- After waking from sleep, migraine mode keeps its Mild setting and its auto-off time instead
+  of restarting as a Full activation with a fresh timer.
+- A single hiccup talking to a monitor (common right after wake or a dock change) no longer
+  turns off hardware brightness for good: the app re-connects to the monitor and retries, and a
+  monitor you had approved is retried automatically a few times (30 minutes, 2 hours, 12 hours)
+  before it asks you to re-test it.
+
+- "Start with Windows" no longer silently fails when the administrator prompt is cancelled or
+  blocked, and no longer sets up auto-start for the wrong account when a different
+  administrator approves the prompt. In both cases it now uses a standard entry for your own
+  account and tells you it did.
+- If your settings file can't be read (for example a hand-edited value is out of range),
+  Monitor Wellness now keeps a dated copy (`settings.invalid-<date>.json`) and tells you,
+  instead of quietly overwriting it with defaults the next time you save.
+- The update check now also runs for a copy of the app that stays open for days, not only at
+  startup, and tells you about each new release once.
+- Upgrading while Monitor Wellness is running no longer fails or needs a reboot: the installer
+  asks to close it first.
+
+### Changed
+- If you never chose a location, the app now says so instead of quietly using London's sunrise
+  and sunset: a notice in Settings (with a "London is correct" button), a note in the status
+  line and the tray tooltip, and a single reminder balloon on a later start. It goes away as soon
+  as you pick your place or confirm London.
+- Internal tidy-up with no change to how the app behaves: the schedule's decision order, the
+  display-writing code, the break reminder and the tray menu were moved out of the largest source
+  files, the settings window was split by topic, and the tests now run against the real app
+  assembly.
+- The dimming overlay is now hidden from screenshots, screen recordings and screen sharing, so
+  other people see your real screen, not your dimmed and tinted view. This is on by default
+  (Settings > Display); turn it off to capture exactly what you see. Needs Windows 10 version
+  2004 or later.
+- The download is about 60% smaller (the app is now compressed inside its single file).
+
+### Added
+- `MonitorWellness.exe --restore` (and a Start Menu shortcut, "Restore display (emergency)")
+  puts your screen colour and any changed monitor brightness back to normal without starting
+  the tray app.
+
 ## 0.2.6 — Maintenance update
 
 ### Changed
