@@ -15,3 +15,4 @@ TestResults/
 # OS cruft
 Thumbs.db
 .DS_Store
+artifacts/

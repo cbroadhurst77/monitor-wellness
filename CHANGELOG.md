@@ -6,6 +6,17 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+### Fixed
+- Scheduled dimming now reaches every active display that has a dim overlay, even when Windows
+  refuses a gamma-ramp device context for it. Colour temperature still applies only to
+  gamma-capable displays; exclusions and the primary-display brightness floor are unchanged.
+
+### Changed
+- Built and published on .NET 10 LTS (.NET 8 reached end of support on 10 November 2026). The
+  release stays self-contained: no separate .NET install is needed.
+
 ## 0.2.5 — Compatibility and reliability update
 
 ### Added

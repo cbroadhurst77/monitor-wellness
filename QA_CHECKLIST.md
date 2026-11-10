@@ -104,6 +104,14 @@ release blocker; anything under "Nice to confirm" is lower priority.
 - [ ] Confirm the normal schedule never dims the Windows primary display below its 20% safety
       floor, even with a per-monitor dim multiplier above 1.0
 
+- [ ] On a mixed setup where one display rejects gamma control (remote/virtual/USB/indirect
+      or a driver that refuses the ramp), confirm the scheduled dim still darkens that display
+      and the primary 20% floor still holds
+- [ ] HDR on/off and driver gamma-ramp rejection: confirm no stuck colour, and the debug log
+      records the rejection
+- [ ] Dock/undock and remote-desktop connect/disconnect: confirm the schedule resumes
+- [ ] For any failure record: Windows version, GPU/driver, display path, expected vs observed
+
 ## Emergency recovery (release blocker)
 
 - [ ] Press `Ctrl+Alt+Shift+R` while the schedule is dimming: all adjusted monitors become

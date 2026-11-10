@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [master]
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ jobs:
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       # These are separate projects rather than a solution. Restore each one explicitly so
       # subsequent --no-restore steps work on a clean GitHub-hosted runner.
@@ -39,3 +40,30 @@ jobs:
       - name: Check known vulnerable dependencies
         shell: pwsh
         run: ./tools/Test-VulnerableDependencies.ps1 -ProjectPath tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj
+
+  # Validates the real release packaging path. No signing credentials are used or needed.
+  # PRs get the lightweight publish check; the installer is compiled on master pushes and tags.
+  release-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate publish output
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: ./tools/Test-ReleasePackage.ps1
+
+      - name: Validate publish output and compile installer
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -and -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+          ./tools/Test-ReleasePackage.ps1 -CompileInstaller

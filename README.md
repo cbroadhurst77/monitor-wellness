@@ -124,7 +124,7 @@ see the [User Guide](USER_GUIDE.md).
 
 ## Building from source
 
-Requires the .NET 8 SDK (or newer) and Windows.
+Requires the .NET 10 SDK (LTS) and Windows.
 
 ```bash
 dotnet build src/MonitorWellness/MonitorWellness.csproj -c Debug
@@ -143,6 +143,11 @@ That output is fully portable — copy `MonitorWellness.exe` anywhere and run it
 installer or admin rights needed. Use the "Start with Windows" tray menu item afterward if you
 want it to launch automatically (that one step does need administrator approval, since it
 registers a Task Scheduler entry — everything else about running the app doesn't).
+
+CI runs `tools/Test-ReleasePackage.ps1`, which performs this exact publish and verifies the
+exe exists, its version matches the csproj and installer, and it is self-contained. Run it
+locally before tagging; add `-CompileInstaller` (needs Inno Setup 6) to also build the installer.
+CI compiles the installer on master pushes and `v*` tags. No signing credentials are required.
 
 ## Building the installer
 

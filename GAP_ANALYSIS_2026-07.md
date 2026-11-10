@@ -1,5 +1,12 @@
 # Monitor Wellness — Gap Analysis (July 2026 pass)
 
+> **HISTORICAL SNAPSHOT (written July 2026; status re-checked 10 November 2026).**
+> Findings below describe the code as it was in July and **many have since been implemented**.
+> For example, the deep-night controls (section 1.1) and history CSV export now exist in
+> `src/MonitorWellness/SettingsWindow.xaml` and `SettingsWindow.xaml.cs`. Do not treat any item
+> here as a currently open bug without re-verifying it against current source; items not
+> re-audited are **unverified**.
+
 A fourth read of this project, after `TECHNICAL_UX_REVIEW.md` (pass 1, closed out),
 `INDEPENDENT_REAUDIT.md` (pass 2, three defects found and fixed), and the `Unreleased`
 section of `CHANGELOG.md` (which shipped a large batch of work — break reminders, migraine
