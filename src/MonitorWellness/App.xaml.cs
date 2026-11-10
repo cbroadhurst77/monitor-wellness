@@ -42,7 +42,7 @@ public partial class App : Application
     private DispatcherTimer? _applicationRuleTimer;
     private DispatcherTimer? _breakReminderTimer;
     private BreakFocusWindow? _breakFocusWindow;
-    private DateTime? _breakReminderSnoozedUntilUtc;
+    private readonly BreakReminderState _breakReminder = new();
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
@@ -568,7 +568,7 @@ public partial class App : Application
 
         if (!_settings.BreakReminderEnabled)
         {
-            _breakReminderSnoozedUntilUtc = null;
+            _breakReminder.Reset();
             DebugLog.Write("BreakReminder: disabled, timer not (re)started");
             return;
         }
@@ -578,26 +578,27 @@ public partial class App : Application
         _breakReminderTimer = new DispatcherTimer { Interval = interval };
         _breakReminderTimer.Tick += (_, _) =>
         {
-            DateTime nowUtc = DateTime.UtcNow;
-            if (BreakReminderPolicy.IsSnoozed(nowUtc, _breakReminderSnoozedUntilUtc))
-            {
-                DebugLog.Write($"BreakReminder: tick skipped (snoozed until {_breakReminderSnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC)");
-                return;
-            }
-            if (_breakReminderSnoozedUntilUtc is not null)
-            {
-                DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
-                _breakReminderSnoozedUntilUtc = null;
-            }
-
             // Skip while migraine mode is active, a fullscreen app likely owns the screen, or
             // Windows says the person has stepped away. The timer continues on its regular
             // cadence so returning from a real break never triggers an immediate catch-up prompt.
-            bool migraineActive = _migraine?.IsActive == true;
-            bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
-            TimeSpan idleDuration = migraineActive || likelyFullscreen ? TimeSpan.Zero : UserIdleDetector.GetIdleDuration();
-            BreakReminderDecision decision = BreakReminderPolicy.Decide(migraineActive, likelyFullscreen, idleDuration);
-            if (decision == BreakReminderDecision.Show)
+            TimeSpan idleDuration = TimeSpan.Zero;
+            BreakReminderTick tick = _breakReminder.Tick(DateTime.UtcNow, () =>
+            {
+                bool migraineActive = _migraine?.IsActive == true;
+                bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
+                idleDuration = migraineActive || likelyFullscreen ? TimeSpan.Zero : UserIdleDetector.GetIdleDuration();
+                return new BreakReminderSignals(migraineActive, likelyFullscreen, idleDuration);
+            });
+
+            if (tick.Outcome == BreakReminderTickOutcome.SkippedSnoozed)
+            {
+                DebugLog.Write($"BreakReminder: tick skipped (snoozed until {tick.SnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC)");
+                return;
+            }
+            if (tick.SnoozeExpired)
+                DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
+
+            if (tick.Outcome == BreakReminderTickOutcome.Show)
             {
                 DebugLog.Write("BreakReminder: tick fired, showing balloon");
                 _trayIcon?.ShowBalloonTip(
@@ -608,7 +609,7 @@ public partial class App : Application
             }
             else
             {
-                DebugLog.Write($"BreakReminder: tick fired but skipped ({decision}, idle={idleDuration.TotalSeconds:F0}s)");
+                DebugLog.Write($"BreakReminder: tick fired but skipped ({tick.Decision}, idle={idleDuration.TotalSeconds:F0}s)");
             }
         };
         _breakReminderTimer.Start();
@@ -628,8 +629,8 @@ public partial class App : Application
             bool enabled = _settings.BreakReminderEnabled;
             menu.Text = !enabled
                 ? "Snooze &Break Reminders (off)"
-                : BreakReminderPolicy.IsSnoozed(DateTime.UtcNow, _breakReminderSnoozedUntilUtc)
-                    ? $"Snooze &Break Reminders (until {_breakReminderSnoozedUntilUtc!.Value.ToLocalTime():HH:mm})"
+                : _breakReminder.IsSnoozed(DateTime.UtcNow)
+                    ? $"Snooze &Break Reminders (until {_breakReminder.SnoozedUntilUtc!.Value.ToLocalTime():HH:mm})"
                     : "Snooze &Break Reminders";
         };
         return menu;
@@ -637,20 +638,19 @@ public partial class App : Application
 
     private void SnoozeBreakReminders(TimeSpan duration)
     {
-        if (!_settings.BreakReminderEnabled || duration <= TimeSpan.Zero)
+        if (!_breakReminder.TrySnooze(_settings.BreakReminderEnabled, DateTime.UtcNow, duration))
             return;
 
-        _breakReminderSnoozedUntilUtc = DateTime.UtcNow + duration;
-        DebugLog.Write($"BreakReminder: snoozed until {_breakReminderSnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC.");
-        _trayIcon?.ShowBalloonTip(4_000, "Monitor Wellness", $"Break reminders snoozed until {_breakReminderSnoozedUntilUtc.Value.ToLocalTime():HH:mm}.", ToolTipIcon.Info);
+        DateTime until = _breakReminder.SnoozedUntilUtc!.Value;
+        DebugLog.Write($"BreakReminder: snoozed until {until:yyyy-MM-dd HH:mm} UTC.");
+        _trayIcon?.ShowBalloonTip(4_000, "Monitor Wellness", $"Break reminders snoozed until {until.ToLocalTime():HH:mm}.", ToolTipIcon.Info);
     }
 
     private void ResumeBreakReminders()
     {
-        if (_breakReminderSnoozedUntilUtc is null)
+        if (!_breakReminder.Resume())
             return;
 
-        _breakReminderSnoozedUntilUtc = null;
         DebugLog.Write("BreakReminder: snooze cleared; reminders resumed.");
     }
 

@@ -65,6 +65,7 @@
     <Compile Include="..\..\src\MonitorWellness\Core\DisplayCompatibilityAdvisor.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\VisualStabilityDiagnostics.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderPolicy.cs" />
+    <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderState.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />
     <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
