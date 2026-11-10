@@ -995,25 +995,25 @@ public partial class App : Application
             ParseColor(_settings.DeepNightOverlayColorHex),
             deepNightFactor);
 
-        var brightnessByDevice = new Dictionary<string, double>();
-        var primaryMonitorNames = MonitorEnumerator.GetActiveMonitors()
+        // Target set comes from the overlay/active displays, not gamma controllers: a display
+        // whose gamma-ramp DC could not be created still has a working overlay and must still
+        // be dimmed. Gamma controllers are unioned in only so hardware-brightness targets that
+        // previously existed keep their entry.
+        var activeMonitors = MonitorEnumerator.GetActiveMonitors();
+        var primaryMonitorNames = activeMonitors
             .Where(monitor => monitor.IsPrimary)
             .Select(monitor => monitor.DeviceName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
-        {
-            if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
-            {
-                brightnessByDevice[controller.DeviceName] = 1.0;
-                continue;
-            }
+        var targetDevices = new HashSet<string>(_overlay?.DeviceNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        targetDevices.UnionWith(activeMonitors.Select(monitor => monitor.DeviceName));
+        targetDevices.UnionWith((_gammaManager?.Controllers ?? Array.Empty<GammaRampController>()).Select(controller => controller.DeviceName));
 
-            double multiplier = _settings.MonitorDimMultiplier.TryGetValue(controller.DeviceName, out var m) ? m : 1.0;
-            brightnessByDevice[controller.DeviceName] = BrightnessSafety.CalculateEffectiveBrightness(
-                globalBrightness,
-                multiplier,
-                primaryMonitorNames.Contains(controller.DeviceName));
-        }
+        var brightnessByDevice = ScheduleBrightnessTargets.Build(
+            targetDevices,
+            globalBrightness,
+            _settings.ExcludedMonitors.ToHashSet(StringComparer.OrdinalIgnoreCase),
+            _settings.MonitorDimMultiplier,
+            primaryMonitorNames);
 
         return (kelvin, brightnessByDevice, dimColor);
     }

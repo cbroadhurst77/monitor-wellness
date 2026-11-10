@@ -989,30 +989,26 @@ public partial class SettingsWindow : Window
     /// </summary>
     private Dictionary<string, double> BuildBrightnessByDeviceForPreview(double globalBrightness)
     {
-        var result = new Dictionary<string, double>();
         var primaryMonitorNames = MonitorEnumerator.GetActiveMonitors()
             .Where(monitor => monitor.IsPrimary)
             .Select(monitor => monitor.DeviceName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var multipliers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         foreach (var deviceName in _overlay.DeviceNames)
         {
-            bool excluded = _excludeBoxes.TryGetValue(deviceName, out var box) && box.IsChecked == true;
-            if (excluded)
-            {
-                result[deviceName] = 1.0;
-                continue;
-            }
+            if (_excludeBoxes.TryGetValue(deviceName, out var box) && box.IsChecked == true)
+                excluded.Add(deviceName);
 
             double multiplier = 1.0;
             if (_multiplierBoxes.TryGetValue(deviceName, out var multiplierBox))
                 double.TryParse(multiplierBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out multiplier);
-
-            result[deviceName] = BrightnessSafety.CalculateEffectiveBrightness(
-                globalBrightness,
-                multiplier,
-                primaryMonitorNames.Contains(deviceName));
+            multipliers[deviceName] = multiplier;
         }
-        return result;
+
+        // Same shared builder as App.ComputeScheduleTarget, so preview and the real schedule
+        // cover the same overlay-backed device set regardless of gamma-controller availability.
+        return ScheduleBrightnessTargets.Build(_overlay.DeviceNames, globalBrightness, excluded, multipliers, primaryMonitorNames);
     }
 
     private void BuildMonitorRows()
