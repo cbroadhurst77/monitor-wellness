@@ -26,9 +26,10 @@
          defaulting to the SDK's own 1.0.0.0, while the installer separately said 0.1.0: a
          silent mismatch, since nothing ever compared the two. -->
     <Version>0.2.9</Version>
-    <!-- Only affects `dotnet publish -p:PublishSingleFile=true` (self-contained). The framework +
-         WPF/WinForms are bundled uncompressed otherwise (~190 MB exe). -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Single-file compression is deliberately NOT enabled. It shrank the exe from ~190 MB to ~80 MB, but
+         the compressed app is unpacked into memory when it runs: measured on the same build, the idle
+         app used ~68 MB more private working set (188 vs 120 MB) and ~120 MB more working set (366 vs
+         246 MB), and Inno Setup's own compression already brings the installer to ~53 MB. -->
     <!-- Symbols travel inside the exe. The separate .pdb was never shipped (the installer carries only
          the exe), so every stack trace in a user's log had method names but no line numbers. -->
     <DebugType>embedded</DebugType>

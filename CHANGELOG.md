@@ -6,13 +6,26 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+### Changed
+- The app now gives its idle memory back to Windows: once shortly after it starts and then about every
+  10 minutes (not while Settings is open). In testing, the memory Task Manager shows for the idle app
+  dropped from about 190 MB to about 65 MB. It only changes what is kept in RAM; anything the app needs
+  is brought back on demand.
+- The app file is no longer compressed (undoing the compression added in 0.2.7). Compressed, the app
+  was unpacked into memory when it ran and used about 68 MB more RAM, and the installer download was
+  about 20 MB larger. The app file on disk is back to about 190 MB, and the installer back to about
+  53 MB.
+
 ## 0.2.9 — Faster startup and update-check update
 
 ### Changed
 - The dimming overlay is now only on screen while it is actually dimming or tinting. In full daytime
   there are no overlay windows over your monitors at all (before, three invisible full-screen windows
-  sat on top of everything all day). The app starts about 4 seconds faster (1.6 s instead of 5.9 s in
-  one test on three monitors) and uses roughly 120 MB less memory while idle.
+  sat on top of everything all day). The app starts about 3 to 4 seconds faster (about 5 s before,
+  about 2 s after, in tests on three monitors). (An earlier version of this note also claimed about
+  120 MB less memory; that came from comparing differently packaged builds and was wrong.)
 - Trade-off: because the overlay is no longer permanently on screen, the dimming part of migraine mode
   now appears about a quarter of a second after the shortcut (about 0.27 s in testing; the colour and
   contrast change is still immediate). The overlay windows are prepared in the background shortly after
