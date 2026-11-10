@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.9 — Faster startup and update-check update
 
 ### Changed
 - The dimming overlay is now only on screen while it is actually dimming or tinting. In full daytime
