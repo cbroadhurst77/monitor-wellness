@@ -6,6 +6,13 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## 0.2.6 — Maintenance update
+
+### Changed
+- No change to how the app looks or behaves. Internal tidy-up: the break-reminder snooze rules
+  and the day/night schedule calculation were moved into separately tested components, and
+  CI now builds and checks the installer on every release.
+
 ## 0.2.5 — Compatibility and reliability update
 
 ### Added
