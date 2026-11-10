@@ -70,9 +70,16 @@ recent work.
   other people see your real screen, not your dimmed and tinted view. This is on by default
   (Settings > Display); turn it off to capture exactly what you see. Needs Windows 10 version
   2004 or later.
-- The download is about 60% smaller (the app is now compressed inside its single file).
+- The standalone app file is about 60% smaller (82 MB instead of 199 MB) and the installed app takes about 110 MB less disk space, because it is now compressed inside its single file. The installer download is about 20 MB larger than before (74 MB instead of 53 MB), since an already-compressed app can't be compressed further by the installer.
 
 ### Added
+- **Fixed clock times instead of the sun** (Settings > Schedule): choose when your day starts and
+  when the evening starts, and no location is needed. The screen changes gradually around those
+  times the way it does around sunrise and sunset, and deepens into night about two hours after
+  the evening starts. It works for night shifts too (set the day to start in the evening).
+- **Wake-up time** next to bedtime: the bedtime warmth and dimming now ends when you wake (easing
+  off over half an hour) instead of always holding for about ten hours after bedtime. Leave it
+  blank to keep the old behaviour.
 - `MonitorWellness.exe --restore` (and a Start Menu shortcut, "Restore display (emergency)")
   puts your screen colour and any changed monitor brightness back to normal without starting
   the tray app.

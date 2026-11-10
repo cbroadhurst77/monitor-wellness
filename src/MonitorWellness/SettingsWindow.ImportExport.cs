@@ -78,6 +78,9 @@ public partial class SettingsWindow
         _settings.Latitude = imported.Latitude;
         _settings.Longitude = imported.Longitude;
         _settings.LocationConfirmed = imported.LocationConfirmed;
+        _settings.ScheduleMode = imported.ScheduleMode;
+        _settings.FixedSunriseLocal = imported.FixedSunriseLocal;
+        _settings.FixedSunsetLocal = imported.FixedSunsetLocal;
         _settings.ExcludedMonitors = imported.ExcludedMonitors;
         _settings.ColorExcludedMonitors = imported.ColorExcludedMonitors;
         _settings.MonitorDimMultiplier = imported.MonitorDimMultiplier;
@@ -94,7 +97,8 @@ public partial class SettingsWindow
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
         _locationConfirmed = _settings.LocationConfirmed;
-        UpdateLocationBanner();
+        LoadScheduleSourceFrom(_settings);
+        UpdateScheduleModeUi();
         LoadPreferencesFrom(imported);
         BuildMonitorRows();
         HistoryTrackingCheckBox.IsChecked = _settings.HistoryTrackingEnabled;

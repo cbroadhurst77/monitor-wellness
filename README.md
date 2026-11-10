@@ -181,9 +181,12 @@ which requests its own UAC approval.
 
 ## Release gate
 
-Commercial releases must be Authenticode-signed and timestamped before distribution. After
-signing the published executable and installer, verify both their signatures, versions, and
-SHA-256 hashes before publishing:
+Commercial releases must be Authenticode-signed and timestamped before distribution. This
+project does not have a code-signing certificate yet, so no release has been signed. When one
+exists, [tools/Sign-Release.ps1](tools/Sign-Release.ps1) does the signing (certificate from a .pfx
+file, or from the `SIGNING_PFX_BASE64` / `SIGNING_PFX_PASSWORD` secrets in CI); sign the exe, rebuild
+the installer from the signed exe, sign the installer, then verify both their signatures, versions,
+and SHA-256 hashes before publishing:
 
 ```powershell
 .\tools\Verify-Release.ps1 `

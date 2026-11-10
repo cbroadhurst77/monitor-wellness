@@ -42,6 +42,8 @@ public partial class SettingsWindow
         BedtimeEnabledCheckBox.IsChecked = !string.IsNullOrWhiteSpace(source.BedtimeLocal);
         BedtimeBox.Text = source.BedtimeLocal ?? "22:30";
         BedtimeBox.IsEnabled = BedtimeEnabledCheckBox.IsChecked == true;
+        WakeTimeBox.Text = source.WakeTimeLocal ?? "";
+        WakeTimeBox.IsEnabled = BedtimeBox.IsEnabled;
 
         _pendingHotkeyModifiers = source.MigraineHotkeyModifiers;
         _pendingHotkeyKey = source.MigraineHotkeyKey;

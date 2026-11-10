@@ -179,11 +179,13 @@ public partial class SettingsWindow : Window
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;
         var runningVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         CurrentVersionText.Text = runningVersion is not null ? $"You're running version {runningVersion.ToString(3)}." : "";
+        LoadScheduleSourceFrom(_settings);
         _loaded = true;
         _locationConfirmed = _settings.LocationConfirmed;
         UpdateMapMarker();
         UpdateSunTimesDisplay();
         UpdateLocationBanner();
+        UpdateScheduleModeUi();
         UpdateSliderLabels();
         RefreshHistorySummary();
         PreviewDay(); // something visible on screen the moment the window opens, matching whichever phase was last touched (day, as the default starting point)
@@ -227,6 +229,8 @@ public partial class SettingsWindow : Window
             error = "Longitude must be a number between -180 and 180.";
             return false;
         }
+        if (!TryValidateFixedTimes(out string scheduleMode, out string fixedSunrise, out string fixedSunset, out error))
+            return false;
         int dayKelvin = (int)DayKelvinSlider.Value;
         int nightKelvin = (int)NightKelvinSlider.Value;
         if (!ColorTemperature.IsSafeForGammaRamp(dayKelvin))
@@ -267,6 +271,7 @@ public partial class SettingsWindow : Window
         TryValidateMigraineColorHex(out string migraineColorHex, out _);
         TryValidateDeepNightColorHex(out string deepNightColorHex, out _);
         TryValidateBedtime(out string? bedtimeLocal, out _);
+        TryValidateWakeTime(out string? wakeLocal, out _);
         if (!TryGetMigraineResponsePlan(out string defaultMigraineResponsePlan, out error))
             return false;
 
@@ -328,6 +333,9 @@ public partial class SettingsWindow : Window
         _settings.Latitude = lat;
         _settings.Longitude = lon;
         _settings.LocationConfirmed = LocationStatus.ConfirmedAfterSave(_settings.LocationConfirmed, _londonConfirmedThisSession, lat, lon);
+        _settings.ScheduleMode = scheduleMode;
+        _settings.FixedSunriseLocal = fixedSunrise;
+        _settings.FixedSunsetLocal = fixedSunset;
         _settings.DayKelvin = dayKelvin;
         _settings.NightKelvin = nightKelvin;
         _settings.DayBrightness = dayBrightness;
@@ -341,6 +349,7 @@ public partial class SettingsWindow : Window
         _settings.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
         _settings.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
         _settings.BedtimeLocal = bedtimeLocal;
+        _settings.WakeTimeLocal = wakeLocal;
         _settings.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
         _settings.MonitorDimMultiplier = multipliers;

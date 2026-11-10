@@ -68,12 +68,26 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 ; Remove the optional auto-start task if the user enabled it from the app.
 Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""{#MyTaskName}"" /f"; Flags: runhidden; RunOnceId: "RemoveAutoStartTask"
 
-; The per-user Run-key fallback (see AutoStartManager.cs). runasoriginaluser targets the HKCU of
-; the person who uninstalls, not an over-the-shoulder administrator's.
-Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v MonitorWellness /f"; Flags: runhidden runasoriginaluser; RunOnceId: "RemoveAutoStartRunKey"
-
 [UninstallDelete]
 ; The app writes its own settings/log files under %AppData% (see SettingsStore.cs /
 ; DebugLog.cs) -- these are user data, not installed program files, so deliberately NOT
 ; removed by uninstall. If a full "remove everything" uninstall is wanted later, they live at
 ; %AppData%\MonitorWellness\.
+
+[Code]
+{ The per-user "Start with Windows" fallback (see AutoStartManager.cs) is a value under each
+  user's own Run key. The uninstaller runs elevated and may not be the person who set it up,
+  so remove it from every loaded user hive instead of only the current one. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Sids: TArrayOfString;
+  I: Integer;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    if RegGetSubkeyNames(HKEY_USERS, '', Sids) then
+      for I := 0 to GetArrayLength(Sids) - 1 do
+        if Pos('_Classes', Sids[I]) = 0 then
+          RegDeleteValue(HKEY_USERS, Sids[I] + '\Software\Microsoft\Windows\CurrentVersion\Run', 'MonitorWellness');
+  end;
+end;

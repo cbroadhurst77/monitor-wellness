@@ -128,6 +128,8 @@ public partial class SettingsWindow
 
         if (!TryValidateBedtime(out string? bedtimeLocal, out error))
             return false;
+        if (!TryValidateWakeTime(out string? wakeLocal, out error))
+            return false;
         if (!TryGetMigraineResponsePlan(out string defaultMigraineResponsePlan, out error))
             return false;
 
@@ -144,6 +146,7 @@ public partial class SettingsWindow
         snapshot.MigraineAutoRevertMinutes = (int)MigraineAutoRevertSlider.Value;
         snapshot.PlaySoundOnMigraineToggle = PlaySoundCheckBox.IsChecked == true;
         snapshot.BedtimeLocal = bedtimeLocal;
+        snapshot.WakeTimeLocal = wakeLocal;
         snapshot.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         snapshot.MigraineHotkeyKey = _pendingHotkeyKey;
         error = "";

@@ -22,6 +22,11 @@ public static class LocationStatus
     public static bool IsUsingUnconfirmedDefault(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+
+        // Fixed clock times need no location, so London is not a placeholder worth pointing out.
+        if (ScheduleSource.UsesFixedTimes(settings))
+            return false;
+
         return IsUsingUnconfirmedDefault(settings.Latitude, settings.Longitude, settings.LocationConfirmed);
     }
 

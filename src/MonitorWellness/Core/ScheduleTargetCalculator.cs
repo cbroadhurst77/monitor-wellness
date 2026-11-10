@@ -12,7 +12,8 @@ public sealed record ScheduleTargetInputs(
     double SolarElevationDegrees,
     string? BedtimeLocal,
     DateTime NowLocal,
-    string DeepNightOverlayColorHex);
+    string DeepNightOverlayColorHex,
+    string? WakeTimeLocal = null);
 
 /// <summary>The global (pre per-monitor) schedule target.</summary>
 public readonly record struct ScheduleTarget(int Kelvin, double GlobalBrightness, Color DimColor);
@@ -40,7 +41,10 @@ public static class ScheduleTargetCalculator
         double deepNightFactor = ScheduleCurve.GetDeepNightFactor(elevation);
         if (!string.IsNullOrWhiteSpace(inputs.BedtimeLocal) && TimeSpan.TryParse(inputs.BedtimeLocal, out var bedtime))
         {
-            double bedtimeFactor = ScheduleCurve.GetBedtimeFactor(inputs.NowLocal, bedtime);
+            // With a wake-up time the blend holds until then; without one it assumes a night of ten hours.
+            double bedtimeFactor = FixedTimeSchedule.TryParseTimeOfDay(inputs.WakeTimeLocal, out TimeSpan wake) && wake != bedtime
+                ? ScheduleCurve.GetBedtimeWakeFactor(inputs.NowLocal, bedtime, wake)
+                : ScheduleCurve.GetBedtimeFactor(inputs.NowLocal, bedtime);
             deepNightFactor = Math.Max(deepNightFactor, bedtimeFactor);
         }
         double globalBrightness = Lerp(nightBrightness, inputs.DeepNightBrightness, deepNightFactor);
