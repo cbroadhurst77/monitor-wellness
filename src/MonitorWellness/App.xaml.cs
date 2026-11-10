@@ -953,47 +953,42 @@ public partial class App : Application
     /// </summary>
     private (int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, System.Windows.Media.Color DimColor) ComputeScheduleTarget(SensoryComfortSchedule? scheduleOverride = null)
     {
-        int dayKelvin = scheduleOverride?.DayKelvin ?? _settings.DayKelvin;
-        int nightKelvin = scheduleOverride?.NightKelvin ?? _settings.NightKelvin;
-        double dayBrightness = scheduleOverride?.DayBrightness ?? _settings.DayBrightness;
-        double nightBrightnessSetting = scheduleOverride?.NightBrightness ?? _settings.NightBrightness;
-        double deepNightBrightness = scheduleOverride?.DeepNightBrightness ?? _settings.DeepNightBrightness;
-        double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
-        int kelvin = ScheduleCurve.GetTargetKelvin(elevation, dayKelvin, nightKelvin);
-        double nightBrightness = ScheduleCurve.GetTargetBrightness(elevation, dayBrightness, nightBrightnessSetting);
-
-        double deepNightFactor = ScheduleCurve.GetDeepNightFactor(elevation);
-        if (!string.IsNullOrWhiteSpace(_settings.BedtimeLocal) && TimeSpan.TryParse(_settings.BedtimeLocal, out var bedtime))
-        {
-            double bedtimeFactor = ScheduleCurve.GetBedtimeFactor(DateTime.Now, bedtime);
-            deepNightFactor = Math.Max(deepNightFactor, bedtimeFactor);
-        }
-        double globalBrightness = Lerp(nightBrightness, deepNightBrightness, deepNightFactor);
-
+        // The pure schedule math lives in ScheduleTargetCalculator. Only the stateful/hardware
+        // parts stay here: the ambient sensor read and its smoother. Scaled by dayFactor so
+        // ambient has zero effect at night; any failure to read the sensor (including simply
+        // not having one, the common case) leaves brightness untouched.
+        Func<double, double?>? ambientAdjustment = null;
         if (_settings.MatchAmbientLight)
         {
-            // Scaled by dayFactor so this has zero effect at night regardless of room
-            // lighting — a lamp-lit bedroom shouldn't fight the night schedule. Any failure to
-            // read the sensor (including simply not having one, the common case) leaves
-            // globalBrightness untouched.
-            double? lux = AmbientLightSensor.TryGetCurrentLux();
-            if (lux.HasValue)
+            ambientAdjustment = dayFactor =>
             {
-                double dayFactor = ScheduleCurve.GetDayFactor(elevation);
-                double adjustment = _ambientLightSmoother.Update(
-                    AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor);
-                globalBrightness = Math.Clamp(globalBrightness + adjustment, 0.0, 1.0);
-            }
+                double? lux = AmbientLightSensor.TryGetCurrentLux();
+                return lux.HasValue
+                    ? _ambientLightSmoother.Update(AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor)
+                    : null;
+            };
         }
         else
         {
             _ambientLightSmoother.Reset();
         }
 
-        var dimColor = LerpColor(
-            System.Windows.Media.Colors.Black,
-            ParseColor(_settings.DeepNightOverlayColorHex),
-            deepNightFactor);
+        double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
+        ScheduleTarget target = ScheduleTargetCalculator.Compute(
+            new ScheduleTargetInputs(
+                DayKelvin: scheduleOverride?.DayKelvin ?? _settings.DayKelvin,
+                NightKelvin: scheduleOverride?.NightKelvin ?? _settings.NightKelvin,
+                DayBrightness: scheduleOverride?.DayBrightness ?? _settings.DayBrightness,
+                NightBrightness: scheduleOverride?.NightBrightness ?? _settings.NightBrightness,
+                DeepNightBrightness: scheduleOverride?.DeepNightBrightness ?? _settings.DeepNightBrightness,
+                SolarElevationDegrees: elevation,
+                BedtimeLocal: _settings.BedtimeLocal,
+                NowLocal: DateTime.Now,
+                DeepNightOverlayColorHex: _settings.DeepNightOverlayColorHex),
+            ambientAdjustment);
+        int kelvin = target.Kelvin;
+        double globalBrightness = target.GlobalBrightness;
+        var dimColor = target.DimColor;
 
         // Target set comes from the overlay/active displays, not gamma controllers: a display
         // whose gamma-ramp DC could not be created still has a working overlay and must still
@@ -1331,17 +1326,6 @@ public partial class App : Application
             DebugLog.Write($"Couldn't persist hardware brightness safety quarantine: {ex}");
         }
     }
-
-    private static System.Windows.Media.Color ParseColor(string hex)
-        => (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
-
-    private static double Lerp(double from, double to, double t) => from + (to - from) * t;
-
-    private static System.Windows.Media.Color LerpColor(System.Windows.Media.Color from, System.Windows.Media.Color to, double t)
-        => System.Windows.Media.Color.FromRgb(
-            (byte)Lerp(from.R, to.R, t),
-            (byte)Lerp(from.G, to.G, t),
-            (byte)Lerp(from.B, to.B, t));
 
     private static System.Drawing.Icon LoadEmbeddedIcon(string resourceName)
     {
