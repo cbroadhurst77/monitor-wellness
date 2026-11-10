@@ -259,10 +259,15 @@ public partial class SettingsWindow : Window
         if (HistoryTrackingCheckBox.IsChecked != true)
         {
             HistorySummaryText.Text = "History tracking is off.";
+            HistoryTrendText.Text = string.Empty;
+            HistoryTrendText.Visibility = Visibility.Collapsed;
             return;
         }
 
-        var summary = HistorySummarizer.Summarize(HistoryStore.Load(), DateTime.UtcNow);
+        var allEvents = HistoryStore.Load();
+        HistoryTrendText.Text = HistoryTrend.Describe(allEvents, DateTime.UtcNow);
+        HistoryTrendText.Visibility = Visibility.Visible;
+        var summary = HistorySummarizer.Summarize(allEvents, DateTime.UtcNow);
         HistorySummaryText.Text = summary.TotalActivations == 0
             ? "No Migraine Mode activations recorded yet."
             : $"{summary.TotalActivations} total activation(s) ({summary.FullCount} strong, {summary.MildCount} gentle) — " +

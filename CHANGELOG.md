@@ -8,6 +8,12 @@ recent work.
 
 ## Unreleased
 
+### Added
+- Profiles & History now shows an optional weekly view of your own history (activations per
+  week, and average helpfulness once a week has at least 3 ratings), with the date range and
+  sample counts. Sparse data is shown as counts, not averages. It stays on your computer and is
+  a personal record, not medical insight.
+
 ### Fixed
 - Scheduled dimming now reaches every active display that has a dim overlay, even when Windows
   refuses a gamma-ramp device context for it. Colour temperature still applies only to

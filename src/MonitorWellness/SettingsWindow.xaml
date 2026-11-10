@@ -421,6 +421,8 @@
                         <TextBlock Text="A quick, optional 1-5 rating after each use — so you can see not just how often you use Migraine Mode, but whether it's actually helping." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <TextBlock x:Name="HistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
                                    AutomationProperties.LiveSetting="Polite"/>
+                        <TextBlock x:Name="HistoryTrendText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                   AutomationProperties.Name="Weekly history view"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                             <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
