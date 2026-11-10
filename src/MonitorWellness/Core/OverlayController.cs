@@ -16,6 +16,19 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     private readonly Dictionary<string, OverlayWindow> _windows = new();
     private DispatcherTimer? _topologyRefreshTimer;
     private bool _disposed;
+    private bool _excludeFromCapture = true;
+
+    /// <summary>Whether the overlay windows are hidden from screenshots and screen sharing (AppSettings.ExcludeOverlayFromCapture). Applies to existing and future windows.</summary>
+    public bool ExcludeFromCapture
+    {
+        get => _excludeFromCapture;
+        set
+        {
+            _excludeFromCapture = value;
+            foreach (var window in _windows.Values)
+                window.SetCaptureExclusion(value);
+        }
+    }
 
     public OverlayController()
     {
@@ -81,6 +94,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
 
             var window = new OverlayWindow();
             window.Show();
+            window.SetCaptureExclusion(_excludeFromCapture);
             window.PositionOver(screen.Bounds);
             _windows[screen.DeviceName] = window;
             DebugLog.Write($"Created overlay window for {screen.DeviceName}, bounds={screen.Bounds}");

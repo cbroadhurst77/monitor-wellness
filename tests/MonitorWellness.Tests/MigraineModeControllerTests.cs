@@ -237,4 +237,66 @@ public class MigraineModeControllerTests
 
         Assert.False(fired);
     }
+
+    [Fact]
+    public void CheckAutoRevertDue_DeactivatesOnceTheDeadlinePassed_EvenIfTheTimerNeverFired()
+    {
+        var settings = CreateSettings();
+        settings.MigraineAutoRevertMinutes = 30;
+        var controller = CreateController(settings, new FakeColorTemperatureTarget(), new FakeOverlayTarget());
+        controller.Activate();
+        DateTime deadline = controller.AutoRevertAtUtc!.Value;
+
+        Assert.False(controller.CheckAutoRevertDue(deadline.AddSeconds(-1)));
+        Assert.True(controller.IsActive);
+
+        Assert.True(controller.CheckAutoRevertDue(deadline.AddHours(5))); // e.g. woke from sleep long after
+        Assert.False(controller.IsActive);
+        Assert.True(controller.IsFadingOut);
+        Assert.Null(controller.AutoRevertAtUtc);
+    }
+
+    [Fact]
+    public void CheckAutoRevertDue_DoesNothingWhenAutoRevertIsOffOrModeIsInactive()
+    {
+        var settings = CreateSettings();
+        settings.MigraineAutoRevertMinutes = 0;
+        var controller = CreateController(settings, new FakeColorTemperatureTarget(), new FakeOverlayTarget());
+
+        Assert.False(controller.CheckAutoRevertDue(DateTime.UtcNow.AddDays(1)));
+        controller.Activate();
+        Assert.False(controller.CheckAutoRevertDue(DateTime.UtcNow.AddDays(1)));
+        Assert.True(controller.IsActive);
+    }
+
+    [Fact]
+    public void Reapply_KeepsMildIntensityAndTheAutoRevertDeadline()
+    {
+        var settings = CreateSettings();
+        settings.MigraineAutoRevertMinutes = 30;
+        var colorTarget = new FakeColorTemperatureTarget();
+        var overlayTarget = new FakeOverlayTarget();
+        var controller = CreateController(settings, colorTarget, overlayTarget);
+        controller.Activate(mild: true);
+        DateTime deadline = controller.AutoRevertAtUtc!.Value;
+        var (_, mildContrast) = colorTarget.Calls[^1];
+
+        controller.Reapply();
+
+        Assert.True(controller.IsMild);
+        Assert.Equal(deadline, controller.AutoRevertAtUtc);
+        Assert.Equal(2, colorTarget.Calls.Count);
+        Assert.Equal(mildContrast, colorTarget.Calls[^1].ContrastReduction); // still the mild value, not full
+    }
+
+    [Fact]
+    public void Reapply_WhenNotActive_DoesNothing()
+    {
+        var colorTarget = new FakeColorTemperatureTarget();
+        var controller = CreateController(CreateSettings(), colorTarget, new FakeOverlayTarget());
+
+        controller.Reapply();
+
+        Assert.Empty(colorTarget.Calls);
+    }
 }

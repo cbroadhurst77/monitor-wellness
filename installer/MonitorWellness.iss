@@ -39,6 +39,12 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; installed app itself runs as the standard user. Enabling its optional Task Scheduler
 ; auto-start entry later requires a separate, explicit UAC-approved user action.
 PrivilegesRequired=admin
+; Monitor Wellness is a tray app that is normally running during an upgrade. Without this,
+; Windows keeps the exe locked and the upgrade needs a reboot or fails. Setup asks to close it
+; (silently when run with /VERYSILENT); Windows Restart Manager then asks the app to end, and
+; if it is ended forcibly the app restores the display itself at its next start.
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -52,6 +58,7 @@ Source: "{#MyPublishDir}\MonitorWellness.exe"; DestDir: "{app}"; Flags: ignoreve
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\Restore display (emergency)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--restore"; Comment: "Puts your screen colour and brightness back to normal if Monitor Wellness closed unexpectedly"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
@@ -60,6 +67,10 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 [UninstallRun]
 ; Remove the optional auto-start task if the user enabled it from the app.
 Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""{#MyTaskName}"" /f"; Flags: runhidden; RunOnceId: "RemoveAutoStartTask"
+
+; The per-user Run-key fallback (see AutoStartManager.cs). runasoriginaluser targets the HKCU of
+; the person who uninstalls, not an over-the-shoulder administrator's.
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v MonitorWellness /f"; Flags: runhidden runasoriginaluser; RunOnceId: "RemoveAutoStartRunKey"
 
 [UninstallDelete]
 ; The app writes its own settings/log files under %AppData% (see SettingsStore.cs /

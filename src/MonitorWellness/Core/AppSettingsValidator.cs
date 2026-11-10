@@ -104,6 +104,8 @@ public static class AppSettingsValidator
                 return Invalid("Hardware brightness safety records must have a monitor identifier.", out error);
             if (state.IsQuarantined && state.IsApproved)
                 return Invalid("A hardware-brightness monitor cannot be approved while quarantined.", out error);
+            if (state.FailureCount is < 0 or > 1000)
+                return Invalid("Hardware brightness failure count is out of range.", out error);
             if (state.QuarantineReason?.Length > 500)
                 return Invalid("Hardware brightness quarantine information is too long.", out error);
         }

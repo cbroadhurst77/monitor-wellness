@@ -26,11 +26,18 @@
          defaulting to the SDK's own 1.0.0.0, while the installer separately said 0.1.0: a
          silent mismatch, since nothing ever compared the two. -->
     <Version>0.2.6</Version>
+    <!-- Only affects `dotnet publish -p:PublishSingleFile=true` (self-contained). The framework +
+         WPF/WinForms are bundled uncompressed otherwise (~190 MB exe). -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- WFAC010 assumes a WinForms-owned entry point (Application.SetHighDpiMode). This app
          is WPF-hosted, so Per-Monitor-V2 is declared in app.manifest instead - see the
          comment there. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MonitorWellness.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Embedded (not Content/CopyToOutputDirectory) so these survive a self-contained

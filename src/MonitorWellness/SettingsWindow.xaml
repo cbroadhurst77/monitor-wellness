@@ -56,6 +56,13 @@
                         </Grid>
                         <TextBlock x:Name="LocationSearchStatus" FontSize="14" Foreground="{DynamicResource MW.HelperText}" Margin="0,0,0,6" TextWrapping="Wrap"
                                    AutomationProperties.LiveSetting="Polite"/>
+                        <StackPanel x:Name="LocationDefaultBanner" Visibility="Collapsed" Margin="0,0,0,8">
+                            <TextBlock x:Name="LocationDefaultBannerText" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite"/>
+                            <Button x:Name="ConfirmLondonButton" Content="London is correct" Padding="10,3" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                    Click="ConfirmLondonButton_Click"
+                                    AutomationProperties.Name="London is correct: keep London as my location"/>
+                        </StackPanel>
                         <TextBlock FontSize="15" Foreground="{DynamicResource MW.SafetyText}" TextWrapping="Wrap" Margin="0,0,0,8">
                             Privacy: nothing in Monitor Wellness is sent anywhere except this location
                             search above (only when you click Find) and, if turned on under Profiles
@@ -344,6 +351,10 @@
                         <CheckBox x:Name="CompatibilityOverlayOnlyCheckBox" Content="Use overlay-only compatibility mode for remote, virtual, and USB displays" IsChecked="True" Margin="0,8,0,0"
                                   AutomationProperties.Name="Use overlay-only compatibility mode for remote, virtual, and USB displays"/>
                         <TextBlock Text="Recommended. These display paths can be mediated by Remote Desktop, a virtual driver, or a USB/indirect transport. While this mode is on, Monitor Wellness uses its reversible overlay fallback and does not send gamma-ramp or physical-brightness commands to a detected compatibility display." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                        <CheckBox x:Name="ExcludeFromCaptureCheckBox" Content="Hide the dimming overlay from screenshots and screen sharing" IsChecked="True" Margin="0,8,0,0"
+                                  AutomationProperties.Name="Hide the dimming overlay from screenshots and screen sharing"/>
+                        <TextBlock Text="Recommended. Screenshots, recordings and screen sharing show your real, un-dimmed screen instead of the dimmed and tinted view only you see. Needs Windows 10 version 2004 or later; turn it off if you want captures to match exactly what you see." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
                         <Separator Margin="0,16,0,16"/>
 

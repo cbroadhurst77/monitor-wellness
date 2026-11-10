@@ -6,6 +6,12 @@ namespace MonitorWellness.Core;
 /// Applies color temperature and brightness to a single monitor via the Win32 gamma ramp
 /// API (SetDeviceGammaRamp) — the same underlying mechanism f.lux and Windows Night Light
 /// use. One instance owns one device context for the lifetime of the app.
+///
+/// On creation it reads the display's current ramp as its <see cref="Baseline"/> (typically a
+/// colour-calibration curve loaded by Windows) and every ramp it writes is derived from that
+/// baseline, and restoring puts the baseline back. If the current ramp does not look like a
+/// native one (see <see cref="GammaRampMath.IsPlausibleBaseline"/>) the linear identity ramp is
+/// used instead, so a leftover warm/dim ramp is never adopted as "normal".
 /// </summary>
 public sealed class GammaRampController : IDisposable
 {
@@ -29,7 +35,16 @@ public sealed class GammaRampController : IDisposable
     [DllImport("gdi32.dll", SetLastError = true)]
     private static extern bool SetDeviceGammaRamp(IntPtr hdc, ref RAMP lpRamp);
 
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool GetDeviceGammaRamp(IntPtr hdc, ref RAMP lpRamp);
+
     public string DeviceName { get; }
+
+    /// <summary>The ramp this display had when the app took control of it; what "native" means for restore.</summary>
+    public GammaRamp Baseline { get; }
+
+    /// <summary>True if <see cref="Baseline"/> was read from the display, false if it fell back to the linear identity ramp.</summary>
+    public bool BaselineWasCaptured { get; }
 
     private readonly IntPtr _hdc;
     private bool _disposed;
@@ -40,6 +55,20 @@ public sealed class GammaRampController : IDisposable
         _hdc = CreateDC("DISPLAY", deviceName, null, IntPtr.Zero);
         if (_hdc == IntPtr.Zero)
             throw new InvalidOperationException($"Could not create a device context for '{deviceName}'.");
+
+        GammaRamp? captured = TryReadRamp(_hdc);
+        if (GammaRampMath.IsPlausibleBaseline(captured))
+        {
+            Baseline = captured!;
+            BaselineWasCaptured = true;
+        }
+        else
+        {
+            Baseline = GammaRamp.Identity();
+            DebugLog.Write(captured is null
+                ? $"GammaRampController: couldn't read the current ramp for {deviceName}; using the linear identity ramp as its baseline."
+                : $"GammaRampController: the current ramp for {deviceName} doesn't look native; using the linear identity ramp as its baseline.");
+        }
     }
 
     /// <summary>
@@ -79,17 +108,7 @@ public sealed class GammaRampController : IDisposable
         double minSafeBrightness = minColorFactor > 0.0 ? MinSafeChannelFactor / minColorFactor : 1.0;
         double clampedBrightness = Math.Clamp(brightnessAssist, Math.Min(1.0, minSafeBrightness), 1.0);
 
-        var ramp = new RAMP { Red = new ushort[256], Green = new ushort[256], Blue = new ushort[256] };
-
-        for (int i = 0; i < 256; i++)
-        {
-            double baseValue = i * 257.0; // identity ramp is 0-65535 in steps of 257
-            ramp.Red[i] = ClampToUShort(baseValue * rFactor * clampedBrightness);
-            ramp.Green[i] = ClampToUShort(baseValue * gFactor * clampedBrightness);
-            ramp.Blue[i] = ClampToUShort(baseValue * bFactor * clampedBrightness);
-        }
-
-        return SetDeviceGammaRamp(_hdc, ref ramp);
+        return Write(GammaRampMath.Scale(Baseline, (rFactor, gFactor, bFactor), clampedBrightness));
     }
 
     /// <summary>
@@ -105,39 +124,46 @@ public sealed class GammaRampController : IDisposable
     public bool ApplyColorTemperatureWithContrast(int kelvin, double contrastReduction)
     {
         var (rFactor, gFactor, bFactor) = ColorTemperature.KelvinToRgbFactors(kelvin);
-        double clampedReduction = Math.Clamp(contrastReduction, 0.0, 1.0);
-
-        var ramp = new RAMP { Red = new ushort[256], Green = new ushort[256], Blue = new ushort[256] };
-
-        for (int i = 0; i < 256; i++)
-        {
-            double compressed = ColorTemperature.ApplyContrastCompression(i / 255.0, clampedReduction);
-            double baseValue = compressed * 65535.0;
-            ramp.Red[i] = ClampToUShort(baseValue * rFactor);
-            ramp.Green[i] = ClampToUShort(baseValue * gFactor);
-            ramp.Blue[i] = ClampToUShort(baseValue * bFactor);
-        }
-
-        return SetDeviceGammaRamp(_hdc, ref ramp);
+        return Write(GammaRampMath.ScaleWithContrast(Baseline, (rFactor, gFactor, bFactor), contrastReduction));
     }
 
-    /// <summary>Restores the monitor's default (identity, 6500K, full brightness) gamma ramp.</summary>
-    public bool ResetToIdentity()
+    /// <summary>Restores the ramp this monitor had when the app took control of it (its calibration curve, or linear if none was detected).</summary>
+    public bool RestoreBaseline() => Write(Baseline);
+
+    /// <summary>Writes a ramp to a display by device name without owning a controller; used by crash recovery.</summary>
+    public static bool TryWriteRamp(string deviceName, GammaRamp ramp)
     {
-        var ramp = new RAMP { Red = new ushort[256], Green = new ushort[256], Blue = new ushort[256] };
+        if (!ramp.HasValidShape)
+            return false;
 
-        for (int i = 0; i < 256; i++)
+        IntPtr hdc = CreateDC("DISPLAY", deviceName, null, IntPtr.Zero);
+        if (hdc == IntPtr.Zero)
+            return false;
+        try
         {
-            ushort v = ClampToUShort(i * 257.0);
-            ramp.Red[i] = v;
-            ramp.Green[i] = v;
-            ramp.Blue[i] = v;
+            return SetRamp(hdc, ramp);
         }
-
-        return SetDeviceGammaRamp(_hdc, ref ramp);
+        finally
+        {
+            DeleteDC(hdc);
+        }
     }
 
-    private static ushort ClampToUShort(double value) => (ushort)Math.Clamp(value, 0.0, 65535.0);
+    private bool Write(GammaRamp ramp) => SetRamp(_hdc, ramp);
+
+    private static bool SetRamp(IntPtr hdc, GammaRamp ramp)
+    {
+        var native = new RAMP { Red = ramp.Red, Green = ramp.Green, Blue = ramp.Blue };
+        return SetDeviceGammaRamp(hdc, ref native);
+    }
+
+    private static GammaRamp? TryReadRamp(IntPtr hdc)
+    {
+        var native = new RAMP { Red = new ushort[256], Green = new ushort[256], Blue = new ushort[256] };
+        return GetDeviceGammaRamp(hdc, ref native)
+            ? new GammaRamp(native.Red, native.Green, native.Blue)
+            : null;
+    }
 
     public void Dispose()
     {

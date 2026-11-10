@@ -6,8 +6,34 @@ namespace MonitorWellness.Core;
 /// </summary>
 public sealed class AppSettings
 {
-    public double Latitude { get; set; } = 51.5072;
-    public double Longitude { get; set; } = -0.1276;
+    /// <summary>
+    /// Version of this file's layout. Lets a build that is older than the file notice it is about
+    /// to overwrite settings it doesn't fully understand (SettingsStore keeps a copy first).
+    /// </summary>
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
+    /// <summary>
+    /// Defaults on: the dim/tint overlay is excluded from screenshots, screen recordings and
+    /// screen sharing (SetWindowDisplayAffinity, Windows 10 2004+; older builds ignore it). Without
+    /// this, whoever you share your screen with sees your dimmed, tinted view, and screenshots
+    /// come out dark. Turn it off if you want captures to look exactly like your screen.
+    /// </summary>
+    public bool ExcludeOverlayFromCapture { get; set; } = true;
+
+    public double Latitude { get; set; } = LocationStatus.DefaultLatitude;
+    public double Longitude { get; set; } = LocationStatus.DefaultLongitude;
+
+    /// <summary>
+    /// True once the person has chosen a location (any place other than the London default) or
+    /// has confirmed that London is right. While false and the coordinates are still London's,
+    /// the app says plainly that its sunrise/sunset are a placeholder (see LocationStatus).
+    /// </summary>
+    public bool LocationConfirmed { get; set; }
+
+    /// <summary>Set once the one-time "you're still on London" balloon has been shown, so it never nags.</summary>
+    public bool LocationReminderShown { get; set; }
 
     public int DayKelvin { get; set; } = 6500;
     public int NightKelvin { get; set; } = 3400;
@@ -238,8 +264,12 @@ public sealed class AppSettings
     /// <summary>Returns a deep copy suitable for editing as an uncommitted settings draft.</summary>
     public AppSettings Clone() => new()
     {
+        SchemaVersion = SchemaVersion,
+        ExcludeOverlayFromCapture = ExcludeOverlayFromCapture,
         Latitude = Latitude,
         Longitude = Longitude,
+        LocationConfirmed = LocationConfirmed,
+        LocationReminderShown = LocationReminderShown,
         DayKelvin = DayKelvin,
         NightKelvin = NightKelvin,
         DayBrightness = DayBrightness,
@@ -281,8 +311,11 @@ public sealed class AppSettings
         ArgumentNullException.ThrowIfNull(source);
         var copy = source.Clone();
 
+        ExcludeOverlayFromCapture = copy.ExcludeOverlayFromCapture;
         Latitude = copy.Latitude;
         Longitude = copy.Longitude;
+        LocationConfirmed = copy.LocationConfirmed;
+        LocationReminderShown = copy.LocationReminderShown;
         DayKelvin = copy.DayKelvin;
         NightKelvin = copy.NightKelvin;
         DayBrightness = copy.DayBrightness;
