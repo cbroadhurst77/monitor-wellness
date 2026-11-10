@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.10 — Memory update
 
 ### Changed
 - The app now gives its idle memory back to Windows: once shortly after it starts and then about every
