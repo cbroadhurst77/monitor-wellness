@@ -6,6 +6,19 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## 0.2.12 — Break reminders you can act on, steadier monitor settings
+
+- **The break reminder now counts the time you are actually at the computer.** It used to fire on a fixed timer, so it could remind you a minute after you sat back down, or skip a whole cycle because you happened to be idle at that moment. Stepping away (2 minutes without keyboard or mouse), sleep, and taking a break all restart the count.
+- **A reminder that was held back is shown when the reason ends.** If migraine mode, a fullscreen app or a snooze held it back, it now appears as soon as that clears instead of being skipped until the next cycle.
+- **The reminder is a small window with buttons.** Start 20 seconds, In 5 minutes, or Skip, in the corner of the screen. It does not take focus from what you are typing, always appears (unlike a notification, which Focus Assist can hide), and goes away by itself after a minute. If it cannot be shown, the old notification is used. Finishing the 20-second timer counts as a break.
+- **Snooze fixes.** "Until tomorrow" is now "Until morning (8:00)" (it used to end at midnight), the snooze items are greyed out when reminders are off, and saving unrelated settings no longer restarts the countdown.
+- **Per-monitor settings follow the monitor, not Windows' display number.** Exclude, Color-accurate, dim multiplier and Kelvin offset are now stored against each monitor's hardware identity, so a dock, a new cable or a reboot can no longer move a setting onto a different screen. Existing settings are converted the first time each monitor is seen, and settings for monitors that are not connected are kept when you save.
+- **Hardware (DDC/CI) brightness can no longer freeze the app.** Talking to a monitor now happens on a background thread. A monitor that is slow or hangs no longer delays the tray menu or the migraine and emergency-restore shortcuts; if it does not answer within 10 seconds the overlay dims that display instead.
+- **One bad value no longer resets all your settings.** If a value in settings.json is out of range or the wrong type, only that value goes back to its default, you are told which, and the original file is kept. The previous settings are also kept as settings.json.bak, and the settings and the crash-recovery file are flushed to disk when saved, so a power cut cannot leave them empty.
+- **Saving Settings no longer undoes things the app recorded meanwhile**, including a monitor that was just switched back to the overlay after a hardware-brightness failure.
+- **Display fixes.** A monitor you exclude, or an HDR or remote display, is handed back to its native colour even if migraine mode had tinted it. The dimming overlay is raised back above other always-on-top windows every 30 seconds and re-checks its real size, and migraine relief is applied before anything is written to disk. After sleep the display is reapplied once monitors have settled.
+- **Smaller changes.** Ambient-light brightness now changes at the same speed however often it is recalculated. A failure while migraine mode fades out ends the fade after three tries instead of repeating. The log no longer loses lines when several things write at once.
+
 ## 0.2.11 — Faster colour repair
 
 - **Fewer redundant colour writes.** The 30-second tick used to rewrite every display's colour ramp (about 10 ms of driver work per display, on the UI thread). A display is now written only when the requested colour changed or the display no longer holds what we last set (another program reset it), and at least every 10 minutes regardless. Display changes, resume and unlock still rebuild the controllers and write for real.
