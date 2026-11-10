@@ -171,6 +171,13 @@ public sealed class GammaRampController : IDisposable
     }
 
     /// <summary>
+    /// Restores the baseline only if this controller has written a ramp since it last restored
+    /// (migraine mode writes ramps too, outside the schedule). Safe to call every tick for
+    /// displays that are meant to stay native: it costs nothing when there is nothing to undo.
+    /// </summary>
+    public bool RestoreBaselineIfModified() => _lastRequested is null || RestoreBaseline();
+
+    /// <summary>
     /// A cheap check (one ramp read, about 1.5 ms) for another program having reset this display's
     /// colour since we last set it. If so, writes our last requested ramp again and returns true.
     /// Does nothing before the first apply or after a restore.

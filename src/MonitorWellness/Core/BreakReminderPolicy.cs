@@ -13,6 +13,22 @@ public static class BreakReminderPolicy
     /// </summary>
     public static readonly TimeSpan AwayThreshold = TimeSpan.FromMinutes(2);
 
+    public const int MinimumIntervalMinutes = 1;
+    public const int MaximumIntervalMinutes = 8 * 60;
+
+    /// <summary>How often the reminder looks at keyboard/mouse activity.</summary>
+    public static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(15);
+
+    /// <summary>The one place the reminder interval is bounded; the validator and the service both use it.</summary>
+    public static int ClampIntervalMinutes(int minutes) => Math.Clamp(minutes, MinimumIntervalMinutes, MaximumIntervalMinutes);
+
+    /// <summary>"Until morning": 08:00 today if it is earlier than that now, otherwise 08:00 tomorrow.</summary>
+    public static DateTime NextMorningLocal(DateTime nowLocal)
+    {
+        DateTime today = nowLocal.Date.AddHours(8);
+        return nowLocal < today ? today : today.AddDays(1);
+    }
+
     /// <summary>Session-only snoozes are active strictly until their stored UTC expiry.</summary>
     public static bool IsSnoozed(DateTime nowUtc, DateTime? snoozedUntilUtc) =>
         snoozedUntilUtc is DateTime until && until > nowUtc;

@@ -28,6 +28,9 @@ public partial class BreakFocusWindow : Window
         _timer.Start();
     }
 
+    /// <summary>True when the countdown ran (nearly) to the end, so it counts as a real break.</summary>
+    public bool CountsAsBreak => DateTime.UtcNow >= _endsAtUtc - TimeSpan.FromSeconds(5);
+
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
     private void UpdateCountdown()

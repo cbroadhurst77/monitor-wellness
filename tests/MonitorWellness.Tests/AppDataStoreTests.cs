@@ -88,15 +88,29 @@ public sealed class AppDataStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_OfOutOfRangeValues_IsTreatedTheSameWay()
+    public void Load_OfAnOutOfRangeValue_ResetsOnlyThatValue_KeepsACopy_AndSaysSo()
     {
         File.WriteAllText(SettingsFile, "{ \"DayKelvin\": 5700, \"DayBrightness\": 7.5 }");
 
         AppSettings loaded = SettingsStore.Load();
 
         Assert.Equal(new AppSettings().DayBrightness, loaded.DayBrightness);
+        Assert.Equal(5700, loaded.DayKelvin);                    // everything else is kept
         Assert.NotNull(SettingsStore.LastLoadProblem);
+        Assert.Contains("brightness levels", SettingsStore.LastLoadProblem);
         Assert.Single(Directory.GetFiles(Folder, "settings.invalid-*.json"));
+    }
+
+    [Fact]
+    public void Load_OfAWronglyTypedValue_ResetsOnlyThatValue()
+    {
+        File.WriteAllText(SettingsFile, "{ \"DayKelvin\": \"warm\", \"NightKelvin\": 3500 }");
+
+        AppSettings loaded = SettingsStore.Load();
+
+        Assert.Equal(new AppSettings().DayKelvin, loaded.DayKelvin);
+        Assert.Equal(3500, loaded.NightKelvin);
+        Assert.Contains("DayKelvin", SettingsStore.LastLoadProblem);
     }
 
     [Fact]

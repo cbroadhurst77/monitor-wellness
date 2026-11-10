@@ -14,7 +14,6 @@ public static class AppSettingsValidator
 
     private const uint AllowedHotkeyModifiers = GlobalHotkey.MOD_ALT | GlobalHotkey.MOD_CONTROL | GlobalHotkey.MOD_SHIFT | GlobalHotkey.MOD_WIN;
     private const int MaximumAutoRevertMinutes = 24 * 60;
-    private const int MaximumBreakReminderMinutes = 8 * 60;
     private const double MaximumMonitorDimMultiplier = 5.0;
     private const int MaximumMonitorKelvinOffset = 2_000;
     // No real setup has anywhere near this many entries (a handful of physical monitors at
@@ -63,8 +62,8 @@ public static class AppSettingsValidator
             return Invalid(fixedTimesError, out error);
         if (settings.MigraineAutoRevertMinutes is < 0 or > MaximumAutoRevertMinutes)
             return Invalid($"Migraine auto-revert must be between 0 and {MaximumAutoRevertMinutes} minutes.", out error);
-        if (settings.BreakReminderIntervalMinutes is < 1 or > MaximumBreakReminderMinutes)
-            return Invalid($"Break reminder interval must be between 1 and {MaximumBreakReminderMinutes} minutes.", out error);
+        if (settings.BreakReminderIntervalMinutes is < BreakReminderPolicy.MinimumIntervalMinutes or > BreakReminderPolicy.MaximumIntervalMinutes)
+            return Invalid($"Break reminder interval must be between {BreakReminderPolicy.MinimumIntervalMinutes} and {BreakReminderPolicy.MaximumIntervalMinutes} minutes.", out error);
         if ((settings.MigraineHotkeyModifiers & ~AllowedHotkeyModifiers) != 0 || settings.MigraineHotkeyModifiers == 0 || settings.MigraineHotkeyKey == 0)
             return Invalid("Migraine hotkey settings are invalid.", out error);
         if (settings.ExcludedMonitors is null || settings.ColorExcludedMonitors is null

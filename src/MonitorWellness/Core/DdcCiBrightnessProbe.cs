@@ -239,7 +239,7 @@ public sealed record DdcCiBrightnessCapability(string DeviceName, bool IsPrimary
 /// journal before the first change and removed only once it has been restored, so a crash or
 /// kill while dimmed cannot make the dimmed value the monitor's new "original".
 /// </summary>
-public sealed class DdcCiBrightnessTestSession : IDisposable
+public sealed class DdcCiBrightnessTestSession : IHardwareBrightnessSession
 {
     private sealed record OriginalBrightness(IntPtr Handle, int Index, uint Value, uint Minimum, uint Maximum);
 
@@ -364,7 +364,7 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
     /// a dock/replug) while keeping the captured original brightness, and forgets the "last
     /// applied" value so the next apply is always written even if the monitor reset itself.
     /// </summary>
-    internal bool TryRefreshHandles(out string error)
+    public bool TryRefreshHandles(out string error)
     {
         error = "";
         if (_disposed)
@@ -393,7 +393,7 @@ public sealed class DdcCiBrightnessTestSession : IDisposable
     }
 
     /// <summary>Forces the next apply to write to the monitor even if the target is unchanged (e.g. after resume, when a monitor may have reset itself).</summary>
-    internal void ForgetLastApplied() => _lastAppliedNormalizedBrightness = null;
+    public void ForgetLastApplied() => _lastAppliedNormalizedBrightness = null;
 
     /// <summary>
     /// Restores the exact physical brightness values captured before the session changed them.

@@ -34,6 +34,7 @@ public partial class SettingsWindow
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))
         {
             activeMonitorsByDeviceName.TryGetValue(deviceName, out MonitorInfo? monitor);
+            MonitorInfo identity = monitor ?? MonitorKeys.Unidentified(deviceName);
             var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -49,7 +50,7 @@ public partial class SettingsWindow
             var excludeBox = new CheckBox
             {
                 Content = "Exclude",
-                IsChecked = _settings.ExcludedMonitors.Contains(deviceName),
+                IsChecked = MonitorKeys.Contains(_settings.ExcludedMonitors, identity),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = "Skip this monitor entirely — no color or brightness adjustment.",
@@ -61,7 +62,7 @@ public partial class SettingsWindow
             var colorExcludeBox = new CheckBox
             {
                 Content = "Color-accurate",
-                IsChecked = _settings.ColorExcludedMonitors.Contains(deviceName),
+                IsChecked = MonitorKeys.Contains(_settings.ColorExcludedMonitors, identity),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = "Keep this monitor's native color (e.g. a photo/video reference display) — it still dims with the schedule.",
@@ -70,7 +71,7 @@ public partial class SettingsWindow
             Grid.SetColumn(colorExcludeBox, 2);
             _colorExcludeBoxes[deviceName] = colorExcludeBox;
 
-            double multiplier = _settings.MonitorDimMultiplier.TryGetValue(deviceName, out var m) ? m : 1.0;
+            double multiplier = MonitorKeys.TryGetValue(_settings.MonitorDimMultiplier, identity, out double m) ? m : 1.0;
             var multiplierBox = new TextBox { Text = multiplier.ToString(CultureInfo.InvariantCulture), ToolTip = "Dim multiplier (1.0 = follow the global schedule exactly)." };
             multiplierBox.TextChanged += (_, _) =>
             {
@@ -80,7 +81,7 @@ public partial class SettingsWindow
             Grid.SetColumn(multiplierBox, 3);
             _multiplierBoxes[deviceName] = multiplierBox;
 
-            int kelvinOffset = _settings.MonitorKelvinOffset.TryGetValue(deviceName, out var k) ? k : 0;
+            int kelvinOffset = MonitorKeys.TryGetValue(_settings.MonitorKelvinOffset, identity, out int k) ? k : 0;
             var kelvinOffsetBox = new TextBox { Text = kelvinOffset.ToString(CultureInfo.InvariantCulture), Margin = new Thickness(4, 0, 0, 0), ToolTip = "Kelvin offset for this monitor only — e.g. -300 if it reads warmer than the others at the same setting." };
             kelvinOffsetBox.TextChanged += (_, _) =>
             {

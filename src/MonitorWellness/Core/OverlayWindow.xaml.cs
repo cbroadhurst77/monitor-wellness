@@ -27,6 +27,18 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
@@ -42,6 +54,8 @@ public partial class OverlayWindow : Window
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
     private System.Drawing.Rectangle? _lastBounds;
     private System.Windows.Media.Color _tintColor = Colors.Transparent;
     private double _tintOpacity;
@@ -114,12 +128,36 @@ public partial class OverlayWindow : Window
     /// <summary>Positions and sizes this window to exactly cover the given physical-pixel bounds.</summary>
     public void PositionOver(System.Drawing.Rectangle bounds)
     {
-        if (_lastBounds == bounds)
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+
+        // Trust the cache only while the window really is where it was put: WPF resizes a window
+        // itself when it crosses to a monitor with a different DPI, and the cache cannot know.
+        if (_lastBounds == bounds && ActualRectMatches(hwnd, bounds))
+            return;
+
+        SetWindowPos(hwnd, HWND_TOPMOST, bounds.X, bounds.Y, bounds.Width, bounds.Height, SWP_NOACTIVATE);
+        _lastBounds = bounds;
+    }
+
+    private static bool ActualRectMatches(IntPtr hwnd, System.Drawing.Rectangle bounds)
+        => hwnd != IntPtr.Zero
+            && GetWindowRect(hwnd, out NativeRect rect)
+            && rect.Left == bounds.Left && rect.Top == bounds.Top
+            && rect.Right == bounds.Right && rect.Bottom == bounds.Bottom;
+
+    /// <summary>
+    /// Puts this (never-activated) window back on top of the other topmost windows. Topmost
+    /// windows are ordered among themselves, so Start, the taskbar or another always-on-top app
+    /// can end up above the dim and stay bright. Cheap, and does nothing visible when already on top.
+    /// </summary>
+    public void ReassertTopmost()
+    {
+        if (!IsVisible)
             return;
 
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
-        SetWindowPos(hwnd, HWND_TOPMOST, bounds.X, bounds.Y, bounds.Width, bounds.Height, SWP_NOACTIVATE);
-        _lastBounds = bounds;
+        if (hwnd != IntPtr.Zero)
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     /// <summary>Sets the overlay's tint color and opacity (0.0 = invisible, 1.0 = fully opaque).</summary>

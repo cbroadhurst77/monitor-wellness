@@ -24,6 +24,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
     private readonly Dictionary<string, bool> _shown = new();
     private IReadOnlyList<(string DeviceName, System.Drawing.Rectangle Bounds)> _screens = Array.Empty<(string, System.Drawing.Rectangle)>();
     private DispatcherTimer? _topologyRefreshTimer;
+    private DispatcherTimer? _identifyTimer;
     private bool _disposed;
     private bool _excludeFromCapture = true;
 
@@ -202,7 +203,10 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
             {
                 OverlayWindow? window = EnsureWindow(deviceName);
                 if (window is null)
+                {
+                    _shown[deviceName] = false; // no window exists, so nothing is shown
                     continue;
+                }
 
                 window.SetTint(setting.Color, opacity);   // before showing, so nothing flashes at the wrong tint
                 window.ShowIfHidden();
@@ -228,6 +232,13 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
             kv => kv.Key,
             kv => (dimColor, 1.0 - Math.Clamp(kv.Value, 0.0, 1.0)));
         Apply(byDevice);
+    }
+
+    /// <summary>Raises every overlay that is on screen back above other topmost windows.</summary>
+    public void ReassertTopmost()
+    {
+        foreach (var window in _windows.Values)
+            window.ReassertTopmost();
     }
 
     /// <summary>Immediately removes every dim/tint overlay from the screen.</summary>
@@ -266,7 +277,11 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
                 window.ShowIfHidden();
             }
 
+            // A second call replaces the first one's timer instead of letting the earlier timer
+            // take the labels down early.
+            _identifyTimer?.Stop();
             var timer = new DispatcherTimer { Interval = duration };
+            _identifyTimer = timer;
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
@@ -292,6 +307,7 @@ public sealed class OverlayController : IDisposable, IOverlayTarget
 
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _topologyRefreshTimer?.Stop();
+        _identifyTimer?.Stop();
         foreach (var window in _windows.Values)
             window.Close();
         _windows.Clear();

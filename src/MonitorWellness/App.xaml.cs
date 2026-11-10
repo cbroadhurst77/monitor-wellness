@@ -54,12 +54,8 @@ public partial class App : Application
     private GlobalHotkey? _emergencyRestoreHotkey;
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private DispatcherTimer? _pauseTimer;
-    private DateTime? _pauseUntilUtc;
+    private readonly ScheduleOverrideState _overrides = new();
     private string? _lastForegroundApplicationContext;
-    private string? _activeNativeDisplayRuleProcessName;
-    private string? _activeComfortPlanRuleDescription;
-    private string? _manualComfortPlanName;
-    private bool _fullscreenPresentationGuardActive;
     private bool _migraineWasActive;
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
@@ -78,6 +74,7 @@ public partial class App : Application
     // do if clicked, and is cleared the moment that balloon closes (clicked or not) so a stale
     // URL can't get triggered by an unrelated balloon shown much later. See ShowUpdateBalloon.
     private string? _pendingBalloonClickUrl;
+    private Action? _pendingBalloonClickAction;
     private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromDays(1);
     private static readonly TimeSpan UpdateCheckPollInterval = TimeSpan.FromHours(6);
     private DispatcherTimer? _updateCheckTimer;
@@ -164,7 +161,7 @@ public partial class App : Application
                 _gammaManager?.ReapplyAfterWake();
                 if (_migraine?.IsActive == true)
                     _migraine.Reapply(); // reapplies in case gamma ramp/overlay state was left stale, without restarting the session
-                else if (!_settingsPreviewActive && !_pauseUntilUtc.HasValue)
+                else if (!_overrides.SettingsPreviewActive && !_overrides.PauseUntilUtc.HasValue)
                     RunScheduleTick();
             }
             catch (Exception recoveryEx)
@@ -176,6 +173,7 @@ public partial class App : Application
         _settings = SettingsStore.Load();
         if (SettingsStore.LastLoadProblem is string settingsProblem)
             QueueStartupBalloon("Monitor Wellness", settingsProblem, ToolTipIcon.Warning);
+        MigrateMonitorSettings();
 
         // A previous run that was killed, crashed hard, or lost power leaves its gamma ramp and
         // any DDC/CI hardware dimming in place. Put those back first, before anything below
@@ -215,12 +213,19 @@ public partial class App : Application
             ToolTipIcon.Warning);
         _migraine.RatingRequested += ShowMigraineRatingPrompt;
         _displayApplier = new DisplayApplier(_settings, _gammaManager, _overlay, _hardwareBrightness);
-        _gammaManager.TopologyChanged += () => RequestDisplayReapply("the display layout changed");
+        _gammaManager.TopologyChanged += () =>
+        {
+            MigrateMonitorSettings(); // a monitor seen for the first time may still be stored under its old display name
+            RequestDisplayReapply("the display layout changed");
+        };
+        _displayApplier.HardwareBrightnessChanged += RunScheduleTick;
         _displayApplier.CompatibilityFallbackStarted += OnCompatibilityFallbackStarted;
         _breakReminder = new BreakReminderService(
             _settings,
             () => _migraine?.IsActive == true,
-            (milliseconds, message, icon) => _trayIcon?.ShowBalloonTip(milliseconds, "Monitor Wellness", message, icon));
+            (milliseconds, message, icon, onClick) => ShowTrayBalloon(milliseconds, message, icon, clickAction: onClick),
+            startBreak: ShowBreakFocusWindow,
+            showPrompt: ShowBreakPrompt);
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -236,12 +241,23 @@ public partial class App : Application
         };
         _trayIcon.BalloonTipClicked += (_, _) =>
         {
+            if (_pendingBalloonClickAction is Action action)
+            {
+                _pendingBalloonClickAction = null;
+                try { action(); }
+                catch (Exception ex) { DebugLog.Write($"Balloon click action failed: {ex.Message}"); }
+                return;
+            }
             if (_pendingBalloonClickUrl is not string url)
                 return;
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
             catch (Exception ex) { DebugLog.Write($"Opening update URL failed: {ex.Message}"); }
         };
-        _trayIcon.BalloonTipClosed += (_, _) => _pendingBalloonClickUrl = null;
+        _trayIcon.BalloonTipClosed += (_, _) =>
+        {
+            _pendingBalloonClickUrl = null;
+            _pendingBalloonClickAction = null;
+        };
 
         if (HdrDetector.IsAnyDisplayHdrEnabled())
         {
@@ -335,6 +351,27 @@ public partial class App : Application
         _updateCheckTimer.Start();
     }
 
+    /// <summary>
+    /// Per-monitor settings used to be stored against the Windows display name, which Windows
+    /// renumbers. Converts any such entry to the monitor's physical identity once that monitor is
+    /// connected, and saves if anything changed. (See MonitorKeys.)
+    /// </summary>
+    private void MigrateMonitorSettings()
+    {
+        try
+        {
+            if (!MonitorKeys.MigrateLegacyNames(_settings, MonitorEnumerator.GetActiveMonitors(forceRefresh: true)))
+                return;
+
+            DebugLog.Write("Per-monitor settings now follow each monitor's hardware identity instead of its Windows display number.");
+            SettingsStore.Save(_settings);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"Couldn't save migrated per-monitor settings: {ex.Message}");
+        }
+    }
+
     private const string RestoreSwitch = "--restore";
 
     /// <summary>
@@ -415,12 +452,11 @@ public partial class App : Application
         _lastNotifiedUpdateTag = update.TagName;
 
         DebugLog.Write($"UpdateChecker: newer version available ({update.TagName})");
-        _pendingBalloonClickUrl = update.ReleaseUrl.ToString();
-        _trayIcon.ShowBalloonTip(
+        ShowTrayBalloon(
             10_000,
-            "Monitor Wellness",
             $"Monitor Wellness {update.Version.ToString(3)}{(update.IsPreRelease ? " (pre-release)" : "")} is available (you have {typeof(App).Assembly.GetName().Version?.ToString(3)}). Click here to open the release page.",
-            ToolTipIcon.Info);
+            ToolTipIcon.Info,
+            clickUrl: update.ReleaseUrl.ToString());
     }
 
     /// <summary>Shows the real first-run onboarding flow — the only path that persists HasCompletedOnboarding. Reopening this content later from the tray menu was replaced by the distinct About/Troubleshooting windows (see ShowAboutWindow/ShowTroubleshootingWindow) rather than resurfacing the welcome-voiced wizard, per MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).</summary>
@@ -466,6 +502,20 @@ public partial class App : Application
         var window = new DisplayCapabilityWindow(_settings);
         window.Show();
         window.Activate();
+    }
+
+    /// <summary>
+    /// Shows a balloon and records what clicking it should do. Whatever an earlier balloon wanted
+    /// is forgotten first, so clicking a later balloon can never open an earlier one's release page.
+    /// </summary>
+    private void ShowTrayBalloon(int milliseconds, string message, ToolTipIcon icon, string? clickUrl = null, Action? clickAction = null)
+    {
+        if (_trayIcon is null)
+            return;
+
+        _pendingBalloonClickUrl = clickUrl;
+        _pendingBalloonClickAction = clickAction;
+        _trayIcon.ShowBalloonTip(milliseconds, "Monitor Wellness", message, icon);
     }
 
     /// <summary>Queues a startup-detection balloon instead of showing it immediately — see the field doc comment on _pendingStartupBalloons for why.</summary>
@@ -520,7 +570,6 @@ public partial class App : Application
     /// need to explicitly "revert" anything, it just stops overriding and lets the real
     /// schedule take back over.
     /// </summary>
-    private bool _settingsPreviewActive;
 
     private void OpenSettingsWindow() => OpenSettingsWindow(null);
 
@@ -538,9 +587,9 @@ public partial class App : Application
         // (constructing SettingsWindow does real work — monitor enumeration, an
         // embedded-resource load — either of which can throw). Without this, a failed
         // construction leaves _settingsWindow null (so no Closed handler ever exists to
-        // clear the flag) with _settingsPreviewActive stuck true, silently suspending the
+        // clear the flag) with _overrides.SettingsPreviewActive stuck true, silently suspending the
         // normal schedule for the rest of the session.
-        _settingsPreviewActive = true;
+        _overrides.SettingsPreviewActive = true;
         try
         {
             _settingsWindow = new SettingsWindow(_settings, _gammaManager!, _overlay!, OnSettingsSaved, ComputeStatusText);
@@ -549,7 +598,7 @@ public partial class App : Application
             _settingsWindow.Closed += (_, _) =>
             {
                 _settingsWindow = null;
-                _settingsPreviewActive = false;
+                _overrides.SettingsPreviewActive = false;
                 RunScheduleTick(); // clears any live preview left on screen the instant the window closes
             };
             _settingsWindow.Show();
@@ -558,7 +607,7 @@ public partial class App : Application
         catch
         {
             _settingsWindow = null;
-            _settingsPreviewActive = false;
+            _overrides.SettingsPreviewActive = false;
             throw;
         }
     }
@@ -597,6 +646,30 @@ public partial class App : Application
         // the schedule fresh from the just-saved settings.
     }
 
+    private BreakPromptWindow? _breakPrompt;
+
+    /// <summary>Shows the break reminder prompt. False means it could not be shown and the caller should fall back to a balloon.</summary>
+    private bool ShowBreakPrompt(Action<BreakPromptChoice> onChoice)
+    {
+        if (_breakPrompt is not null)
+            return true; // one is already waiting for an answer
+
+        try
+        {
+            var prompt = new BreakPromptWindow(onChoice);
+            prompt.Closed += (_, _) => _breakPrompt = null;
+            _breakPrompt = prompt;
+            prompt.Show();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _breakPrompt = null;
+            DebugLog.Write($"Couldn't show the break prompt: {ex.Message}");
+            return false;
+        }
+    }
+
     private void ShowBreakFocusWindow()
     {
         if (_breakFocusWindow is not null)
@@ -606,7 +679,12 @@ public partial class App : Application
         }
 
         _breakFocusWindow = new BreakFocusWindow();
-        _breakFocusWindow.Closed += (_, _) => _breakFocusWindow = null;
+        _breakFocusWindow.Closed += (_, _) =>
+        {
+            if (_breakFocusWindow?.CountsAsBreak == true)
+                _breakReminder?.NotifyBreakTaken();
+            _breakFocusWindow = null;
+        };
         _breakFocusWindow.Show();
         _breakFocusWindow.Activate();
     }
@@ -745,10 +823,10 @@ public partial class App : Application
     private void EmergencyRestoreDisplay()
     {
         DebugLog.Write("Emergency Restore Screen activated");
-        if (_manualComfortPlanName is not null)
+        if (_overrides.ManualComfortPlanName is not null)
         {
-            DebugLog.Write($"Emergency Restore Screen cleared temporary comfort plan: {_manualComfortPlanName}.");
-            _manualComfortPlanName = null;
+            DebugLog.Write($"Emergency Restore Screen cleared temporary comfort plan: {_overrides.ManualComfortPlanName}.");
+            _overrides.ManualComfortPlanName = null;
         }
         _migraine?.RestoreImmediately();
         _displayApplier?.RestoreNative();
@@ -967,6 +1045,10 @@ public partial class App : Application
             _migraine.Reapply(); // keeps Mild/Full, the auto-revert deadline and history as they were
         else
             RunScheduleTick();
+
+        // Monitors often finish coming back a few seconds after the resume notification, and
+        // Windows may reset the colour ramp as they do; one debounced reapply covers that.
+        RequestDisplayReapply("the system resumed from sleep");
     }
 
     private void OnMigraineStateChanged()
@@ -1007,7 +1089,7 @@ public partial class App : Application
     /// reads this on load and on a short refresh timer, so a user isn't limited to hovering the
     /// tray icon or catching a transient balloon to find out. See
     /// MonitorWellness_UX_Accessibility_Audit.html §2.1/§2.2/§6 (P0). Underlying state
-    /// (IsActive, AutoRevertAtUtc, _pauseUntilUtc) already existed — this is new UI/plain-
+    /// (IsActive, AutoRevertAtUtc, _overrides.PauseUntilUtc) already existed — this is new UI/plain-
     /// language surfacing of it, not new state.
     /// </summary>
     private string ComputeStatusText()
@@ -1022,16 +1104,8 @@ public partial class App : Application
         if (_migraine?.IsFadingOut == true)
             return "Currently: Migraine relief easing off — back to normal shortly.";
 
-        if (_pauseUntilUtc is DateTime pauseUntil)
-            return $"Currently: Schedule paused until {pauseUntil.ToLocalTime():h:mm tt}.";
-        if (_fullscreenPresentationGuardActive)
-            return "Currently: Native display restored for a fullscreen presentation or app.";
-        if (_activeNativeDisplayRuleProcessName is not null)
-            return $"Currently: Native display restored for {_activeNativeDisplayRuleProcessName}.";
-        if (_manualComfortPlanName is not null)
-            return $"Currently: {_manualComfortPlanName} comfort plan selected temporarily.";
-        if (_activeComfortPlanRuleDescription is not null)
-            return $"Currently: {_activeComfortPlanRuleDescription}.";
+        if (_overrides.DescribeStatus() is string overrideStatus)
+            return overrideStatus;
 
         double elevation = ScheduleSource.GetElevationDegrees(_settings, DateTime.UtcNow, DateTime.Now);
         string phase = elevation <= ScheduleCurve.DeepNightThresholdDeg ? "Deep Night mode"
@@ -1063,7 +1137,7 @@ public partial class App : Application
             {
                 double? lux = AmbientLightSensor.TryGetCurrentLux();
                 return lux.HasValue
-                    ? _ambientLightSmoother.Update(AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor)
+                    ? _ambientLightSmoother.Update(AmbientLightAdapter.ComputeBrightnessAdjustment(lux.Value) * dayFactor, DateTime.UtcNow)
                     : null;
             };
         }
@@ -1103,11 +1177,14 @@ public partial class App : Application
         targetDevices.UnionWith(activeMonitors.Select(monitor => monitor.DeviceName));
         targetDevices.UnionWith((_gammaManager?.Controllers ?? Array.Empty<GammaRampController>()).Select(controller => controller.DeviceName));
 
+        // Per-monitor settings are stored against each monitor's physical identity; resolve them
+        // to the display names the schedule is applied by.
+        var (excludedDevices, dimMultipliers) = MonitorKeys.ResolveDimSettings(_settings, targetDevices, activeMonitors);
         var brightnessByDevice = ScheduleBrightnessTargets.Build(
             targetDevices,
             globalBrightness,
-            _settings.ExcludedMonitors.ToHashSet(StringComparer.OrdinalIgnoreCase),
-            _settings.MonitorDimMultiplier,
+            excludedDevices,
+            dimMultipliers,
             primaryMonitorNames);
 
         return (kelvin, brightnessByDevice, dimColor);
@@ -1122,8 +1199,8 @@ public partial class App : Application
     /// </summary>
     private void PauseScheduleFor(TimeSpan duration)
     {
-        _pauseUntilUtc = DateTime.UtcNow + duration;
-        DebugLog.Write($"Schedule paused until {_pauseUntilUtc:yyyy-MM-dd HH:mm} UTC");
+        _overrides.PauseUntilUtc = DateTime.UtcNow + duration;
+        DebugLog.Write($"Schedule paused until {_overrides.PauseUntilUtc:yyyy-MM-dd HH:mm} UTC");
 
         if (_settings.HistoryTrackingEnabled)
             HistoryStore.Append(new HistoryEvent(DateTime.UtcNow, "SchedulePaused", null, (int)duration.TotalSeconds));
@@ -1136,14 +1213,14 @@ public partial class App : Application
         if (_resumeScheduleMenuItem is not null)
             _resumeScheduleMenuItem.Enabled = true;
         if (_trayIcon is not null)
-            _trayIcon.Text = $"Monitor Wellness — paused until {_pauseUntilUtc.Value.ToLocalTime():HH:mm}";
+            _trayIcon.Text = $"Monitor Wellness — paused until {_overrides.PauseUntilUtc.Value.ToLocalTime():HH:mm}";
     }
 
     private void ResumeSchedule()
     {
         _pauseTimer?.Stop();
         _pauseTimer = null;
-        _pauseUntilUtc = null;
+        _overrides.PauseUntilUtc = null;
         DebugLog.Write("Schedule resumed");
 
         if (_resumeScheduleMenuItem is not null)
@@ -1180,7 +1257,7 @@ public partial class App : Application
             foreach (ToolStripMenuItem item in menu.DropDownItems.OfType<ToolStripMenuItem>())
             {
                 if (item.Tag is string plan)
-                    item.Checked = string.Equals(plan, _manualComfortPlanName, StringComparison.Ordinal);
+                    item.Checked = string.Equals(plan, _overrides.ManualComfortPlanName, StringComparison.Ordinal);
             }
         };
         return menu;
@@ -1191,18 +1268,18 @@ public partial class App : Application
         if (!SensoryComfortPlans.IsSupported(plan))
             return;
 
-        _manualComfortPlanName = plan;
+        _overrides.ManualComfortPlanName = plan;
         DebugLog.Write($"Temporary comfort plan selected: {plan}.");
         RunScheduleTick();
     }
 
     private void ClearManualComfortPlan()
     {
-        if (_manualComfortPlanName is null)
+        if (_overrides.ManualComfortPlanName is null)
             return;
 
-        DebugLog.Write($"Temporary comfort plan cleared: {_manualComfortPlanName}.");
-        _manualComfortPlanName = null;
+        DebugLog.Write($"Temporary comfort plan cleared: {_overrides.ManualComfortPlanName}.");
+        _overrides.ManualComfortPlanName = null;
         RunScheduleTick();
     }
 
@@ -1213,7 +1290,7 @@ public partial class App : Application
     /// </summary>
     private bool ExpirePauseIfDue()
     {
-        if (!SchedulePause.IsExpired(_pauseUntilUtc, DateTime.UtcNow))
+        if (!SchedulePause.IsExpired(_overrides.PauseUntilUtc, DateTime.UtcNow))
             return false;
 
         DebugLog.Write("Schedule pause ended (detected by clock check)");
@@ -1223,14 +1300,15 @@ public partial class App : Application
 
     private void RunScheduleTick()
     {
+        _overlay?.ReassertTopmost();
         _migraine?.CheckAutoRevertDue(DateTime.UtcNow);
         if (ExpirePauseIfDue())
             return;
 
         ScheduleDecision decision = SchedulePolicy.Decide(new ScheduleDecisionInputs(
             MigraineSuspendsSchedule: _migraine?.SuspendsNormalSchedule == true,
-            SettingsPreviewActive: _settingsPreviewActive,
-            Paused: _pauseUntilUtc.HasValue,
+            SettingsPreviewActive: _overrides.SettingsPreviewActive,
+            Paused: _overrides.PauseUntilUtc.HasValue,
             FullscreenGuardEnabled: _settings.RestoreNativeDisplayInFullscreen,
             IsForegroundFullscreen: FullscreenDetector.IsForegroundWindowLikelyFullscreen,
             FindForegroundRule: () =>
@@ -1240,7 +1318,7 @@ public partial class App : Application
                 ForegroundApplicationDetector.ForegroundApplicationInfo? foreground = ForegroundApplicationDetector.TryGetForegroundApplication();
                 return ApplicationComfortRules.FindForegroundRule(_settings.ApplicationComfortRules, foreground?.ProcessName, foreground?.WindowTitle);
             },
-            ManualComfortPlanName: _manualComfortPlanName));
+            ManualComfortPlanName: _overrides.ManualComfortPlanName));
 
         // Migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now.
         if (decision.Action == ScheduleActionKind.Skip)
@@ -1248,44 +1326,44 @@ public partial class App : Application
 
         if (decision.Action == ScheduleActionKind.FullscreenGuard)
         {
-            _activeComfortPlanRuleDescription = null;
+            _overrides.ActiveComfortPlanRuleDescription = null;
             ActivateFullscreenPresentationGuard();
             return;
         }
-        if (_fullscreenPresentationGuardActive)
+        if (_overrides.FullscreenPresentationGuardActive)
         {
             DebugLog.Write("Fullscreen presentation guard ended; resuming the selected schedule or application rule.");
-            _fullscreenPresentationGuardActive = false;
+            _overrides.FullscreenPresentationGuardActive = false;
         }
         if (decision.Action == ScheduleActionKind.NativeDisplayRule)
         {
-            _activeComfortPlanRuleDescription = null;
+            _overrides.ActiveComfortPlanRuleDescription = null;
             ActivateNativeDisplayApplicationRule(decision.NativeDisplayRule!);
             return;
         }
 
-        if (_activeNativeDisplayRuleProcessName is not null)
+        if (_overrides.ActiveNativeDisplayRuleProcessName is not null)
         {
-            DebugLog.Write($"Application comfort rule ended for {_activeNativeDisplayRuleProcessName}; resuming the schedule.");
-            _activeNativeDisplayRuleProcessName = null;
+            DebugLog.Write($"Application comfort rule ended for {_overrides.ActiveNativeDisplayRuleProcessName}; resuming the schedule.");
+            _overrides.ActiveNativeDisplayRuleProcessName = null;
         }
 
         SensoryComfortSchedule? scheduleOverride = decision.Override;
         switch (decision.OverrideSource)
         {
             case ScheduleOverrideSource.ManualPlan:
-                _activeComfortPlanRuleDescription = null;
+                _overrides.ActiveComfortPlanRuleDescription = null;
                 break;
             case ScheduleOverrideSource.ApplicationRule:
-                if (!string.Equals(_activeComfortPlanRuleDescription, decision.RuleDescription, StringComparison.Ordinal))
+                if (!string.Equals(_overrides.ActiveComfortPlanRuleDescription, decision.RuleDescription, StringComparison.Ordinal))
                     DebugLog.Write($"Application comfort rule active: {decision.RuleDescription}.");
-                _activeComfortPlanRuleDescription = decision.RuleDescription;
+                _overrides.ActiveComfortPlanRuleDescription = decision.RuleDescription;
                 break;
             default:
-                if (_activeComfortPlanRuleDescription is not null)
+                if (_overrides.ActiveComfortPlanRuleDescription is not null)
                 {
-                    DebugLog.Write($"Application comfort rule ended for {_activeComfortPlanRuleDescription}; resuming the saved schedule.");
-                    _activeComfortPlanRuleDescription = null;
+                    DebugLog.Write($"Application comfort rule ended for {_overrides.ActiveComfortPlanRuleDescription}; resuming the saved schedule.");
+                    _overrides.ActiveComfortPlanRuleDescription = null;
                 }
                 break;
         }
@@ -1309,9 +1387,7 @@ public partial class App : Application
         _applicationRuleTimer = new DispatcherTimer { Interval = ApplicationRulePollInterval };
         _applicationRuleTimer.Tick += (_, _) =>
         {
-            bool anyRuleStateToClear = _activeNativeDisplayRuleProcessName is not null
-                || _activeComfortPlanRuleDescription is not null
-                || _fullscreenPresentationGuardActive;
+            bool anyRuleStateToClear = _overrides.AnyRuleStateActive;
             if (!ApplicationRuleRefreshPolicy.ShouldPollForeground(_settings.RestoreNativeDisplayInFullscreen, _settings.ApplicationComfortRules, anyRuleStateToClear))
             {
                 _lastForegroundApplicationContext = null; // nothing to watch for: skip the foreground lookup
@@ -1334,10 +1410,10 @@ public partial class App : Application
                 foregroundApplication?.WindowTitle);
             if (!ApplicationRuleRefreshPolicy.ShouldRefresh(
                 matchingRule,
-                _activeNativeDisplayRuleProcessName is not null,
-                _activeComfortPlanRuleDescription is not null,
+                _overrides.ActiveNativeDisplayRuleProcessName is not null,
+                _overrides.ActiveComfortPlanRuleDescription is not null,
                 fullscreenGuardShouldApply,
-                _fullscreenPresentationGuardActive))
+                _overrides.FullscreenPresentationGuardActive))
             {
                 // The regular schedule timer will handle its next gradual adjustment. Do not
                 // write the same gamma/overlay state merely because an unrelated window opened.
@@ -1352,10 +1428,10 @@ public partial class App : Application
 
     private void ActivateFullscreenPresentationGuard()
     {
-        if (_fullscreenPresentationGuardActive)
+        if (_overrides.FullscreenPresentationGuardActive)
             return;
 
-        _fullscreenPresentationGuardActive = true;
+        _overrides.FullscreenPresentationGuardActive = true;
         DebugLog.Write("Fullscreen presentation guard active: restoring native display state.");
         _displayApplier?.RestoreNative();
         if (_trayIcon is not null)
@@ -1364,10 +1440,10 @@ public partial class App : Application
 
     private void ActivateNativeDisplayApplicationRule(ApplicationComfortRule rule)
     {
-        if (string.Equals(_activeNativeDisplayRuleProcessName, rule.ProcessName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_overrides.ActiveNativeDisplayRuleProcessName, rule.ProcessName, StringComparison.OrdinalIgnoreCase))
             return;
 
-        _activeNativeDisplayRuleProcessName = rule.ProcessName;
+        _overrides.ActiveNativeDisplayRuleProcessName = rule.ProcessName;
         DebugLog.Write($"Application comfort rule active for {rule.ProcessName}: restoring native display state.");
         _displayApplier?.RestoreNative();
         if (_trayIcon is not null)

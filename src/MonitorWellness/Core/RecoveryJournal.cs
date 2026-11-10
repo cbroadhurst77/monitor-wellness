@@ -55,21 +55,9 @@ public sealed class RecoveryJournal<T> where T : class
                     return;
                 }
 
-                string? directory = System.IO.Path.GetDirectoryName(_path);
-                if (!string.IsNullOrEmpty(directory))
-                    Directory.CreateDirectory(directory);
-
-                string temporary = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                try
-                {
-                    File.WriteAllText(temporary, JsonSerializer.Serialize(entries, JsonOptions));
-                    File.Move(temporary, _path, overwrite: true);
-                }
-                finally
-                {
-                    if (File.Exists(temporary))
-                        File.Delete(temporary);
-                }
+                // Flushed to disk before the move: the journal exists to survive a power loss, so
+                // it must not be an empty file after one.
+                DurableFile.WriteAllText(_path, JsonSerializer.Serialize(entries, JsonOptions));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

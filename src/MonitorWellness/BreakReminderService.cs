@@ -5,104 +5,210 @@ using MonitorWellness.Core;
 namespace MonitorWellness;
 
 /// <summary>
-/// The opt-in 20-20-20 break reminder: owns the repeating timer, the session-only snooze state
-/// and the tray "Snooze Break Reminders" submenu. The rules themselves stay in
-/// BreakReminderState/BreakReminderPolicy (tested); this class is only the wiring between those
-/// rules, the Windows signals that feed them, and the tray balloon. Extracted from App.
+/// The opt-in 20-20-20 break reminder. It samples keyboard/mouse activity every few seconds and
+/// counts the time the person has actually been at the computer (<see cref="ActiveTimeTracker"/>);
+/// when that reaches the chosen interval it shows a reminder, unless migraine mode, a fullscreen
+/// app or a snooze says not to. A reminder that is held back stays due and is shown as soon as the
+/// reason goes away, instead of being skipped until the next cycle. Taking a break (the 20-second
+/// focus timer, or simply stepping away) restarts the count.
+/// The rules live in BreakReminderState/BreakReminderPolicy/ActiveTimeTracker (tested); this class
+/// is the wiring to the Windows signals, the tray balloon and the tray menu.
 /// </summary>
 public sealed class BreakReminderService : IDisposable
 {
     private readonly AppSettings _settings;
     private readonly Func<bool> _isMigraineActive;
-    private readonly Action<int, string, ToolTipIcon> _showBalloon;
+    private readonly Action<int, string, ToolTipIcon, Action?> _showBalloon;
+    private readonly Action? _startBreak;
+    private readonly Func<Action<BreakPromptChoice>, bool>? _showPrompt;
+    private readonly Func<TimeSpan> _readIdle;
+    private readonly Func<bool> _isFullscreen;
+    private readonly TimeProvider _clock;
     private readonly BreakReminderState _state = new();
+    private readonly ActiveTimeTracker _activeTime = new();
     private DispatcherTimer? _timer;
+    private ToolStripMenuItem[] _snoozeItems = Array.Empty<ToolStripMenuItem>();
     private readonly LogOnChange _tickLog = new(TimeSpan.FromHours(6));
 
-    /// <param name="showBalloon">Shows a tray balloon: (milliseconds, message, icon).</param>
-    public BreakReminderService(AppSettings settings, Func<bool> isMigraineActive, Action<int, string, ToolTipIcon> showBalloon)
+    /// <param name="showBalloon">Shows a tray balloon: (milliseconds, message, icon, action to run if the balloon is clicked).</param>
+    /// <param name="startBreak">Starts the 20-second focus break; offered by the prompt and when the fallback balloon is clicked.</param>
+    /// <param name="showPrompt">Shows the reminder prompt and reports the person's choice to the callback; returns false if it could not be shown (the balloon is used instead).</param>
+    public BreakReminderService(
+        AppSettings settings,
+        Func<bool> isMigraineActive,
+        Action<int, string, ToolTipIcon, Action?> showBalloon,
+        Action? startBreak = null,
+        Func<Action<BreakPromptChoice>, bool>? showPrompt = null,
+        Func<TimeSpan>? readIdle = null,
+        Func<bool>? isFullscreen = null,
+        TimeProvider? clock = null)
     {
         _settings = settings;
         _isMigraineActive = isMigraineActive;
         _showBalloon = showBalloon;
+        _startBreak = startBreak;
+        _showPrompt = showPrompt;
+        _readIdle = readIdle ?? UserIdleDetector.GetIdleDuration;
+        _isFullscreen = isFullscreen ?? FullscreenDetector.IsForegroundWindowLikelyFullscreen;
+        _clock = clock ?? TimeProvider.System;
     }
 
+    private TimeSpan Interval => TimeSpan.FromMinutes(BreakReminderPolicy.ClampIntervalMinutes(_settings.BreakReminderIntervalMinutes));
+
     /// <summary>
-    /// (Re)starts the timer from the current settings, or stops it if reminders are off. Called at
-    /// startup and again after Settings saves, since the interval or on/off state may have changed.
+    /// Starts or stops sampling to match the settings. Called at startup and after every Settings
+    /// save. Saving unrelated settings, or changing only the interval, does not restart the count:
+    /// the interval is read afresh at each sample.
     /// </summary>
     public void Rebuild()
     {
-        _timer?.Stop();
-        _timer = null;
-
         if (!_settings.BreakReminderEnabled)
         {
+            if (_timer is not null)
+                DebugLog.Write("BreakReminder: disabled, sampling stopped");
+            _timer?.Stop();
+            _timer = null;
             _state.Reset();
-            DebugLog.Write("BreakReminder: disabled, timer not (re)started");
+            _activeTime.Reset();
             return;
         }
 
-        var interval = TimeSpan.FromMinutes(Math.Max(1, _settings.BreakReminderIntervalMinutes));
-        DebugLog.Write($"BreakReminder: timer (re)started, interval={interval.TotalMinutes} min");
-        _timer = new DispatcherTimer { Interval = interval };
-        _timer.Tick += (_, _) => OnTick();
+        if (_timer is not null)
+            return;
+
+        DebugLog.Write($"BreakReminder: sampling started, interval={Interval.TotalMinutes} min of active time");
+        _activeTime.Reset();
+        _timer = new DispatcherTimer { Interval = BreakReminderPolicy.SampleInterval };
+        _timer.Tick += (_, _) => SampleOnce();
         _timer.Start();
     }
 
-    private void OnTick()
+    /// <summary>The person took a break (the focus timer ran, or they chose to): start counting again.</summary>
+    public void NotifyBreakTaken()
     {
-        // Skip while migraine mode is active, a fullscreen app likely owns the screen, or
-        // Windows says the person has stepped away. The timer continues on its regular
-        // cadence so returning from a real break never triggers an immediate catch-up prompt.
-        TimeSpan idleDuration = TimeSpan.Zero;
-        BreakReminderTick tick = _state.Tick(DateTime.UtcNow, () =>
-        {
-            bool migraineActive = _isMigraineActive();
-            bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
-            idleDuration = migraineActive || likelyFullscreen ? TimeSpan.Zero : UserIdleDetector.GetIdleDuration();
-            return new BreakReminderSignals(migraineActive, likelyFullscreen, idleDuration);
-        });
+        _activeTime.Reset();
+        DebugLog.Write("BreakReminder: a break was taken; the count restarts.");
+    }
 
-        if (tick.Outcome == BreakReminderTickOutcome.SkippedSnoozed)
+    /// <summary>One look at the keyboard/mouse and, if the interval is reached, the decision whether to show the reminder.</summary>
+    internal void SampleOnce()
+    {
+        // A convenience feature must not take the app's display-recovery path with it: anything
+        // thrown here is logged and the next sample simply tries again.
+        try
         {
-            DebugLog.Write($"BreakReminder: tick skipped (snoozed until {tick.SnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC)");
-            return;
-        }
-        if (tick.SnoozeExpired)
-            DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
+            if (!_settings.BreakReminderEnabled)
+                return;
 
-        if (tick.Outcome == BreakReminderTickOutcome.Show)
-        {
-            if (_tickLog.ShouldLog("show", DateTime.UtcNow))
-                DebugLog.Write("BreakReminder: tick fired, showing balloon (further identical ticks are logged only every 6 hours)");
-            _showBalloon(
-                8_000,
-                "Time for a break — look at something about 20 feet away for 20 seconds. Use the tray menu if you'd like a quiet timer.",
-                ToolTipIcon.Info);
+            DateTime nowUtc = _clock.GetUtcNow().UtcDateTime;
+            TimeSpan idle = _readIdle();
+            _activeTime.Sample(nowUtc, idle, BreakReminderPolicy.SampleInterval, BreakReminderPolicy.AwayThreshold);
+            if (!_activeTime.IsDue(Interval))
+                return;
+
+            BreakReminderTick tick = _state.Tick(nowUtc, () =>
+            {
+                bool migraineActive = _isMigraineActive();
+                bool likelyFullscreen = !migraineActive && _isFullscreen();
+                return new BreakReminderSignals(migraineActive, likelyFullscreen, idle);
+            });
+
+            if (tick.Outcome == BreakReminderTickOutcome.SkippedSnoozed)
+                return; // still due; shown once the snooze ends
+            if (tick.SnoozeExpired)
+                DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
+
+            if (tick.Outcome == BreakReminderTickOutcome.Show)
+            {
+                _activeTime.Reset();
+                if (_tickLog.ShouldLog("show", nowUtc))
+                    DebugLog.Write("BreakReminder: reminder shown (further identical reminders are logged only every 6 hours)");
+                if (!TryShowPrompt())
+                {
+                    _showBalloon(
+                        8_000,
+                        "Time for a break — look at something about 20 feet away for 20 seconds. Click here for a 20-second timer.",
+                        ToolTipIcon.Info,
+                        _startBreak);
+                }
+            }
+            else if (_tickLog.ShouldLog($"hold:{tick.Decision}", nowUtc))
+            {
+                DebugLog.Write($"BreakReminder: reminder is due but held back ({tick.Decision}); it will show when that clears (identical entries logged every 6 hours)");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            if (_tickLog.ShouldLog($"skip:{tick.Decision}", DateTime.UtcNow))
-                DebugLog.Write($"BreakReminder: tick fired but skipped ({tick.Decision}, idle={idleDuration.TotalSeconds:F0}s; further identical ticks are logged only every 6 hours)");
+            DebugLog.Write($"BreakReminder: sample failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>How long "In 5 minutes" on the prompt waits before asking again.</summary>
+    internal static readonly TimeSpan PromptSnoozeDelay = TimeSpan.FromMinutes(5);
+
+    private bool TryShowPrompt()
+    {
+        if (_showPrompt is null)
+            return false;
+
+        try
+        {
+            return _showPrompt(OnPromptChoice);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: the prompt could not be shown, using a balloon: {ex.Message}");
+            return false;
+        }
+    }
+
+    private void OnPromptChoice(BreakPromptChoice choice)
+    {
+        try
+        {
+            switch (choice)
+            {
+                case BreakPromptChoice.StartBreak:
+                    _startBreak?.Invoke();
+                    break;
+                case BreakPromptChoice.Snooze:
+                    // The count restarted when the prompt appeared; make the next one come in a few minutes, not a full interval.
+                    _activeTime.SetAccumulated(Interval - PromptSnoozeDelay);
+                    DebugLog.Write("BreakReminder: prompt snoozed for 5 minutes.");
+                    break;
+                case BreakPromptChoice.Skip:
+                    DebugLog.Write("BreakReminder: prompt skipped.");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: handling the prompt choice failed: {ex.Message}");
         }
     }
 
     public ToolStripMenuItem BuildSnoozeMenu()
     {
         var menu = new ToolStripMenuItem("Snooze &Break Reminders");
-        menu.DropDownItems.Add("30 minutes", null, (_, _) => Snooze(TimeSpan.FromMinutes(30)));
-        menu.DropDownItems.Add("1 hour", null, (_, _) => Snooze(TimeSpan.FromHours(1)));
-        menu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
-            Snooze(DateTime.Today.AddDays(1).ToUniversalTime() - DateTime.UtcNow));
+        var items = new List<ToolStripMenuItem>
+        {
+            (ToolStripMenuItem)menu.DropDownItems.Add("30 minutes", null, (_, _) => Snooze(TimeSpan.FromMinutes(30))),
+            (ToolStripMenuItem)menu.DropDownItems.Add("1 hour", null, (_, _) => Snooze(TimeSpan.FromHours(1))),
+            (ToolStripMenuItem)menu.DropDownItems.Add("Until morning (8:00)", null, (_, _) =>
+                Snooze(BreakReminderPolicy.NextMorningLocal(DateTime.Now).ToUniversalTime() - DateTime.UtcNow)),
+        };
         menu.DropDownItems.Add(new ToolStripSeparator());
-        menu.DropDownItems.Add("Resume break reminders", null, (_, _) => Resume());
+        items.Add((ToolStripMenuItem)menu.DropDownItems.Add("Resume break reminders", null, (_, _) => Resume()));
+        _snoozeItems = items.ToArray();
+
         menu.DropDownOpening += (_, _) =>
         {
             bool enabled = _settings.BreakReminderEnabled;
+            foreach (ToolStripMenuItem item in _snoozeItems)
+                item.Enabled = enabled;
             menu.Text = !enabled
-                ? "Snooze &Break Reminders (off)"
-                : _state.IsSnoozed(DateTime.UtcNow)
+                ? "Snooze &Break Reminders (off in Settings)"
+                : _state.IsSnoozed(_clock.GetUtcNow().UtcDateTime)
                     ? $"Snooze &Break Reminders (until {_state.SnoozedUntilUtc!.Value.ToLocalTime():HH:mm})"
                     : "Snooze &Break Reminders";
         };
@@ -111,12 +217,13 @@ public sealed class BreakReminderService : IDisposable
 
     private void Snooze(TimeSpan duration)
     {
-        if (!_state.TrySnooze(_settings.BreakReminderEnabled, DateTime.UtcNow, duration))
+        DateTime nowUtc = _clock.GetUtcNow().UtcDateTime;
+        if (!_state.TrySnooze(_settings.BreakReminderEnabled, nowUtc, duration))
             return;
 
         DateTime until = _state.SnoozedUntilUtc!.Value;
         DebugLog.Write($"BreakReminder: snoozed until {until:yyyy-MM-dd HH:mm} UTC.");
-        _showBalloon(4_000, $"Break reminders snoozed until {until.ToLocalTime():HH:mm}.", ToolTipIcon.Info);
+        _showBalloon(4_000, $"Break reminders snoozed until {until.ToLocalTime():HH:mm}.", ToolTipIcon.Info, null);
     }
 
     private void Resume()

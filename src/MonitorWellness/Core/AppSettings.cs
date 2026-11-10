@@ -337,6 +337,32 @@ public sealed class AppSettings
         LastUpdateCheckUtc = LastUpdateCheckUtc,
     };
 
+    /// <summary>
+    /// A settings window edits a copy taken when it opened. While it was open the app may have
+    /// recorded things the window knows nothing about (an update check, a one-time reminder, a
+    /// hardware-brightness failure). Call this on the draft just before saving so that saving the
+    /// draft does not revert them; in particular a quarantined monitor stays quarantined.
+    /// </summary>
+    public void AdoptAppOwnedState(AppSettings live)
+    {
+        ArgumentNullException.ThrowIfNull(live);
+
+        if (live.LastUpdateCheckUtc is DateTime liveCheck
+            && (LastUpdateCheckUtc is not DateTime draftCheck || liveCheck > draftCheck))
+            LastUpdateCheckUtc = liveCheck;
+        LocationReminderShown |= live.LocationReminderShown;
+        HasCompletedOnboarding |= live.HasCompletedOnboarding;
+
+        foreach (var (key, liveState) in live.HardwareBrightnessSafetyByMonitor)
+        {
+            if (liveState.IsQuarantined || !HardwareBrightnessSafetyByMonitor.ContainsKey(key))
+            {
+                HardwareBrightnessSafetyByMonitor[key] =
+                    HardwareBrightnessSafety.CloneStates(new Dictionary<string, HardwareBrightnessSafetyState> { [key] = liveState })[key];
+            }
+        }
+    }
+
     /// <summary>Replaces this instance's values with a deep copy of a validated settings snapshot.</summary>
     public void CopyFrom(AppSettings source)
     {

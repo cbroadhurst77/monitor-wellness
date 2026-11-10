@@ -45,7 +45,11 @@ public sealed class MigraineModeController
     private readonly Func<(int Kelvin, IReadOnlyDictionary<string, double> BrightnessByDevice, Color DimColor)> _computeScheduleTarget;
     private readonly Func<bool>? _isForegroundFullscreenLikely;
 
+    /// <summary>A fade step that throws this many times in a row ends the fade instead of retrying 5 times a second for the rest of its 20 seconds.</summary>
+    private const int MaximumConsecutiveFadeFailures = 3;
+
     private DispatcherTimer? _fadeTimer;
+    private int _consecutiveFadeFailures;
     private DateTime _fadeStartUtc;
     private Color _fadeFromColor;
     private double _fadeFromOpacity;
@@ -115,10 +119,12 @@ public sealed class MigraineModeController
         _activeIsMild = mild;
         _activatedAtUtc = DateTime.UtcNow;
 
+        // Relief first: the history line is file I/O and must never delay what the person
+        // pressed the hotkey for.
+        PushActiveAppearance();
+
         if (_settings.HistoryTrackingEnabled)
             HistoryStore.Append(new HistoryEvent(_activatedAtUtc.Value, "MigraineActivated", mild, null));
-
-        PushActiveAppearance();
 
         _autoRevertTimer?.Stop();
         if (_settings.MigraineAutoRevertMinutes > 0)
@@ -198,6 +204,7 @@ public sealed class MigraineModeController
             return;
 
         DebugLog.Write("MigraineMode: Deactivate (starting fade)");
+        _consecutiveFadeFailures = 0;
         _autoRevertTimer?.Stop();
         _autoRevertTimer = null;
         AutoRevertAtUtc = null;
@@ -259,7 +266,35 @@ public sealed class MigraineModeController
         StateChanged?.Invoke();
     }
 
-    private void FadeTick()
+    /// <summary>
+    /// One step of the fade-out, run by the fade timer. A failing step (a monitor that went away
+    /// mid-fade, a driver error) is logged and retried; if it keeps failing the fade is ended so the
+    /// schedule takes over, rather than raising an unhandled exception five times a second.
+    /// </summary>
+    internal void FadeTick()
+    {
+        try
+        {
+            FadeStep();
+            _consecutiveFadeFailures = 0;
+        }
+        catch (Exception ex)
+        {
+            _consecutiveFadeFailures++;
+            DebugLog.Write($"MigraineMode: fade step failed ({_consecutiveFadeFailures}/{MaximumConsecutiveFadeFailures}): {ex.Message}");
+            if (_consecutiveFadeFailures < MaximumConsecutiveFadeFailures)
+                return;
+
+            _fadeTimer?.Stop();
+            _fadeTimer = null;
+            IsFadingOut = false;
+            _consecutiveFadeFailures = 0;
+            DebugLog.Write("MigraineMode: fade ended early after repeated failures; the normal schedule resumes.");
+            StateChanged?.Invoke();
+        }
+    }
+
+    private void FadeStep()
     {
         double t = Math.Clamp((DateTime.UtcNow - _fadeStartUtc).TotalSeconds / FadeDuration.TotalSeconds, 0.0, 1.0);
         var (targetKelvin, targetBrightnessByDevice, targetDimColor) = _computeScheduleTarget();

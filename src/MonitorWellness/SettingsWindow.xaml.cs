@@ -205,6 +205,7 @@ public partial class SettingsWindow : Window
 
         try
         {
+            _settings.AdoptAppOwnedState(_targetSettings);
             SettingsStore.Save(_settings);
             _targetSettings.CopyFrom(_settings);
             _onSaved();
@@ -330,6 +331,15 @@ public partial class SettingsWindow : Window
             });
         }
 
+        // Per-monitor settings are stored against each monitor's physical identity, and entries for
+        // monitors that are not connected right now are kept rather than dropped.
+        var activeByName = MonitorEnumerator.GetActiveMonitors()
+            .GroupBy(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        MonitorInfo RowMonitor(string deviceName)
+            => activeByName.TryGetValue(deviceName, out MonitorInfo? known) ? known : MonitorKeys.Unidentified(deviceName);
+        List<MonitorInfo> shownMonitors = _excludeBoxes.Keys.Select(RowMonitor).ToList();
+
         // All parsed successfully — commit to the live settings object.
         _settings.Latitude = lat;
         _settings.Longitude = lon;
@@ -353,8 +363,12 @@ public partial class SettingsWindow : Window
         _settings.WakeTimeLocal = wakeLocal;
         _settings.MigraineHotkeyModifiers = _pendingHotkeyModifiers;
         _settings.MigraineHotkeyKey = _pendingHotkeyKey;
-        _settings.MonitorDimMultiplier = multipliers;
-        _settings.MonitorKelvinOffset = kelvinOffsets;
+        _settings.MonitorDimMultiplier = MonitorKeys.MergeValues(
+            _settings.MonitorDimMultiplier, shownMonitors,
+            multipliers.Select(pair => (RowMonitor(pair.Key), pair.Value)));
+        _settings.MonitorKelvinOffset = MonitorKeys.MergeValues(
+            _settings.MonitorKelvinOffset, shownMonitors,
+            kelvinOffsets.Select(pair => (RowMonitor(pair.Key), pair.Value)));
         _settings.ApplicationComfortRules = applicationRules;
         var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors()
             .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
@@ -382,14 +396,12 @@ public partial class SettingsWindow : Window
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;
         _settings.ExcludeOverlayFromCapture = ExcludeFromCaptureCheckBox.IsChecked == true;
         _settings.UpdateNotifyPreReleases = CheckForPreReleasesCheckBox.IsChecked == true;
-        _settings.ExcludedMonitors = _excludeBoxes
-            .Where(kv => kv.Value.IsChecked == true)
-            .Select(kv => kv.Key)
-            .ToList();
-        _settings.ColorExcludedMonitors = _colorExcludeBoxes
-            .Where(kv => kv.Value.IsChecked == true)
-            .Select(kv => kv.Key)
-            .ToList();
+        _settings.ExcludedMonitors = MonitorKeys.MergeFlags(
+            _settings.ExcludedMonitors, shownMonitors,
+            _excludeBoxes.Where(kv => kv.Value.IsChecked == true).Select(kv => RowMonitor(kv.Key)));
+        _settings.ColorExcludedMonitors = MonitorKeys.MergeFlags(
+            _settings.ColorExcludedMonitors, shownMonitors,
+            _colorExcludeBoxes.Where(kv => kv.Value.IsChecked == true).Select(kv => RowMonitor(kv.Key)));
 
         return true;
     }

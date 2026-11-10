@@ -31,6 +31,23 @@ public sealed class DisplayApplier
         _gamma = gamma;
         _overlay = overlay;
         _hardware = hardware;
+        _hardware.ResultChanged += OnHardwareResultChanged;
+    }
+
+    /// <summary>Raised (on the UI thread) when hardware brightness took over a display, gave one back, or failed: the schedule should be re-applied so the overlay matches.</summary>
+    public event Action? HardwareBrightnessChanged;
+
+    private void OnHardwareResultChanged(HardwareBrightnessApplicationResult result)
+    {
+        try
+        {
+            PersistHardwareBrightnessQuarantines(MonitorEnumerator.GetActiveMonitors(), result);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"Handling the hardware brightness result failed: {ex}");
+        }
+        HardwareBrightnessChanged?.Invoke();
     }
 
     /// <summary>
@@ -40,7 +57,7 @@ public sealed class DisplayApplier
     /// </summary>
     public void RestoreNative()
     {
-        _hardware.RestoreAll();
+        _hardware.RestoreAll(TimeSpan.FromSeconds(2));
         _overlay.Clear();
         _gamma.RestoreAllToBaseline();
     }
@@ -54,37 +71,49 @@ public sealed class DisplayApplier
             ApplyColor(controller, kelvin, activeMonitorsByDeviceName);
 
         var approvedHardwareDevices = activeMonitors
-            .Where(monitor => !_settings.ExcludedMonitors.Contains(monitor.DeviceName)
+            .Where(monitor => !MonitorKeys.Contains(_settings.ExcludedMonitors, monitor)
                 && (!_settings.PreferOverlayOnlyOnCompatibilityDisplays
                     || !DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out _))
                 && HardwareBrightnessSafety.IsApproved(_settings, monitor))
             .Select(monitor => monitor.DeviceName)
             .ToList();
-        HardwareBrightnessApplicationResult hardwareResult = _hardware.ApplyApprovedBrightness(approvedHardwareDevices, brightnessByDevice);
-        PersistHardwareBrightnessQuarantines(activeMonitors, hardwareResult);
-
-        // A display whose physical brightness was set needs no overlay dimming on top of it.
+        // Hardware (DDC/CI) brightness is set on a worker thread and never waited for here. A
+        // display whose physical brightness is currently set by us needs no overlay dimming on top
+        // of it; until the first result is in (or while the worker is stuck) the overlay dims it,
+        // and HardwareBrightnessChanged re-applies the schedule once hardware takes over.
+        _hardware.RequestApply(approvedHardwareDevices, brightnessByDevice);
+        IReadOnlySet<string> hardwareApplied = _hardware.AppliedDevices;
         var overlayBrightnessByDevice = brightnessByDevice.ToDictionary(
             entry => entry.Key,
-            entry => hardwareResult.AppliedDeviceNames.Contains(entry.Key) ? 1.0 : entry.Value);
+            entry => hardwareApplied.Contains(entry.Key) ? 1.0 : entry.Value);
         _overlay.ApplyDim(overlayBrightnessByDevice, dimColor);
     }
 
     private void ApplyColor(GammaRampController controller, int kelvin, Dictionary<string, MonitorInfo> activeMonitorsByDeviceName)
     {
-        if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
+        activeMonitorsByDeviceName.TryGetValue(controller.DeviceName, out MonitorInfo? knownMonitor);
+        MonitorInfo identity = knownMonitor ?? MonitorKeys.Unidentified(controller.DeviceName);
+
+        if (MonitorKeys.Contains(_settings.ExcludedMonitors, identity))
+        {
+            // Excluded after it was already tinted (or tinted by migraine mode): hand it back.
+            controller.RestoreBaselineIfModified();
             return;
+        }
 
         if (_settings.PreferOverlayOnlyOnCompatibilityDisplays
-            && activeMonitorsByDeviceName.TryGetValue(controller.DeviceName, out MonitorInfo? monitor)
+            && knownMonitor is MonitorInfo monitor
             && DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out string compatibilityReason))
         {
             // A remote/virtual/indirect surface can be backed by a transport or driver
             // which handles gamma state unpredictably. Restore a previously applied ramp,
             // then leave the normal per-monitor overlay in charge of dimming.
-            if (_compatibilityFallbackDevices.Add(controller.DeviceName))
+            bool firstTime = _compatibilityFallbackDevices.Add(controller.DeviceName);
+            // Every tick, not just the first: migraine mode writes ramps to every display, and
+            // nothing else would take that colour off this one afterwards.
+            controller.RestoreBaselineIfModified();
+            if (firstTime)
             {
-                controller.RestoreBaseline();
                 DebugLog.Write($"Compatibility fallback active for {controller.DeviceName}: {compatibilityReason}");
                 CompatibilityFallbackStarted?.Invoke(controller.DeviceName, compatibilityReason, monitor.IsHdr);
             }
@@ -93,15 +122,15 @@ public sealed class DisplayApplier
 
         _compatibilityFallbackDevices.Remove(controller.DeviceName);
 
-        if (_settings.ColorExcludedMonitors.Contains(controller.DeviceName))
+        if (MonitorKeys.Contains(_settings.ColorExcludedMonitors, identity))
         {
             // Color-accurate reference monitor: stays at native color, but still
             // participates in the brightness schedule.
-            controller.RestoreBaseline();
+            controller.RestoreBaselineIfModified();
             return;
         }
 
-        int offset = _settings.MonitorKelvinOffset.TryGetValue(controller.DeviceName, out var off) ? off : 0;
+        int offset = MonitorKeys.TryGetValue(_settings.MonitorKelvinOffset, identity, out int off) ? off : 0;
         int targetKelvin = kelvin + offset;
         if (!controller.ApplyColorTemperature(targetKelvin))
         {

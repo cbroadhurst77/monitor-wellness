@@ -35,34 +35,77 @@ public static class DebugLog
     /// <summary>Path to the local rolling log, exposed for explicit user-requested support bundles.</summary>
     public static string FilePath => LogPath;
 
+    private static readonly object Gate = new();
+    private static readonly System.Text.UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+    private static bool _directoryReady;
+    private static long _knownSize = -1; // -1 = look at the file before the next write
+
+    /// <summary>
+    /// Appends one line. Writers inside the process are serialised, the directory is created once,
+    /// the file size is tracked instead of asked for on every line, and a sharing violation (a
+    /// support tool reading the log, antivirus) is retried once rather than silently dropping the line.
+    /// </summary>
     public static void Write(string message)
     {
-        try
+        byte[] line = Utf8.GetBytes($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {LogRedaction.Redact(message)}{Environment.NewLine}");
+        lock (Gate)
         {
-            string? directory = Path.GetDirectoryName(LogPath);
-            if (directory is not null)
-                Directory.CreateDirectory(directory);
-
-            RotateIfTooLarge();
-            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {LogRedaction.Redact(message)}{Environment.NewLine}");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Logging must never be the thing that crashes the app. RotateIfTooLarge touches
-            // FileInfo.Length and opens a FileStream before this catch takes effect, and both
-            // can throw UnauthorizedAccessException under permission conditions IOException
-            // doesn't cover -- matches the pattern already used in ProfileStore.Load/HistoryStore.Load.
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                try
+                {
+                    EnsureDirectory();
+                    RotateIfTooLarge(line.Length);
+                    using var stream = new FileStream(LogPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                    stream.Write(line);
+                    _knownSize += line.Length;
+                    return;
+                }
+                catch (IOException) when (attempt == 0)
+                {
+                    _knownSize = -1;
+                    Thread.Sleep(15);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Logging must never be the thing that crashes the app.
+                    _knownSize = -1;
+                    return;
+                }
+            }
         }
     }
 
-    private static void RotateIfTooLarge()
+    private static void EnsureDirectory()
     {
-        var info = new FileInfo(LogPath);
-        if (!info.Exists || info.Length <= MaxSizeBytes)
+        if (_directoryReady)
+            return;
+
+        string? directory = Path.GetDirectoryName(LogPath);
+        if (directory is not null)
+            Directory.CreateDirectory(directory);
+        _directoryReady = true;
+    }
+
+    private static void RotateIfTooLarge(int incomingBytes)
+    {
+        if (_knownSize < 0)
+        {
+            var info = new FileInfo(LogPath);
+            _knownSize = info.Exists ? info.Length : 0;
+        }
+        if (_knownSize + incomingBytes <= MaxSizeBytes)
             return;
 
         // Keep only the tail: read the last TrimToBytes bytes and drop everything before the
         // first newline in that chunk, so the file starts on a clean line boundary.
+        long length = new FileInfo(LogPath).Length;
+        if (length < TrimToBytes)
+        {
+            _knownSize = length;
+            return;
+        }
+
         byte[] tail;
         using (var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
@@ -75,5 +118,6 @@ public static class DebugLog
         int start = firstNewline >= 0 ? firstNewline + 1 : 0;
 
         File.WriteAllBytes(LogPath, tail[start..]);
+        _knownSize = tail.Length - start;
     }
 }
