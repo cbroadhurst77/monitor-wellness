@@ -17,6 +17,7 @@ public sealed class BreakReminderService : IDisposable
     private readonly Action<int, string, ToolTipIcon> _showBalloon;
     private readonly BreakReminderState _state = new();
     private DispatcherTimer? _timer;
+    private readonly LogOnChange _tickLog = new(TimeSpan.FromHours(6));
 
     /// <param name="showBalloon">Shows a tray balloon: (milliseconds, message, icon).</param>
     public BreakReminderService(AppSettings settings, Func<bool> isMigraineActive, Action<int, string, ToolTipIcon> showBalloon)
@@ -73,7 +74,8 @@ public sealed class BreakReminderService : IDisposable
 
         if (tick.Outcome == BreakReminderTickOutcome.Show)
         {
-            DebugLog.Write("BreakReminder: tick fired, showing balloon");
+            if (_tickLog.ShouldLog("show", DateTime.UtcNow))
+                DebugLog.Write("BreakReminder: tick fired, showing balloon (further identical ticks are logged only every 6 hours)");
             _showBalloon(
                 8_000,
                 "Time for a break — look at something about 20 feet away for 20 seconds. Use the tray menu if you'd like a quiet timer.",
@@ -81,7 +83,8 @@ public sealed class BreakReminderService : IDisposable
         }
         else
         {
-            DebugLog.Write($"BreakReminder: tick fired but skipped ({tick.Decision}, idle={idleDuration.TotalSeconds:F0}s)");
+            if (_tickLog.ShouldLog($"skip:{tick.Decision}", DateTime.UtcNow))
+                DebugLog.Write($"BreakReminder: tick fired but skipped ({tick.Decision}, idle={idleDuration.TotalSeconds:F0}s; further identical ticks are logged only every 6 hours)");
         }
     }
 

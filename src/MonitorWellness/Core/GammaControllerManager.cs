@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace MonitorWellness.Core;
@@ -19,6 +20,10 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
     private readonly Dictionary<string, GammaRampController> _controllers = new();
     private bool _disposed;
 
+    /// <summary>Display-change notifications arrive in bursts while a dock, driver or DPI setting settles; one rebuild after they stop replaces the burst.</summary>
+    internal static readonly TimeSpan TopologyDebounce = TimeSpan.FromMilliseconds(400);
+    private DispatcherTimer? _topologyTimer;
+
     public GammaControllerManager()
     {
         RebuildControllers();
@@ -36,10 +41,31 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is not null && !dispatcher.CheckAccess())
-            dispatcher.Invoke(HandleTopologyChange);
+        if (dispatcher is null)
+            HandleTopologyChange();   // no UI thread (shutdown): nothing to debounce on
+        else if (dispatcher.CheckAccess())
+            ScheduleTopologyChange();
         else
-            HandleTopologyChange();
+            dispatcher.BeginInvoke(ScheduleTopologyChange);
+    }
+
+    private void ScheduleTopologyChange()
+    {
+        if (_disposed)
+            return;
+
+        if (_topologyTimer is null)
+        {
+            _topologyTimer = new DispatcherTimer { Interval = TopologyDebounce };
+            _topologyTimer.Tick += (_, _) =>
+            {
+                _topologyTimer.Stop();
+                if (!_disposed)
+                    HandleTopologyChange();
+            };
+        }
+        _topologyTimer.Stop();
+        _topologyTimer.Start();
     }
 
     private void HandleTopologyChange()
@@ -58,10 +84,12 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
 
         lock (_lock)
         {
+            bool setChanged = false;
             foreach (var stale in _controllers.Keys.Except(current).ToList())
             {
                 _controllers[stale].Dispose();
                 _controllers.Remove(stale);
+                setChanged = true;
             }
 
             foreach (var deviceName in current)
@@ -72,6 +100,7 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
                 try
                 {
                     _controllers[deviceName] = new GammaRampController(deviceName);
+                    setChanged = true;
                 }
                 catch (InvalidOperationException)
                 {
@@ -80,7 +109,12 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
                 }
             }
 
-            PersistBaselines(monitors);
+            // The journal holds each display's baseline, which only changes when a display comes or
+            // goes. Display-change notifications arrive in bursts (seen every ~6 s for minutes), and
+            // re-saving the same ~30 KB file each time is pointless disk work. It is deleted only on
+            // a clean exit, so skipping an unchanged save never leaves a display unprotected.
+            if (setChanged)
+                PersistBaselines(monitors);
         }
     }
 
@@ -127,6 +161,21 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         }
     }
 
+    /// <summary>Re-applies our colour to any display another program has reset since the last apply. Returns how many were repaired.</summary>
+    public int RepairResetDisplays()
+    {
+        int repaired = 0;
+        foreach (var controller in Controllers)
+        {
+            if (controller.RepairIfReset())
+            {
+                repaired++;
+                DebugLog.Write($"GammaControllerManager: {controller.DeviceName}'s colour had been reset by something else; reapplied.");
+            }
+        }
+        return repaired;
+    }
+
     /// <summary>Immediately restores all controllable gamma ramps to the baseline captured when this app took control (the display's calibration curve, or linear).</summary>
     public void RestoreAllToBaseline()
     {
@@ -143,6 +192,7 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
         _disposed = true;
 
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _topologyTimer?.Stop();
         lock (_lock)
         {
             bool allRestored = true;

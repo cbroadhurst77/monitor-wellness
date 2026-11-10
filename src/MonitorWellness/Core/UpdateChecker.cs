@@ -7,6 +7,9 @@ namespace MonitorWellness.Core;
 
 public sealed record UpdateInfo(Version Version, string TagName, Uri ReleaseUrl, bool IsPreRelease = false);
 
+/// <summary>The outcome of an update check. A failed check (offline, timeout, HTTP error) is not the same as "up to date": the caller retries it at the next poll instead of waiting a day.</summary>
+public readonly record struct UpdateCheckResult(UpdateInfo? Update, bool Failed);
+
 /// <summary>
 /// Zero-cost update notice: checks this repo's GitHub Releases API for the newest release tag and
 /// compares it to the running assembly version (set via MonitorWellness.csproj's &lt;Version&gt;).
@@ -52,7 +55,7 @@ public static class UpdateChecker
     /// courtesy check that must never affect startup reliability, matching the same broad-catch
     /// reasoning already used for GeocodingService and AmbientLightSensor.
     /// </summary>
-    public static async Task<UpdateInfo?> CheckForUpdateAsync(bool includePreReleases, CancellationToken cancellationToken = default)
+    public static async Task<UpdateCheckResult> CheckForUpdateAsync(bool includePreReleases, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -60,28 +63,28 @@ public static class UpdateChecker
             if (!response.IsSuccessStatusCode)
             {
                 DebugLog.Write($"UpdateChecker: GitHub API returned HTTP {(int)response.StatusCode}");
-                return null;
+                return new UpdateCheckResult(null, true);
             }
             if (response.Content.Headers.ContentLength is long contentLength && contentLength > MaximumResponseBytes)
             {
                 DebugLog.Write("UpdateChecker: response exceeded the allowed size");
-                return null;
+                return new UpdateCheckResult(null, true);
             }
 
             string? json = await ReadResponseAtMostAsync(response.Content, cancellationToken);
             if (json is null)
             {
                 DebugLog.Write("UpdateChecker: response exceeded the allowed size");
-                return null;
+                return new UpdateCheckResult(null, true);
             }
 
             var currentVersion = typeof(UpdateChecker).Assembly.GetName().Version ?? new Version(0, 0, 0);
-            return SelectLatest(json, currentVersion, includePreReleases);
+            return new UpdateCheckResult(SelectLatest(json, currentVersion, includePreReleases), false);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             DebugLog.Write($"UpdateChecker: check failed: {ex.Message}");
-            return null;
+            return new UpdateCheckResult(null, true);
         }
     }
 
