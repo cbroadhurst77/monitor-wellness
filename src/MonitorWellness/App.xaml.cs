@@ -40,9 +40,9 @@ public partial class App : Application
     private System.Drawing.Icon? _iconOn;
     private DispatcherTimer? _timer;
     private DispatcherTimer? _applicationRuleTimer;
-    private DispatcherTimer? _breakReminderTimer;
     private BreakFocusWindow? _breakFocusWindow;
-    private readonly BreakReminderState _breakReminder = new();
+    private BreakReminderService? _breakReminder;
+    private DisplayApplier? _displayApplier;
     private GammaControllerManager? _gammaManager;
     private OverlayController? _overlay;
     private readonly HardwareBrightnessControllerManager _hardwareBrightness = new();
@@ -59,7 +59,6 @@ public partial class App : Application
     private string? _manualComfortPlanName;
     private bool _fullscreenPresentationGuardActive;
     private bool _migraineWasActive;
-    private readonly HashSet<string> _compatibilityFallbackDevices = new(StringComparer.OrdinalIgnoreCase);
     private SingleInstanceGuard? _singleInstanceGuard;
     private readonly CrashLoopDetector _crashLoopDetector = new();
 
@@ -78,6 +77,9 @@ public partial class App : Application
     // URL can't get triggered by an unrelated balloon shown much later. See ShowUpdateBalloon.
     private string? _pendingBalloonClickUrl;
     private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromDays(1);
+    private static readonly TimeSpan UpdateCheckPollInterval = TimeSpan.FromHours(6);
+    private DispatcherTimer? _updateCheckTimer;
+    private string? _lastNotifiedUpdateTag;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -90,15 +92,27 @@ public partial class App : Application
         // timer and a hotkey that silently fails (see TECHNICAL_UX_REVIEW.md §3.1) — this app's
         // own portable + auto-start design makes an accidental double-launch a real scenario,
         // not just a hypothetical one.
+        bool restoreOnly = e.Args.Any(arg => string.Equals(arg, RestoreSwitch, StringComparison.OrdinalIgnoreCase));
         _singleInstanceGuard = new SingleInstanceGuard();
         if (!_singleInstanceGuard.IsPrimaryInstance)
         {
-            DebugLog.Write("Another instance is already running — exiting");
+            DebugLog.Write(restoreOnly
+                ? "--restore requested while another instance is running — exiting"
+                : "Another instance is already running — exiting");
             System.Windows.MessageBox.Show(
-                "Monitor Wellness is already running — check your system tray (near the clock) for its icon.",
+                restoreOnly
+                    ? "Monitor Wellness is running, so it controls your display right now. Use its tray icon's \"Emergency Restore Screen\" (Ctrl+Alt+Shift+R), or exit it first and run this again."
+                    : "Monitor Wellness is already running — check your system tray (near the clock) for its icon.",
                 "Monitor Wellness",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
+        if (restoreOnly)
+        {
+            RunRestoreOnly();
             Shutdown();
             return;
         }
@@ -137,7 +151,7 @@ public partial class App : Application
 
                 _gammaManager?.ReapplyAfterWake();
                 if (_migraine?.IsActive == true)
-                    _migraine.Activate(); // idempotent — reapplies in case gamma ramp/overlay state was left stale
+                    _migraine.Reapply(); // reapplies in case gamma ramp/overlay state was left stale, without restarting the session
                 else if (!_settingsPreviewActive && !_pauseUntilUtc.HasValue)
                     RunScheduleTick();
             }
@@ -148,9 +162,38 @@ public partial class App : Application
         };
 
         _settings = SettingsStore.Load();
+        if (SettingsStore.LastLoadProblem is string settingsProblem)
+            QueueStartupBalloon("Monitor Wellness", settingsProblem, ToolTipIcon.Warning);
+
+        // A previous run that was killed, crashed hard, or lost power leaves its gamma ramp and
+        // any DDC/CI hardware dimming in place. Put those back first, before anything below
+        // reads the display's current state and mistakes the leftover for "normal".
+        try
+        {
+            DisplayRecoveryResult recovery = DisplayStateRecovery.RestoreLeftoverState();
+            if (recovery.RestoredAnything)
+            {
+                QueueStartupBalloon(
+                    "Monitor Wellness",
+                    "Monitor Wellness didn't close cleanly last time, so it has put your display back to normal before starting.",
+                    ToolTipIcon.Info);
+            }
+            if (recovery.BrightnessStillPending > 0)
+            {
+                QueueStartupBalloon(
+                    "Monitor Wellness",
+                    "A monitor's own brightness may still be lower than before and couldn't be restored automatically. If it looks dim, raise it from the monitor's own menu.",
+                    ToolTipIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Recovery is best-effort and must never be the reason the app fails to start.
+            DebugLog.Write($"DisplayStateRecovery failed at startup: {ex}");
+        }
 
         _gammaManager = new GammaControllerManager();
-        _overlay = new OverlayController();
+        _overlay = new OverlayController { ExcludeFromCapture = _settings.ExcludeOverlayFromCapture };
         _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, () => ComputeScheduleTarget(), FullscreenDetector.IsForegroundWindowLikelyFullscreen);
         _migraine.StateChanged += OnMigraineStateChanged;
         _migraine.PossibleFullscreenConflict += () => _trayIcon?.ShowBalloonTip(
@@ -159,6 +202,11 @@ public partial class App : Application
             "Migraine relief turned on, but a full-screen app may be hiding it. Try switching to windowed mode to see the full effect.",
             ToolTipIcon.Warning);
         _migraine.RatingRequested += ShowMigraineRatingPrompt;
+        _displayApplier = new DisplayApplier(_settings, _gammaManager, _overlay, _hardwareBrightness);
+        _breakReminder = new BreakReminderService(
+            _settings,
+            () => _migraine?.IsActive == true,
+            (milliseconds, message, icon) => _trayIcon?.ShowBalloonTip(milliseconds, "Monitor Wellness", message, icon));
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
@@ -221,103 +269,7 @@ public partial class App : Application
             }
         };
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("&Toggle Migraine Mode", null, (_, _) => _migraine.Toggle());
-        menu.Items.Add("Emergency &Restore Screen (Ctrl+Alt+Shift+R)", null, (_, _) => EmergencyRestoreDisplay());
-        menu.Items.Add("Activate Migraine Mode (&Full)", null, (_, _) => _migraine.Activate(mild: false));
-        menu.Items.Add("Activate Migraine Mode (Mi&ld)", null, (_, _) => _migraine.Activate(mild: true));
-        menu.Items.Add("&Deactivate Migraine Mode", null, (_, _) => _migraine.Deactivate());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("&Identify Monitors", null, (_, _) =>
-        {
-            DebugLog.Write("Tray menu: Identify Monitors clicked");
-            try
-            {
-                _overlay?.IdentifyMonitors(IdentifyDuration);
-            }
-            catch (Exception ex)
-            {
-                DebugLog.Write($"Tray menu click EXCEPTION: {ex}");
-            }
-        });
-        menu.Items.Add(new ToolStripSeparator());
-        var pauseMenu = new ToolStripMenuItem("&Pause Schedule");
-        pauseMenu.DropDownItems.Add("30 minutes", null, (_, _) => PauseScheduleFor(TimeSpan.FromMinutes(30)));
-        pauseMenu.DropDownItems.Add("1 hour", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(1)));
-        pauseMenu.DropDownItems.Add("2 hours", null, (_, _) => PauseScheduleFor(TimeSpan.FromHours(2)));
-        pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
-            PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
-        menu.Items.Add(pauseMenu);
-        menu.Items.Add("Start a &20-second focus break", null, (_, _) => ShowBreakFocusWindow());
-        menu.Items.Add(BuildBreakReminderSnoozeMenu());
-        _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
-        menu.Items.Add(_resumeScheduleMenuItem);
-        menu.Items.Add(BuildQuickComfortPlansMenu());
-        menu.Items.Add(new ToolStripSeparator());
-        bool autoStartCurrentlyRegistered = AutoStartManager.IsRegistered();
-        if (_settings.AutoStartEnabled && !autoStartCurrentlyRegistered)
-        {
-            // The user turned this on at some point and it's since disappeared — e.g. a
-            // Windows update or IT policy silently removed the Task Scheduler entry. Worth
-            // saying so explicitly rather than letting auto-start just quietly stop working.
-            DebugLog.Write("Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is missing");
-            QueueStartupBalloon(
-                "Monitor Wellness",
-                "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
-                ToolTipIcon.Warning);
-        }
-
-        var autoStartItem = new ToolStripMenuItem("Start with &Windows") { Checked = autoStartCurrentlyRegistered };
-        autoStartItem.Click += (_, _) =>
-        {
-            bool wasOn = autoStartItem.Checked;
-            bool success = wasOn ? AutoStartManager.Unregister() : AutoStartManager.Register();
-            if (success)
-            {
-                autoStartItem.Checked = !wasOn;
-                _settings.AutoStartEnabled = !wasOn;
-                try
-                {
-                    SettingsStore.Save(_settings);
-                }
-                catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-                {
-                    DebugLog.Write($"Couldn't persist AutoStartEnabled after toggling: {ex.Message}");
-                }
-            }
-            else if (_trayIcon is not null)
-            {
-                _trayIcon.ShowBalloonTip(
-                    10_000,
-                    "Monitor Wellness",
-                    wasOn
-                        ? "Couldn't remove the auto-start entry — the UAC prompt may have been cancelled."
-                        : "Couldn't set up auto-start — this needs administrator approval (UAC prompt), which may have been cancelled or blocked by IT policy.",
-                    ToolTipIcon.Warning);
-            }
-        };
-        menu.Items.Add(autoStartItem);
-        // Diagnostic-only items nested under one submenu, rather than sitting at the same menu
-        // level as everyday actions (Settings, Migraine Mode) — shortens the list a first-time
-        // user has to scan. See MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P2).
-        var diagnosticsMenu = new ToolStripMenuItem("&Diagnostics");
-        diagnosticsMenu.DropDownItems.Add("Display Capability Passport...", null, (_, _) => ShowDisplayCapabilityWindow());
-        diagnosticsMenu.DropDownItems.Add("Auto-start Diagnostics...", null, (_, _) => ShowAutoStartDiagnostics());
-        diagnosticsMenu.DropDownItems.Add("Export Diagnostic Bundle...", null, (_, _) => ExportDiagnosticBundle());
-        diagnosticsMenu.DropDownItems.Add("Open Logs Folder", null, (_, _) => OpenLogsFolder());
-        menu.Items.Add(diagnosticsMenu);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("&Settings...", null, (_, _) => OpenSettingsWindow());
-        menu.Items.Add("Add &Foreground App Rule...", null, (_, _) => CaptureForegroundApplicationRule());
-        // Split out of the old single "Help / About..." item, which previously just reopened
-        // the first-run onboarding wizard (the wrong voice for someone looking something up
-        // later, rather than seeing it for the first time). See
-        // MonitorWellness_UX_Accessibility_Audit.html §2.1/§2.6/§3.5/§6 (P1).
-        menu.Items.Add("&About Monitor Wellness...", null, (_, _) => ShowAboutWindow());
-        menu.Items.Add("&Troubleshooting...", null, (_, _) => ShowTroubleshootingWindow());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("E&xit", null, (_, _) => Shutdown());
-        _trayIcon.ContextMenuStrip = menu;
+        _trayIcon.ContextMenuStrip = BuildTrayMenu();
 
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
         _timer.Tick += (_, _) => RunScheduleTick();
@@ -326,7 +278,25 @@ public partial class App : Application
         StartApplicationRuleMonitoring();
 
         RunScheduleTick();
-        RebuildBreakReminderTimer();
+        _breakReminder.Rebuild();
+
+        // One reminder, later than the first run (onboarding already asks), for anyone who skipped
+        // setting a location. The status line, tray tooltip and Settings banner keep saying it.
+        if (_settings.HasCompletedOnboarding
+            && !_settings.LocationReminderShown
+            && LocationStatus.IsUsingUnconfirmedDefault(_settings))
+        {
+            QueueStartupBalloon("Monitor Wellness", LocationStatus.ReminderBalloon, ToolTipIcon.Info);
+            _settings.LocationReminderShown = true;
+            try
+            {
+                SettingsStore.Save(_settings);
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                DebugLog.Write($"Couldn't persist LocationReminderShown: {ex.Message}");
+            }
+        }
 
         // On a first run, let onboarding take the screen by itself before any detection
         // balloons start appearing — see the queue/drain pair below.
@@ -336,6 +306,47 @@ public partial class App : Application
             StartDrainingStartupBalloons();
 
         _ = CheckForUpdatesIfDueAsync();
+
+        // A tray app can run for weeks. The check itself still runs at most once a day
+        // (LastUpdateCheckUtc); this just gives a long-running session the chance to do it.
+        _updateCheckTimer = new DispatcherTimer { Interval = UpdateCheckPollInterval };
+        _updateCheckTimer.Tick += (_, _) => _ = CheckForUpdatesIfDueAsync();
+        _updateCheckTimer.Start();
+    }
+
+    private const string RestoreSwitch = "--restore";
+
+    /// <summary>
+    /// <c>MonitorWellness.exe --restore</c>: a standalone recovery path that does not start the
+    /// tray app. Puts every display's colour ramp and any hardware brightness this app changed
+    /// back to normal, tells the person what happened, and exits. Usable when the tray icon is
+    /// gone (for example after the app was killed while the screen was dimmed).
+    /// </summary>
+    private static void RunRestoreOnly()
+    {
+        DebugLog.Write("--restore: restoring display state, then exiting");
+        string message;
+        MessageBoxImage icon = MessageBoxImage.Information;
+        try
+        {
+            DisplayRecoveryResult result = DisplayStateRecovery.RestoreForUser();
+            message = $"Your display has been put back to normal ({result.GammaRestored} display(s) reset"
+                + (result.BrightnessRestored > 0 ? $", {result.BrightnessRestored} monitor brightness setting(s) restored" : "")
+                + ").";
+            if (result.BrightnessStillPending > 0)
+            {
+                message += "\n\nA monitor's own brightness couldn't be restored automatically. If it still looks dim, raise it from the monitor's own menu.";
+                icon = MessageBoxImage.Warning;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"--restore failed: {ex}");
+            message = "Couldn't restore the display automatically. Restart Windows, or use the monitor's own menu to reset brightness and colour.";
+            icon = MessageBoxImage.Warning;
+        }
+
+        System.Windows.MessageBox.Show(message, "Monitor Wellness — Restore display", MessageBoxButton.OK, icon);
     }
 
     /// <summary>
@@ -370,6 +381,11 @@ public partial class App : Application
 
         if (update is null || _trayIcon is null)
             return;
+
+        // One balloon per release per session; the daily re-check would otherwise repeat it.
+        if (string.Equals(_lastNotifiedUpdateTag, update.TagName, StringComparison.Ordinal))
+            return;
+        _lastNotifiedUpdateTag = update.TagName;
 
         DebugLog.Write($"UpdateChecker: newer version available ({update.TagName})");
         _pendingBalloonClickUrl = update.ReleaseUrl.ToString();
@@ -546,112 +562,14 @@ public partial class App : Application
     private void OnSettingsSaved()
     {
         DebugLog.Write("Settings saved from settings window — rebuilding hotkey");
+        if (_overlay is not null)
+            _overlay.ExcludeFromCapture = _settings.ExcludeOverlayFromCapture;
         RebuildHotkey();
-        RebuildBreakReminderTimer();
+        _breakReminder?.Rebuild();
         // Deliberately not calling RunScheduleTick() here: the settings window's own preview
         // already has the correct saved values on screen right now (that's the whole point
         // of previewing before Save), and the window is about to close anyway, which reapplies
         // the schedule fresh from the just-saved settings.
-    }
-
-    /// <summary>
-    /// Opt-in 20-20-20 reminder (AppSettings.BreakReminderEnabled) — the one eye-strain
-    /// intervention this app's own EVALUATION.md notes actually has ergonomics backing
-    /// (unlike blue-light filtering itself, per the AAO position cited there), previously
-    /// entirely absent from the app. Called at startup and again after Settings saves, since
-    /// the interval or on/off state may have just changed.
-    /// </summary>
-    private void RebuildBreakReminderTimer()
-    {
-        _breakReminderTimer?.Stop();
-        _breakReminderTimer = null;
-
-        if (!_settings.BreakReminderEnabled)
-        {
-            _breakReminder.Reset();
-            DebugLog.Write("BreakReminder: disabled, timer not (re)started");
-            return;
-        }
-
-        var interval = TimeSpan.FromMinutes(Math.Max(1, _settings.BreakReminderIntervalMinutes));
-        DebugLog.Write($"BreakReminder: timer (re)started, interval={interval.TotalMinutes} min");
-        _breakReminderTimer = new DispatcherTimer { Interval = interval };
-        _breakReminderTimer.Tick += (_, _) =>
-        {
-            // Skip while migraine mode is active, a fullscreen app likely owns the screen, or
-            // Windows says the person has stepped away. The timer continues on its regular
-            // cadence so returning from a real break never triggers an immediate catch-up prompt.
-            TimeSpan idleDuration = TimeSpan.Zero;
-            BreakReminderTick tick = _breakReminder.Tick(DateTime.UtcNow, () =>
-            {
-                bool migraineActive = _migraine?.IsActive == true;
-                bool likelyFullscreen = !migraineActive && FullscreenDetector.IsForegroundWindowLikelyFullscreen();
-                idleDuration = migraineActive || likelyFullscreen ? TimeSpan.Zero : UserIdleDetector.GetIdleDuration();
-                return new BreakReminderSignals(migraineActive, likelyFullscreen, idleDuration);
-            });
-
-            if (tick.Outcome == BreakReminderTickOutcome.SkippedSnoozed)
-            {
-                DebugLog.Write($"BreakReminder: tick skipped (snoozed until {tick.SnoozedUntilUtc:yyyy-MM-dd HH:mm} UTC)");
-                return;
-            }
-            if (tick.SnoozeExpired)
-                DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
-
-            if (tick.Outcome == BreakReminderTickOutcome.Show)
-            {
-                DebugLog.Write("BreakReminder: tick fired, showing balloon");
-                _trayIcon?.ShowBalloonTip(
-                    8_000,
-                    "Monitor Wellness",
-                    "Time for a break — look at something about 20 feet away for 20 seconds. Use the tray menu if you'd like a quiet timer.",
-                    ToolTipIcon.Info);
-            }
-            else
-            {
-                DebugLog.Write($"BreakReminder: tick fired but skipped ({tick.Decision}, idle={idleDuration.TotalSeconds:F0}s)");
-            }
-        };
-        _breakReminderTimer.Start();
-    }
-
-    private ToolStripMenuItem BuildBreakReminderSnoozeMenu()
-    {
-        var menu = new ToolStripMenuItem("Snooze &Break Reminders");
-        menu.DropDownItems.Add("30 minutes", null, (_, _) => SnoozeBreakReminders(TimeSpan.FromMinutes(30)));
-        menu.DropDownItems.Add("1 hour", null, (_, _) => SnoozeBreakReminders(TimeSpan.FromHours(1)));
-        menu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
-            SnoozeBreakReminders(DateTime.Today.AddDays(1).ToUniversalTime() - DateTime.UtcNow));
-        menu.DropDownItems.Add(new ToolStripSeparator());
-        menu.DropDownItems.Add("Resume break reminders", null, (_, _) => ResumeBreakReminders());
-        menu.DropDownOpening += (_, _) =>
-        {
-            bool enabled = _settings.BreakReminderEnabled;
-            menu.Text = !enabled
-                ? "Snooze &Break Reminders (off)"
-                : _breakReminder.IsSnoozed(DateTime.UtcNow)
-                    ? $"Snooze &Break Reminders (until {_breakReminder.SnoozedUntilUtc!.Value.ToLocalTime():HH:mm})"
-                    : "Snooze &Break Reminders";
-        };
-        return menu;
-    }
-
-    private void SnoozeBreakReminders(TimeSpan duration)
-    {
-        if (!_breakReminder.TrySnooze(_settings.BreakReminderEnabled, DateTime.UtcNow, duration))
-            return;
-
-        DateTime until = _breakReminder.SnoozedUntilUtc!.Value;
-        DebugLog.Write($"BreakReminder: snoozed until {until:yyyy-MM-dd HH:mm} UTC.");
-        _trayIcon?.ShowBalloonTip(4_000, "Monitor Wellness", $"Break reminders snoozed until {until.ToLocalTime():HH:mm}.", ToolTipIcon.Info);
-    }
-
-    private void ResumeBreakReminders()
-    {
-        if (!_breakReminder.Resume())
-            return;
-
-        DebugLog.Write("BreakReminder: snooze cleared; reminders resumed.");
     }
 
     private void ShowBreakFocusWindow()
@@ -785,9 +703,7 @@ public partial class App : Application
             _manualComfortPlanName = null;
         }
         _migraine?.RestoreImmediately();
-        _hardwareBrightness.RestoreAll();
-        _overlay?.Clear();
-        _gammaManager?.ResetAllToIdentity();
+        _displayApplier?.RestoreNative();
         PauseScheduleFor(EmergencyRestorePauseDuration);
         _trayIcon?.ShowBalloonTip(
             10_000,
@@ -807,6 +723,8 @@ public partial class App : Application
         var diagnostics = AutoStartManager.GetDiagnostics();
         string message = !diagnostics.IsRegistered
             ? "Auto-start is not currently registered. Turn on \"Start with Windows\" from this menu first."
+            : diagnostics.Method != AutoStartManager.TaskSchedulerMethod
+            ? "Auto-start is registered as a standard sign-in entry for your account. It starts Monitor Wellness each time you sign in to Windows; Windows keeps no last-run history for this kind of entry."
             : $"Status: {diagnostics.Status ?? "unknown"}\n" +
               $"Last Run Time: {diagnostics.LastRunTime ?? "unknown"}\n" +
               $"Last Result: {diagnostics.LastResult ?? "unknown"} (0 = last run succeeded)\n" +
@@ -864,9 +782,14 @@ public partial class App : Application
 
         DebugLog.Write("System resumed from sleep — reapplying current state");
         _gammaManager?.ReapplyAfterWake();
+        _hardwareBrightness.RefreshAfterWake();
+
+        // Deadlines are enforced by the clock: timers set for hours don't reliably count time
+        // spent asleep, so an auto-revert or pause that ended during sleep is applied now.
+        _migraine?.CheckAutoRevertDue(DateTime.UtcNow);
 
         if (_migraine?.IsActive == true)
-            _migraine.Activate(); // idempotent — reapplies in case gamma ramp state was reset
+            _migraine.Reapply(); // keeps Mild/Full, the auto-revert deadline and history as they were
         else
             RunScheduleTick();
     }
@@ -940,7 +863,8 @@ public partial class App : Application
             : elevation <= ScheduleCurve.NightThresholdDeg ? "Night mode"
             : elevation >= ScheduleCurve.DayThresholdDeg ? "Day mode"
             : "transitioning between day and night";
-        return $"Currently: {phase}.";
+        string unconfirmedLocation = LocationStatus.IsUsingUnconfirmedDefault(_settings) ? LocationStatus.StatusSuffix : "";
+        return $"Currently: {phase}.{unconfirmedLocation}";
     }
 
     /// <summary>
@@ -1106,17 +1030,45 @@ public partial class App : Application
         RunScheduleTick();
     }
 
+    /// <summary>
+    /// Ends the schedule pause if its end time has passed according to the clock. The pause
+    /// timer alone is not enough: it may not account for time spent asleep. Returns true if the
+    /// pause was just ended (ResumeSchedule has already applied the schedule).
+    /// </summary>
+    private bool ExpirePauseIfDue()
+    {
+        if (!SchedulePause.IsExpired(_pauseUntilUtc, DateTime.UtcNow))
+            return false;
+
+        DebugLog.Write("Schedule pause ended (detected by clock check)");
+        ResumeSchedule();
+        return true;
+    }
+
     private void RunScheduleTick()
     {
-        if (_migraine?.SuspendsNormalSchedule == true || _settingsPreviewActive || _pauseUntilUtc.HasValue)
-            return; // migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now
+        _migraine?.CheckAutoRevertDue(DateTime.UtcNow);
+        if (ExpirePauseIfDue())
+            return;
 
-        ForegroundApplicationDetector.ForegroundApplicationInfo? foregroundApplication = ForegroundApplicationDetector.TryGetForegroundApplication();
-        ApplicationComfortRule? applicationRule = ApplicationComfortRules.FindForegroundRule(
-            _settings.ApplicationComfortRules,
-            foregroundApplication?.ProcessName,
-            foregroundApplication?.WindowTitle);
-        if (_settings.RestoreNativeDisplayInFullscreen && FullscreenDetector.IsForegroundWindowLikelyFullscreen())
+        ScheduleDecision decision = SchedulePolicy.Decide(new ScheduleDecisionInputs(
+            MigraineSuspendsSchedule: _migraine?.SuspendsNormalSchedule == true,
+            SettingsPreviewActive: _settingsPreviewActive,
+            Paused: _pauseUntilUtc.HasValue,
+            FullscreenGuardEnabled: _settings.RestoreNativeDisplayInFullscreen,
+            IsForegroundFullscreen: FullscreenDetector.IsForegroundWindowLikelyFullscreen,
+            FindForegroundRule: () =>
+            {
+                ForegroundApplicationDetector.ForegroundApplicationInfo? foreground = ForegroundApplicationDetector.TryGetForegroundApplication();
+                return ApplicationComfortRules.FindForegroundRule(_settings.ApplicationComfortRules, foreground?.ProcessName, foreground?.WindowTitle);
+            },
+            ManualComfortPlanName: _manualComfortPlanName));
+
+        // Migraine mode, a live settings preview, or an explicit pause owns the gamma ramp + overlay right now.
+        if (decision.Action == ScheduleActionKind.Skip)
+            return;
+
+        if (decision.Action == ScheduleActionKind.FullscreenGuard)
         {
             _activeComfortPlanRuleDescription = null;
             ActivateFullscreenPresentationGuard();
@@ -1127,10 +1079,10 @@ public partial class App : Application
             DebugLog.Write("Fullscreen presentation guard ended; resuming the selected schedule or application rule.");
             _fullscreenPresentationGuardActive = false;
         }
-        if (applicationRule?.Action == ApplicationComfortActions.RestoreNativeDisplay)
+        if (decision.Action == ScheduleActionKind.NativeDisplayRule)
         {
             _activeComfortPlanRuleDescription = null;
-            ActivateNativeDisplayApplicationRule(applicationRule);
+            ActivateNativeDisplayApplicationRule(decision.NativeDisplayRule!);
             return;
         }
 
@@ -1140,93 +1092,36 @@ public partial class App : Application
             _activeNativeDisplayRuleProcessName = null;
         }
 
-        SensoryComfortSchedule? scheduleOverride = null;
-        if (_manualComfortPlanName is not null
-            && SensoryComfortPlans.TryGetSchedule(_manualComfortPlanName, out SensoryComfortSchedule manualPlanSchedule))
+        SensoryComfortSchedule? scheduleOverride = decision.Override;
+        switch (decision.OverrideSource)
         {
-            scheduleOverride = manualPlanSchedule;
-            _activeComfortPlanRuleDescription = null;
-        }
-        else if (applicationRule?.Action == ApplicationComfortActions.ApplySensoryComfortPlan
-            && SensoryComfortPlans.TryGetSchedule(applicationRule.ComfortPlanName, out SensoryComfortSchedule planSchedule))
-        {
-            scheduleOverride = planSchedule;
-            string description = $"{applicationRule.ComfortPlanName} comfort plan for {applicationRule.ProcessName}";
-            if (!string.Equals(_activeComfortPlanRuleDescription, description, StringComparison.Ordinal))
-                DebugLog.Write($"Application comfort rule active: {description}.");
-            _activeComfortPlanRuleDescription = description;
-        }
-        else if (_activeComfortPlanRuleDescription is not null)
-        {
-            DebugLog.Write($"Application comfort rule ended for {_activeComfortPlanRuleDescription}; resuming the saved schedule.");
-            _activeComfortPlanRuleDescription = null;
+            case ScheduleOverrideSource.ManualPlan:
+                _activeComfortPlanRuleDescription = null;
+                break;
+            case ScheduleOverrideSource.ApplicationRule:
+                if (!string.Equals(_activeComfortPlanRuleDescription, decision.RuleDescription, StringComparison.Ordinal))
+                    DebugLog.Write($"Application comfort rule active: {decision.RuleDescription}.");
+                _activeComfortPlanRuleDescription = decision.RuleDescription;
+                break;
+            default:
+                if (_activeComfortPlanRuleDescription is not null)
+                {
+                    DebugLog.Write($"Application comfort rule ended for {_activeComfortPlanRuleDescription}; resuming the saved schedule.");
+                    _activeComfortPlanRuleDescription = null;
+                }
+                break;
         }
 
         var (kelvin, brightnessByDevice, dimColor) = ComputeScheduleTarget(scheduleOverride);
 
-        IReadOnlyList<MonitorInfo> activeMonitors = MonitorEnumerator.GetActiveMonitors();
-        var activeMonitorsByDeviceName = activeMonitors.ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
-        foreach (var controller in _gammaManager?.Controllers ?? Array.Empty<GammaRampController>())
-        {
-            if (_settings.ExcludedMonitors.Contains(controller.DeviceName))
-                continue;
-
-            if (_settings.PreferOverlayOnlyOnCompatibilityDisplays
-                && activeMonitorsByDeviceName.TryGetValue(controller.DeviceName, out MonitorInfo? monitor)
-                && DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out string compatibilityReason))
-            {
-                // A remote/virtual/indirect surface can be backed by a transport or driver
-                // which handles gamma state unpredictably. Reset a previously applied ramp,
-                // then leave the normal per-monitor overlay in charge of dimming.
-                if (_compatibilityFallbackDevices.Add(controller.DeviceName))
-                {
-                    controller.ResetToIdentity();
-                    DebugLog.Write($"Compatibility fallback active for {controller.DeviceName}: {compatibilityReason}");
-                }
-                continue;
-            }
-
-            _compatibilityFallbackDevices.Remove(controller.DeviceName);
-
-            if (_settings.ColorExcludedMonitors.Contains(controller.DeviceName))
-            {
-                // Color-accurate reference monitor: stays at native color, but still
-                // participates in the brightness schedule below.
-                controller.ResetToIdentity();
-                continue;
-            }
-
-            int offset = _settings.MonitorKelvinOffset.TryGetValue(controller.DeviceName, out var off) ? off : 0;
-            int targetKelvin = kelvin + offset;
-            if (!controller.ApplyColorTemperature(targetKelvin))
-            {
-                // Confirmed this actually happens in practice: a user-entered Kelvin value
-                // below this hardware's safe gamma ramp floor (~3300K, see the Week 1
-                // finding) gets silently rejected by the driver, leaving the display stuck
-                // at whatever color it last reached rather than transitioning. Previously
-                // unlogged here — RunScheduleTick just ignored the return value.
-                DebugLog.Write($"ApplyColorTemperature({targetKelvin}) REJECTED by driver for {controller.DeviceName} — likely below this hardware's safe floor.");
-            }
-        }
-
-        var approvedHardwareDevices = activeMonitors
-            .Where(monitor => !_settings.ExcludedMonitors.Contains(monitor.DeviceName)
-                && (!_settings.PreferOverlayOnlyOnCompatibilityDisplays
-                    || !DisplayCompatibilityAdvisor.TryGetOverlayOnlyReason(monitor, out _))
-                && HardwareBrightnessSafety.IsApproved(_settings, monitor))
-            .Select(monitor => monitor.DeviceName)
-            .ToList();
-        HardwareBrightnessApplicationResult hardwareResult = _hardwareBrightness.ApplyApprovedBrightness(approvedHardwareDevices, brightnessByDevice);
-        PersistHardwareBrightnessQuarantines(activeMonitors, hardwareResult.FailuresByDeviceName);
-        var overlayBrightnessByDevice = brightnessByDevice.ToDictionary(
-            entry => entry.Key,
-            entry => hardwareResult.AppliedDeviceNames.Contains(entry.Key) ? 1.0 : entry.Value);
-        _overlay?.ApplyDim(overlayBrightnessByDevice, dimColor);
+        _displayApplier?.Apply(kelvin, brightnessByDevice, dimColor);
 
         if (_trayIcon is not null && _migraine?.IsActive != true)
         {
             double elevation = SolarCalculator.GetSolarElevationDegrees(DateTime.UtcNow, _settings.Latitude, _settings.Longitude);
-            _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°";
+            // NotifyIcon.Text is limited to 63 characters; this stays well under it.
+            string locationHint = LocationStatus.IsUsingUnconfirmedDefault(_settings) ? " · set location" : "";
+            _trayIcon.Text = $"Monitor Wellness — {kelvin}K, sun {elevation:F1}°{locationHint}";
         }
     }
 
@@ -1274,9 +1169,7 @@ public partial class App : Application
 
         _fullscreenPresentationGuardActive = true;
         DebugLog.Write("Fullscreen presentation guard active: restoring native display state.");
-        _hardwareBrightness.RestoreAll();
-        _overlay?.Clear();
-        _gammaManager?.ResetAllToIdentity();
+        _displayApplier?.RestoreNative();
         if (_trayIcon is not null)
             _trayIcon.Text = "Monitor Wellness — native display for fullscreen app";
     }
@@ -1288,43 +1181,9 @@ public partial class App : Application
 
         _activeNativeDisplayRuleProcessName = rule.ProcessName;
         DebugLog.Write($"Application comfort rule active for {rule.ProcessName}: restoring native display state.");
-        _hardwareBrightness.RestoreAll();
-        _overlay?.Clear();
-        _gammaManager?.ResetAllToIdentity();
+        _displayApplier?.RestoreNative();
         if (_trayIcon is not null)
             _trayIcon.Text = $"Monitor Wellness — native display for {rule.ProcessName}";
-    }
-
-    private void PersistHardwareBrightnessQuarantines(
-        IReadOnlyCollection<MonitorInfo> activeMonitors,
-        IReadOnlyDictionary<string, string> failuresByDeviceName)
-    {
-        bool changed = false;
-        foreach (var (deviceName, reason) in failuresByDeviceName)
-        {
-            MonitorInfo? monitor = activeMonitors.FirstOrDefault(candidate =>
-                string.Equals(candidate.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
-            if (monitor is not null)
-            {
-                changed |= HardwareBrightnessSafety.Quarantine(
-                    _settings,
-                    monitor,
-                    $"Hardware brightness was disabled after a failed command: {reason}");
-            }
-        }
-
-        if (!changed)
-            return;
-
-        try
-        {
-            SettingsStore.Save(_settings);
-            DebugLog.Write("Hardware brightness safety quarantine persisted; overlay fallback remains active.");
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-        {
-            DebugLog.Write($"Couldn't persist hardware brightness safety quarantine: {ex}");
-        }
     }
 
     private static System.Drawing.Icon LoadEmbeddedIcon(string resourceName)
@@ -1339,10 +1198,11 @@ public partial class App : Application
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _timer?.Stop();
         _applicationRuleTimer?.Stop();
-        _breakReminderTimer?.Stop();
+        _breakReminder?.Dispose();
         _breakFocusWindow?.Close();
         _pauseTimer?.Stop();
         _startupBalloonTimer?.Stop();
+        _updateCheckTimer?.Stop();
         _hotkey?.Dispose();
         _emergencyRestoreHotkey?.Dispose();
         _hardwareBrightness.Dispose();

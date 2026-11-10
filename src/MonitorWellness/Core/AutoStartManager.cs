@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.IO;
+using System.Security;
+using Microsoft.Win32;
 
 namespace MonitorWellness.Core;
 
@@ -20,6 +23,39 @@ public static class AutoStartManager
 {
     public const string TaskName = "MonitorWellness";
 
+    /// <summary>Per-user fallback used when Task Scheduler registration isn't possible (see <see cref="Register"/>). Needs no elevation.</summary>
+    public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    public const string RunValueName = "MonitorWellness";
+    public const string TaskSchedulerMethod = "Task Scheduler";
+    public const string RunKeyMethod = "Windows sign-in (Run key)";
+
+    /// <summary>
+    /// Set by <see cref="Register"/> when it succeeded in a way the person should hear about
+    /// (it had to use the no-admin fallback). Null when it did exactly what was asked.
+    /// </summary>
+    public static string? LastRegistrationNote { get; private set; }
+
+    /// <summary>The registry value for the Run-key fallback. Pure and testable.</summary>
+    public static string BuildRunValue(string exePath) => $"\"{exePath}\"";
+
+    /// <summary>
+    /// True when a task's "Run As User" is this user, or is unknown. Unknown (a localized
+    /// schtasks label, or a field that wasn't parsed) is treated as fine so the check can only
+    /// ever catch a positively identified different account. Compares the name after any
+    /// DOMAIN\ prefix, ignoring case. Pure and testable.
+    /// </summary>
+    public static bool RunsAsUser(string? runAsUser, string currentUserName)
+    {
+        if (string.IsNullOrWhiteSpace(runAsUser) || string.IsNullOrWhiteSpace(currentUserName))
+            return true;
+
+        string name = runAsUser.Trim();
+        int slash = name.LastIndexOf('\\');
+        if (slash >= 0)
+            name = name[(slash + 1)..];
+        return string.Equals(name, currentUserName.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Builds the schtasks argument string for registering the auto-start task. Pure and testable — no process is started here.</summary>
     public static string BuildCreateArguments(string exePath)
         => $"/create /tn \"{TaskName}\" /tr \"\\\"{exePath}\\\"\" /sc onlogon /rl limited";
@@ -36,8 +72,55 @@ public static class AutoStartManager
     public static string BuildQueryVerboseArguments()
         => $"/query /tn \"{TaskName}\" /v /fo LIST";
 
-    /// <summary>True if the auto-start task is currently registered. Does not require elevation.</summary>
-    public static bool IsRegistered()
+    /// <summary>True if auto-start is registered by either method (Task Scheduler, or the per-user Run key fallback). Does not require elevation.</summary>
+    public static bool IsRegistered() => IsTaskRegistered() || IsRunKeyRegistered();
+
+    public static bool IsRunKeyRegistered()
+    {
+        try
+        {
+            using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
+            return key?.GetValue(RunValueName) is string;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            DebugLog.Write($"AutoStartManager.IsRunKeyRegistered check failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool TryRegisterRunKey(string exePath)
+    {
+        try
+        {
+            using RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
+            key.SetValue(RunValueName, BuildRunValue(exePath), RegistryValueKind.String);
+            return true;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            DebugLog.Write($"AutoStartManager: couldn't write the Run key: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool TryUnregisterRunKey()
+    {
+        try
+        {
+            using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+            key?.DeleteValue(RunValueName, throwOnMissingValue: false);
+            return true;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            DebugLog.Write($"AutoStartManager: couldn't remove the Run key value: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>True if the Task Scheduler auto-start task is currently registered. Does not require elevation.</summary>
+    public static bool IsTaskRegistered()
     {
         try
         {
@@ -59,18 +142,55 @@ public static class AutoStartManager
     }
 
     /// <summary>
-    /// Registers auto-start for the current running exe. Triggers a UAC prompt. Returns
-    /// false if the user cancels the prompt or the call otherwise fails — callers should
-    /// treat that as "didn't happen," not a crash.
+    /// Registers auto-start for the current running exe. Task Scheduler stays the primary
+    /// method (it needs a UAC prompt; see IMPLEMENTATION.md). Two cases used to end badly and
+    /// now fall back to a per-user Run-key entry, which needs no elevation:
+    ///  - the prompt is cancelled or blocked by policy (previously: no auto-start at all);
+    ///  - a standard user approves with a *different* administrator's credentials, which
+    ///    registers the task for that administrator's account, so it never starts for the
+    ///    person who asked. That registration is detected afterwards, removed, and replaced.
+    /// <see cref="LastRegistrationNote"/> says when the fallback was used. Returns false only
+    /// if neither method worked — callers should treat that as "didn't happen," not a crash.
     /// </summary>
     public static bool Register()
     {
+        LastRegistrationNote = null;
         string exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName
             ?? throw new InvalidOperationException("Could not determine the running executable's path.");
-        return RunElevated(BuildCreateArguments(exePath));
+
+        if (RunElevated(BuildCreateArguments(exePath)))
+        {
+            AutoStartDiagnostics task = GetTaskDiagnostics();
+            if (RunsAsUser(task.RunAsUser, Environment.UserName))
+            {
+                TryUnregisterRunKey(); // the task is the single source of truth; avoid a second launch entry
+                return true;
+            }
+
+            DebugLog.Write($"AutoStartManager: the task was registered for '{task.RunAsUser}', not '{Environment.UserName}'; removing it and using the per-user entry.");
+            RunElevated(BuildDeleteArguments());
+            if (!TryRegisterRunKey(exePath))
+                return false;
+            LastRegistrationNote = "Windows approved this with a different administrator's account, which would not start Monitor Wellness for you. It has been set up for your own account instead.";
+            return true;
+        }
+
+        if (TryRegisterRunKey(exePath))
+        {
+            LastRegistrationNote = "Administrator approval wasn't given, so Monitor Wellness was set to start with Windows using a standard entry for your account instead.";
+            return true;
+        }
+        return false;
     }
 
-    public static bool Unregister() => RunElevated(BuildDeleteArguments());
+    /// <summary>Removes auto-start by every method. A UAC prompt appears only if the Task Scheduler entry exists.</summary>
+    public static bool Unregister()
+    {
+        bool runKeyGone = TryUnregisterRunKey();
+        if (!IsTaskRegistered())
+            return runKeyGone;
+        return RunElevated(BuildDeleteArguments()) && runKeyGone;
+    }
 
     /// <summary>
     /// Task Scheduler's own record of whether this task has actually fired -- specifically
@@ -79,9 +199,25 @@ public static class AutoStartManager
     /// *definition* still exists; it says nothing about whether it has ever successfully run.
     /// Does not require elevation.
     /// </summary>
-    public sealed record AutoStartDiagnostics(bool IsRegistered, string? Status, string? LastRunTime, string? LastResult, string? NextRunTime);
+    public sealed record AutoStartDiagnostics(
+        bool IsRegistered,
+        string? Status,
+        string? LastRunTime,
+        string? LastResult,
+        string? NextRunTime,
+        string? RunAsUser = null,
+        string Method = TaskSchedulerMethod);
 
     public static AutoStartDiagnostics GetDiagnostics()
+    {
+        AutoStartDiagnostics task = GetTaskDiagnostics();
+        if (task.IsRegistered || !IsRunKeyRegistered())
+            return task;
+
+        return new AutoStartDiagnostics(true, "Registered", null, null, null, Method: RunKeyMethod);
+    }
+
+    private static AutoStartDiagnostics GetTaskDiagnostics()
     {
         try
         {
@@ -104,7 +240,8 @@ public static class AutoStartManager
                 Status: fields.GetValueOrDefault("Status"),
                 LastRunTime: fields.GetValueOrDefault("Last Run Time"),
                 LastResult: fields.GetValueOrDefault("Last Result"),
-                NextRunTime: fields.GetValueOrDefault("Next Run Time"));
+                NextRunTime: fields.GetValueOrDefault("Next Run Time"),
+                RunAsUser: fields.GetValueOrDefault("Run As User"));
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

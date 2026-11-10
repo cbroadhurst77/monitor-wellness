@@ -118,14 +118,7 @@ public sealed class MigraineModeController
         if (_settings.HistoryTrackingEnabled)
             HistoryStore.Append(new HistoryEvent(_activatedAtUtc.Value, "MigraineActivated", mild, null));
 
-        double intensity = mild ? MildIntensityMultiplier : 1.0;
-
-        _colorTemperatureTarget.ApplyToAll(_settings.NightKelvin, _settings.MigraineContrastReduction * intensity);
-
-        Color color = ParseColor(_settings.MigraineOverlayColorHex);
-        double opacity = _settings.MigraineOverlayOpacity * intensity;
-        var byDevice = _overlayTarget.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
-        _overlayTarget.Apply(byDevice);
+        PushActiveAppearance();
 
         _autoRevertTimer?.Stop();
         if (_settings.MigraineAutoRevertMinutes > 0)
@@ -154,6 +147,49 @@ public sealed class MigraineModeController
             DebugLog.Write("MigraineMode: activated while the foreground window looks fullscreen — overlay may not be visible over it");
             PossibleFullscreenConflict?.Invoke();
         }
+    }
+
+    /// <summary>Pushes the configured migraine tint/contrast for the current intensity to every display.</summary>
+    private void PushActiveAppearance()
+    {
+        double intensity = _activeIsMild ? MildIntensityMultiplier : 1.0;
+
+        _colorTemperatureTarget.ApplyToAll(_settings.NightKelvin, _settings.MigraineContrastReduction * intensity);
+
+        Color color = ParseColor(_settings.MigraineOverlayColorHex);
+        double opacity = _settings.MigraineOverlayOpacity * intensity;
+        var byDevice = _overlayTarget.DeviceNames.ToDictionary(d => d, _ => (color, opacity));
+        _overlayTarget.Apply(byDevice);
+    }
+
+    /// <summary>
+    /// Re-applies the current migraine appearance (after resume from sleep, or recovery from an
+    /// unhandled exception) without starting a new activation: unlike Activate(), it keeps the
+    /// current Mild/Full intensity, leaves the auto-revert deadline alone, and does not write a
+    /// second "activated" history event. Does nothing if migraine mode isn't active.
+    /// </summary>
+    public void Reapply()
+    {
+        if (!IsActive)
+            return;
+
+        DebugLog.Write("MigraineMode: reapplying current appearance");
+        PushActiveAppearance();
+    }
+
+    /// <summary>
+    /// Deactivates if the auto-revert deadline has passed. Called from the regular schedule tick
+    /// and after resume, so the deadline is enforced by the clock and not only by a timer that
+    /// may not have counted time spent asleep. Returns true if it deactivated.
+    /// </summary>
+    public bool CheckAutoRevertDue(DateTime nowUtc)
+    {
+        if (!IsActive || AutoRevertAtUtc is not DateTime deadline || nowUtc < deadline)
+            return false;
+
+        DebugLog.Write("MigraineMode: auto-revert deadline passed (detected by clock check)");
+        Deactivate();
+        return true;
     }
 
     public void Deactivate()

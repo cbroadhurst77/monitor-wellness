@@ -17,8 +17,18 @@ public static class SettingsStore
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    private const int MaximumKeptUnreadableCopies = 3;
+
+    /// <summary>
+    /// Set when Load() had to fall back to defaults because settings.json was unreadable or
+    /// invalid: says what happened and where the original was kept, for the app to tell the
+    /// person. Null after a normal load.
+    /// </summary>
+    public static string? LastLoadProblem { get; private set; }
+
     public static AppSettings Load()
     {
+        LastLoadProblem = null;
         try
         {
             if (File.Exists(SettingsPath))
@@ -28,6 +38,13 @@ public static class SettingsStore
                 if (loaded is not null && AppSettingsValidator.TryValidate(loaded, out _))
                 {
                     DebugLog.Write($"SettingsStore: loaded settings from {SettingsPath}");
+                    if (loaded.SchemaVersion > AppSettings.CurrentSchemaVersion)
+                    {
+                        // Written by a newer build. This build will drop what it doesn't know
+                        // on the next save, so keep the original once, untouched.
+                        string? kept = PreserveCopy(SettingsPath, "from-newer-version", pruneOldCopies: false);
+                        DebugLog.Write($"SettingsStore: settings.json is schema v{loaded.SchemaVersion}, newer than this build (v{AppSettings.CurrentSchemaVersion}); original kept as {kept ?? "(copy failed)"}.");
+                    }
                     return loaded;
                 }
 
@@ -35,6 +52,7 @@ public static class SettingsStore
                     ? "The file was empty or did not contain a settings object."
                     : GetValidationError(loaded);
                 DebugLog.Write($"SettingsStore: settings file failed validation, falling back to defaults: {validationError}");
+                RecordUnreadableSettings(validationError);
             }
             else
             {
@@ -49,9 +67,51 @@ public static class SettingsStore
             // visibility — exactly what happened to the Asus monitor's dim multiplier during
             // Week 4 testing. The file gets overwritten (with valid JSON) on the next Save().
             DebugLog.Write($"SettingsStore: FAILED to load settings, falling back to defaults: {ex}");
+            RecordUnreadableSettings(ex.Message);
         }
 
         return new AppSettings();
+    }
+
+    /// <summary>
+    /// Falling back to defaults is right, but the next Save() overwrites settings.json, which
+    /// would destroy a file that is probably only slightly wrong (one hand-edited value out of
+    /// range loses every other setting). Keeps a dated copy first and remembers a message.
+    /// </summary>
+    private static void RecordUnreadableSettings(string reason)
+    {
+        string? kept = PreserveCopy(SettingsPath, "invalid-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture), pruneOldCopies: true);
+        LastLoadProblem = kept is null
+            ? "Your settings file couldn't be read, so the defaults are in use."
+            : $"Your settings file couldn't be read ({reason.TrimEnd('.')}), so the defaults are in use. The original was kept as {Path.GetFileName(kept)} in the Monitor Wellness folder (Diagnostics > Open Logs Folder).";
+    }
+
+    /// <summary>Copies <paramref name="sourcePath"/> to a sibling named settings.&lt;label&gt;.json. Returns the new path, or null if the copy failed. Never throws.</summary>
+    internal static string? PreserveCopy(string sourcePath, string label, bool pruneOldCopies)
+    {
+        try
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(sourcePath)) ?? "";
+            string stem = Path.GetFileNameWithoutExtension(sourcePath);
+            string target = Path.Combine(directory, $"{stem}.{label}.json");
+            File.Copy(sourcePath, target, overwrite: true);
+
+            if (pruneOldCopies)
+            {
+                foreach (string old in Directory.GetFiles(directory, $"{stem}.invalid-*.json")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .Skip(MaximumKeptUnreadableCopies))
+                {
+                    File.Delete(old);
+                }
+            }
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"SettingsStore: couldn't keep a copy of {Path.GetFileName(sourcePath)}: {ex.Message}");
+            return null;
+        }
     }
 
     public static void Save(AppSettings settings)
@@ -63,6 +123,7 @@ public static class SettingsStore
         if (directory is not null)
             Directory.CreateDirectory(directory);
 
+        settings.SchemaVersion = AppSettings.CurrentSchemaVersion;
         string json = JsonSerializer.Serialize(settings, JsonOptions);
         WriteAtomically(SettingsPath, json);
     }

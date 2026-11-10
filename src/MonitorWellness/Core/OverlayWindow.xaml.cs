@@ -27,6 +27,13 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+    private const uint WDA_NONE = 0x00000000;
+    private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011; // Windows 10 version 2004 and later
+    private bool _loggedCaptureExclusionFailure;
+
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_LAYERED = 0x00080000;
@@ -54,6 +61,26 @@ public partial class OverlayWindow : Window
         int previousStyle = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
         if (previousStyle == 0 && Marshal.GetLastWin32Error() != 0)
             DebugLog.Write($"OverlayWindow: couldn't enable click-through style (Win32Error={Marshal.GetLastWin32Error()})");
+    }
+
+    /// <summary>
+    /// Hides (or shows again) this overlay in screenshots, recordings and screen sharing, so
+    /// what others see is the real, un-dimmed screen. Returns false where Windows doesn't
+    /// support it (before Windows 10 2004) or the window has no handle yet.
+    /// </summary>
+    public bool SetCaptureExclusion(bool exclude)
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        bool applied = SetWindowDisplayAffinity(hwnd, exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+        if (!applied && exclude && !_loggedCaptureExclusionFailure)
+        {
+            _loggedCaptureExclusionFailure = true;
+            DebugLog.Write($"OverlayWindow: couldn't exclude the overlay from screen capture (Win32Error={Marshal.GetLastWin32Error()}); this needs Windows 10 version 2004 or later.");
+        }
+        return applied;
     }
 
     /// <summary>Positions and sizes this window to exactly cover the given physical-pixel bounds.</summary>

@@ -32,47 +32,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\MonitorWellness\Core\SolarCalculator.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ScheduleCurve.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ColorTemperature.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\GeocodingService.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\DebugLog.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\SchedulePause.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AutoStartManager.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\SingleInstanceGuard.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\NightLightDetector.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\CrashLoopDetector.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HdrDetector.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HistoryStore.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HistoryTrend.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\FullscreenHeuristic.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightAdapter.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSensor.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AppSettings.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AppSettingsValidator.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\BrightnessSafety.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ScheduleBrightnessTargets.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ScheduleTargetCalculator.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessMath.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\DdcCiBrightnessProbe.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\MonitorEnumerator.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HardwareBrightnessSafety.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ApplicationComfortRule.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ApplicationRuleRefreshPolicy.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\MigraineResponsePlans.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\SensoryComfortPlans.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\AmbientLightSmoother.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\DisplayCapabilityReport.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\DisplayCompatibilityAdvisor.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\VisualStabilityDiagnostics.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderPolicy.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\BreakReminderState.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\SettingsStore.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\ProfileStore.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\GlobalHotkey.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\HardwareTargets.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\MigraineModeController.cs" />
-    <Compile Include="..\..\src\MonitorWellness\Core\UpdateChecker.cs" />
+    <!-- Reference the app instead of linking ~45 source files one by one: a new Core file is
+         then tested automatically, and the tests exercise the real assembly. Internals are
+         visible via InternalsVisibleTo in the app project. -->
+    <ProjectReference Include="..\..\src\MonitorWellness\MonitorWellness.csproj" />
   </ItemGroup>
 
 </Project>

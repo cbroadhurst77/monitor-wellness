@@ -14,4 +14,13 @@ public static class SchedulePause
     /// </summary>
     public static DateTime ComputeUntilTomorrowLocal(DateTime nowLocal)
         => nowLocal.Date.AddDays(1).AddHours(8);
+
+    /// <summary>
+    /// True once the wall clock has reached the pause's end. The pause is judged by the clock,
+    /// not only by a timer: a DispatcherTimer set for hours does not reliably account for time
+    /// spent asleep or hibernating, so an overnight "until tomorrow" pause could otherwise
+    /// outlive its end.
+    /// </summary>
+    public static bool IsExpired(DateTime? pauseUntilUtc, DateTime nowUtc)
+        => pauseUntilUtc.HasValue && nowUtc >= pauseUntilUtc.Value;
 }

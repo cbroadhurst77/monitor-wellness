@@ -30,4 +30,18 @@ public class SchedulePauseTests
         var result = SchedulePause.ComputeUntilTomorrowLocal(now);
         Assert.Equal(new DateTime(2026, 8, 1, 8, 0, 0), result);
     }
+
+    [Fact]
+    public void IsExpired_IsFalseWhenNoPauseIsActive()
+        => Assert.False(SchedulePause.IsExpired(null, DateTime.UtcNow));
+
+    [Fact]
+    public void IsExpired_IsJudgedByTheClock_SoAPauseThatEndedDuringSleepIsDetected()
+    {
+        var until = new DateTime(2026, 11, 11, 8, 0, 0, DateTimeKind.Utc);
+
+        Assert.False(SchedulePause.IsExpired(until, until.AddSeconds(-1)));
+        Assert.True(SchedulePause.IsExpired(until, until));
+        Assert.True(SchedulePause.IsExpired(until, until.AddHours(9))); // laptop woke the next afternoon
+    }
 }
