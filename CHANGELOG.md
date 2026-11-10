@@ -6,23 +6,6 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
-
-### Added
-- Profiles & History now shows an optional weekly view of your own history (activations per
-  week, and average helpfulness once a week has at least 3 ratings), with the date range and
-  sample counts. Sparse data is shown as counts, not averages. It stays on your computer and is
-  a personal record, not medical insight.
-
-### Fixed
-- Scheduled dimming now reaches every active display that has a dim overlay, even when Windows
-  refuses a gamma-ramp device context for it. Colour temperature still applies only to
-  gamma-capable displays; exclusions and the primary-display brightness floor are unchanged.
-
-### Changed
-- Built and published on .NET 10 LTS (.NET 8 reached end of support on 10 November 2026). The
-  release stays self-contained: no separate .NET install is needed.
-
 ## 0.2.5 — Compatibility and reliability update
 
 ### Added
@@ -47,11 +30,24 @@ recent work.
   safely resumes afterward.
 - Display Capability Passport now refreshes, copies its local report to the clipboard, and
   exposes privacy-preserving Flicker Guard session counters.
+- Profiles & History now shows an optional weekly view of your own history (activations per
+  week, and average helpfulness once a week has at least 3 ratings), with the date range and
+  sample counts. Sparse data is shown as counts, not averages. It stays on your computer and is
+  a personal record, not medical insight.
 
 ### Improved
 - Switching between unrelated apps or windows no longer re-applies gamma and overlay state.
   This reduces unnecessary display churn while preserving immediate changes when an
   application-aware rule begins or ends.
+
+### Fixed
+- Scheduled dimming now reaches every active display that has a dim overlay, even when Windows
+  refuses a gamma-ramp device context for it. Colour temperature still applies only to
+  gamma-capable displays; exclusions and the primary-display brightness floor are unchanged.
+
+### Changed
+- Built and published on .NET 10 LTS (.NET 8 reached end of support on 10 November 2026). The
+  release stays self-contained: no separate .NET install is needed.
 
 ## 0.2.3 — Sensory safety and comfort update
 
