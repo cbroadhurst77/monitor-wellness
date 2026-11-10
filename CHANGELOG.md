@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.11 — Faster colour repair
 
 - **Fewer redundant colour writes.** The 30-second tick used to rewrite every display's colour ramp (about 10 ms of driver work per display, on the UI thread). A display is now written only when the requested colour changed or the display no longer holds what we last set (another program reset it), and at least every 10 minutes regardless. Display changes, resume and unlock still rebuild the controllers and write for real.
 - **Less disk work during display-change bursts.** The crash-recovery journal is rewritten only when a display is added or removed, not on every layout notification (they arrived every ~6 seconds for minutes in one log).
