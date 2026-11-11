@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.13 — Break reminders that fire when they should
 
 - **The break reminder no longer treats reading as a break.** Pauses in keyboard and mouse use of up to 5 minutes (reading, a video, a call) now count as time at the screen; only 5 minutes or more away restarts the count. A reminder that comes due while you have not touched the keyboard for 2 minutes is held until you are back, and dropped if you leave for good, so it no longer pops up on an empty screen.
 - **Clicking a notification can no longer do something an earlier notification offered.** Every notification now clears what the previous one would have done on click (before, only the update and break notifications did), so a later one could still open an old release page.
