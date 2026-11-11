@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.14 — Reminders that wait for your calls
 
 - **Break reminders can wait for your calls.** While a camera is in use, or a microphone is in use by a calling app (Teams, Zoom, Webex, Skype, Slack, Discord, WhatsApp, a browser and similar), a reminder that comes due waits and is shown when the call ends, or after 90 minutes at most. Recorders and other tools that keep the microphone open all day do not count. It uses Windows' own record of which apps use the microphone and camera; nothing is recorded or sent. Turn it off in Settings > Monitors & Breaks.
 - **Reminder hours.** "Only remind me between these times" (for example 08:00 to 18:00, or hours that run past midnight). Nothing is counted outside them, so the first reminder of the day is a full interval after they begin.
