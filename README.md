@@ -61,9 +61,14 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
 - Optional update check (Settings → Profiles & History → Updates, **off by default**) —
   once a day at most, checks for a newer release (pre-releases included unless you turn that
   off) and links to it; never downloads or installs anything automatically
-- Optional, idle-aware 20-20-20 break reminders that stay quiet during migraine mode,
-  full-screen work, or after you have stepped away; the tray menu can start a simple,
-  always-dismissible 20-second focus timer and snooze reminders for the current session
+- Optional **20-20-20 break reminders** that count the time you are actually at the computer
+  (not a fixed timer) and appear as a small window on the monitor you are using, with Start /
+  In 5 minutes / Skip (or as a quiet notification, with an optional sound). They wait while
+  Migraine Mode is on, during full-screen work, while you are on a call (a camera in use, or the
+  microphone in use by a calling app — read locally from Windows' own privacy records, nothing is
+  recorded or sent), and outside hours you choose; the break length is yours to set (10–120 seconds,
+  20 by default). The tray menu shows when the next break is due (or why it is waiting), can show
+  a test reminder, start a simple always-dismissible focus timer, and snooze for the session
 - **Display Capability Passport** in Diagnostics: a local, read-only explanation of each
   display's physical identity, DDC/CI eligibility, HDR state, and safest brightness backend;
   copy or refresh it for support, and view local Flicker Guard counters; it deliberately reports

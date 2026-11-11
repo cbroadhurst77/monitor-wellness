@@ -43,6 +43,38 @@ public static class AmbientLightSensor
     });
 
     private static bool _loggedFirstLuxRead;
+    private static int _warmUpStarted;
+    private static volatile bool _ready;
+
+    /// <summary>
+    /// Opens the sensor on a background thread. The first call into the sensor API can take many seconds
+    /// right after a boot (28 seconds on the UI thread once, with nothing in the log to say why), so it is
+    /// started early, off the UI thread, and <see cref="TryGetCurrentLux()"/> reports "no reading" instead
+    /// of waiting until it is ready.
+    /// </summary>
+    public static void WarmUp()
+    {
+        if (Interlocked.Exchange(ref _warmUpStarted, 1) != 0)
+            return;
+
+        _ = Task.Run(() =>
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                _ = Sensor.Value;
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"AmbientLightSensor: warm-up failed: {ex.Message}");
+            }
+            finally
+            {
+                _ready = true;
+                DebugLog.Write($"AmbientLightSensor: ready after {timer.ElapsedMilliseconds} ms.");
+            }
+        });
+    }
 
     // A sensor that starts failing used to be re-read and re-logged on every 30-second tick (and
     // 5 times a second while migraine mode faded out): 1,250 identical lines in one day, with no
@@ -57,6 +89,12 @@ public static class AmbientLightSensor
 
     internal static double? TryGetCurrentLux(DateTime nowUtc)
     {
+        if (!_ready)
+        {
+            WarmUp();
+            return null; // not open yet: no adjustment this time, and never a wait on the UI thread
+        }
+
         if (!Throttle.ShouldAttempt(nowUtc))
             return null;
 

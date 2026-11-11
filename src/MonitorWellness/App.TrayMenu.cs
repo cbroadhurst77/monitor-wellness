@@ -39,33 +39,20 @@ public partial class App
         pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
             PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
         menu.Items.Add(pauseMenu);
+        var breakStatusItem = new ToolStripMenuItem(breakReminder.DescribeStatus()) { Enabled = false };
+        menu.Items.Add(breakStatusItem);
+        menu.Opening += (_, _) => breakStatusItem.Text = breakReminder.DescribeStatus();
         _focusBreakMenuItem = new ToolStripMenuItem(FocusBreakMenuText(), null, (_, _) => ShowBreakFocusWindow());
         menu.Items.Add(_focusBreakMenuItem);
+        menu.Items.Add("Show a test reminder", null, (_, _) => breakReminder.ShowTestReminder());
         menu.Items.Add(breakReminder.BuildSnoozeMenu());
         _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
         menu.Items.Add(BuildQuickComfortPlansMenu());
         menu.Items.Add(new ToolStripSeparator());
-        AutoStartCheck autoStartCheck = AutoStartManager.CheckRegistration();
-        // "Unknown" (the check couldn't complete) must never be read as "no": keep the saved
-        // preference as the answer and say nothing, rather than raise a false alarm.
-        bool autoStartCurrentlyRegistered = autoStartCheck == AutoStartCheck.Registered
-            || (autoStartCheck == AutoStartCheck.Unknown && _settings.AutoStartEnabled);
-        if (autoStartCheck == AutoStartCheck.Unknown)
-            DebugLog.Write("Auto-start check could not be completed at startup; leaving the saved preference as it is.");
-        if (_settings.AutoStartEnabled && autoStartCheck is AutoStartCheck.NotRegistered or AutoStartCheck.Disabled)
-        {
-            // The user turned this on at some point and it's since disappeared or been disabled —
-            // e.g. a Windows update or IT policy silently removed the Task Scheduler entry. Worth
-            // saying so explicitly rather than letting auto-start just quietly stop working.
-            DebugLog.Write($"Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is {(autoStartCheck == AutoStartCheck.Disabled ? "disabled" : "missing")}");
-            QueueStartupBalloon(
-                "Monitor Wellness",
-                "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
-                ToolTipIcon.Warning);
-        }
-
-        var autoStartItem = new ToolStripMenuItem("Start with &Windows") { Checked = autoStartCurrentlyRegistered };
+        // Whether auto-start is registered needs a Task Scheduler query, which can take seconds right after a
+        // boot, so it is asked in the background (below); until the answer arrives the saved preference is shown.
+        var autoStartItem = new ToolStripMenuItem("Start with &Windows") { Checked = _settings.AutoStartEnabled };
         autoStartItem.Click += (_, _) =>
         {
             bool wasOn = autoStartItem.Checked;
@@ -97,6 +84,7 @@ public partial class App
             }
         };
         menu.Items.Add(autoStartItem);
+        _ = ResolveAutoStartStateAsync(autoStartItem);
         // Diagnostic-only items nested under one submenu, rather than sitting at the same menu
         // level as everyday actions (Settings, Migraine Mode) — shortens the list a first-time
         // user has to scan. See MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P2).
@@ -119,6 +107,39 @@ public partial class App
         menu.Items.Add("&Restart Monitor Wellness", null, (_, _) => RestartApplication());
         menu.Items.Add("E&xit", null, (_, _) => Shutdown());
         return menu;
+    }
+
+    /// <summary>
+    /// Finds out in the background whether auto-start is registered and updates the menu item (and, if
+    /// it was turned on but has gone missing, tells the person). "Unknown" is never read as "no".
+    /// </summary>
+    private async Task ResolveAutoStartStateAsync(ToolStripMenuItem item)
+    {
+        try
+        {
+            AutoStartCheck check = await Task.Run(AutoStartManager.CheckRegistration);
+            bool registered = check == AutoStartCheck.Registered
+                || (check == AutoStartCheck.Unknown && _settings.AutoStartEnabled);
+            if (check == AutoStartCheck.Unknown)
+                DebugLog.Write("Auto-start check could not be completed at startup; leaving the saved preference as it is.");
+
+            item.Checked = registered;
+            if (_settings.AutoStartEnabled && check is AutoStartCheck.NotRegistered or AutoStartCheck.Disabled)
+            {
+                // The user turned this on at some point and it's since disappeared or been disabled —
+                // e.g. a Windows update or IT policy silently removed the Task Scheduler entry. Worth
+                // saying so explicitly rather than letting auto-start just quietly stop working.
+                DebugLog.Write($"Auto-start drift detected: AppSettings.AutoStartEnabled is true but the Task Scheduler entry is {(check == AutoStartCheck.Disabled ? "disabled" : "missing")}");
+                QueueLateStartupBalloon(
+                    "Monitor Wellness",
+                    "Auto-start seems to have been turned off (possibly by a Windows update or IT policy) — re-enable it from this tray menu if you still want it.",
+                    ToolTipIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"Auto-start check failed: {ex.Message}");
+        }
     }
 
     private string FocusBreakMenuText() => $"Start a &{_settings.BreakFocusSeconds}-second focus break";

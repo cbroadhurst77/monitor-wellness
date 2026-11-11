@@ -41,6 +41,23 @@ variable. A managed configuration channel must have an organisation-owned trust 
 (for example an MDM-delivered, ACL-protected and signed policy) before it can override an
 individual’s comfort settings.
 
+## Break reminders, call awareness and command-line switches
+
+- Break reminders are off by default and entirely local; no network access is involved. With
+  them on, and "Wait while my microphone or camera is in use" ticked (the default), the app
+  reads, read-only, the Windows privacy records under
+  `HKCU\Software\Microsoft\Windows\CapabilityAccessManager\ConsentStore\microphone` and
+  `...\webcam` (which apps are using those devices) so a reminder waits until a call ends. It never
+  opens the devices and does not store or log the app names. The option is
+  `BreakReminderHoldDuringCalls` in settings.json.
+- `MonitorWellness.exe --restore` puts the display back to normal and exits (it refuses while
+  another instance is running). `--restart-wait <pid>` is used by the tray "Restart" item: the new
+  process waits up to 20 seconds for the old one to exit before taking over; it is not meant to be
+  run by hand.
+- On sign-out or shutdown the app hands the displays back immediately and writes
+  "Windows is ending the session" and "App exit complete" to `debug.log`, which helps when
+  investigating an unclean shutdown.
+
 ## Privacy and support
 
 - Diagnostic bundles are manually exported and exclude settings, location, history, and

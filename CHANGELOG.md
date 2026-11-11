@@ -6,6 +6,12 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **The tray menu says when your next break is due, and why one is waiting.** A line such as "Next break in about 12 min", "A break is due — waiting for your call to end", "Break reminders snoozed until 14:00" or "Outside your reminder hours (back at 08:00)". A new **Show a test reminder** item shows the reminder exactly as a real one would arrive (window or notification, with the sound if on), so you can check where it appears and how it looks.
+- **Start-up is timed, and two slow steps no longer hold up the tray icon.** Every start now logs how long each step took (and flags any over a second), so a slow start says where the time went. The ambient-light sensor, which once stalled the app for 28 seconds right after a boot, is now opened in the background, and the check of whether "Start with Windows" is registered no longer runs before the tray menu appears (the menu first shows your saved choice, then corrects itself).
+- Documentation updated for call awareness, reminder hours, the prompt window and the tray Restart: the README, PRIVACY.md (what is read and what is not) and ENTERPRISE_DEPLOYMENT.md (registry keys read, command-line switches).
+
 ## 0.2.14 — Reminders that wait for your calls
 
 - **Break reminders can wait for your calls.** While a camera is in use, or a microphone is in use by a calling app (Teams, Zoom, Webex, Skype, Slack, Discord, WhatsApp, a browser and similar), a reminder that comes due waits and is shown when the call ends, or after 90 minutes at most. Recorders and other tools that keep the microphone open all day do not count. It uses Windows' own record of which apps use the microphone and camera; nothing is recorded or sent. Turn it off in Settings > Monitors & Breaks.

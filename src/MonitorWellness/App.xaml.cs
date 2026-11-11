@@ -86,6 +86,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         DebugLog.Write("App starting up");
+        var startup = new StartupTimeline();
 
         // Checked first, before anything else touches the gamma ramp/overlay/hotkey/tray icon:
         // a second instance racing the first would otherwise register a competing schedule
@@ -177,6 +178,9 @@ public partial class App : Application
         if (SettingsStore.LastLoadProblem is string settingsProblem)
             QueueStartupBalloon("Monitor Wellness", settingsProblem, ToolTipIcon.Warning);
         MigrateMonitorSettings();
+        if (_settings.MatchAmbientLight)
+            AmbientLightSensor.WarmUp(); // slow right after a boot, so start it now, off the UI thread
+        startup.Mark("settings");
 
         // A previous run that was killed, crashed hard, or lost power leaves its gamma ramp and
         // any DDC/CI hardware dimming in place. Put those back first, before anything below
@@ -205,6 +209,7 @@ public partial class App : Application
             DebugLog.Write($"DisplayStateRecovery failed at startup: {ex}");
         }
 
+        startup.Mark("display recovery");
         _gammaManager = new GammaControllerManager();
         _overlay = new OverlayController { ExcludeFromCapture = _settings.ExcludeOverlayFromCapture };
         _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, () => ComputeScheduleTarget(), FullscreenDetector.IsForegroundWindowLikelyFullscreen);
@@ -230,6 +235,7 @@ public partial class App : Application
             startBreak: ShowBreakFocusWindow,
             showPrompt: ShowBreakPrompt);
 
+        startup.Mark("display controllers and services");
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
 
@@ -262,6 +268,7 @@ public partial class App : Application
             _pendingBalloonClickAction = null;
         };
 
+        startup.Mark("tray icon");
         if (HdrDetector.IsAnyDisplayHdrEnabled())
         {
             // This app's gamma-ramp approach is documented to interact unpredictably with
@@ -275,6 +282,7 @@ public partial class App : Application
                 ToolTipIcon.Warning);
         }
 
+        startup.Mark("HDR check");
         if (NightLightDetector.IsFluxRunning())
         {
             // f.lux is this app's own predecessor and writes to the exact same last-write-wins
@@ -287,6 +295,7 @@ public partial class App : Application
                 ToolTipIcon.Warning);
         }
 
+        startup.Mark("f.lux check");
         RegisterEmergencyRestoreHotkey();
         RebuildHotkey(isStartup: true);
 
@@ -305,15 +314,19 @@ public partial class App : Application
             }
         };
 
+        startup.Mark("hotkeys");
         _trayIcon.ContextMenuStrip = BuildTrayMenu();
+        startup.Mark("tray menu");
 
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
         _timer.Tick += (_, _) => RunScheduleTick();
         _timer.Start();
 
         StartApplicationRuleMonitoring();
+        startup.Mark("timers and rules");
 
         RunScheduleTick();
+        startup.Mark("first schedule tick");
         _breakReminder.Rebuild();
 
         // One reminder, later than the first run (onboarding already asks), for anyone who skipped
@@ -341,6 +354,7 @@ public partial class App : Application
         else
             StartDrainingStartupBalloons();
 
+        startup.Mark("onboarding and balloons");
         _startupFinished = true;
         _overlay.PrewarmWhenIdle(); // build the hidden overlay windows in idle time, so showing one later is instant
         StartMemoryTrimming();
@@ -352,6 +366,11 @@ public partial class App : Application
         _updateCheckTimer = new DispatcherTimer { Interval = UpdateCheckPollInterval };
         _updateCheckTimer.Tick += (_, _) => _ = CheckForUpdatesIfDueAsync();
         _updateCheckTimer.Start();
+
+        startup.Mark("remaining startup");
+        DebugLog.Write(startup.Summary());
+        foreach (var (step, duration) in startup.SlowSteps(TimeSpan.FromSeconds(1)))
+            DebugLog.Write($"Startup was slow at \"{step}\": {duration.TotalSeconds:0.0} s.");
     }
 
     /// <summary>
@@ -597,7 +616,25 @@ public partial class App : Application
     /// <summary>Queues a startup-detection balloon instead of showing it immediately — see the field doc comment on _pendingStartupBalloons for why.</summary>
     private void QueueStartupBalloon(string title, string message, ToolTipIcon icon) => _pendingStartupBalloons.Enqueue((title, message, icon));
 
-    private void StartDrainingStartupBalloons() => ShowNextStartupBalloon();
+    private bool _startupBalloonsReleased;
+
+    private void StartDrainingStartupBalloons()
+    {
+        _startupBalloonsReleased = true;
+        ShowNextStartupBalloon();
+    }
+
+    /// <summary>
+    /// For a notice whose answer arrives after start-up (the auto-start check now runs in the background):
+    /// queued like the others, and shown straight away if the queue has already been let go (not while the
+    /// first-run onboarding still has the screen).
+    /// </summary>
+    private void QueueLateStartupBalloon(string title, string message, ToolTipIcon icon)
+    {
+        QueueStartupBalloon(title, message, icon);
+        if (_startupBalloonsReleased && _startupBalloonTimer?.IsEnabled != true)
+            ShowNextStartupBalloon();
+    }
 
     private void ShowNextStartupBalloon()
     {

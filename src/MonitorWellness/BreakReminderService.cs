@@ -31,6 +31,7 @@ public sealed class BreakReminderService : IDisposable
     private DispatcherTimer? _timer;
     private ToolStripMenuItem[] _snoozeItems = Array.Empty<ToolStripMenuItem>();
     private DateTime? _callHeldSinceUtc;
+    private BreakReminderDecision? _heldFor;
     private readonly LogOnChange _tickLog = new(TimeSpan.FromHours(6));
 
     /// <param name="showBalloon">Shows a tray balloon: (milliseconds, message, icon, action to run if the balloon is clicked).</param>
@@ -82,6 +83,7 @@ public sealed class BreakReminderService : IDisposable
             _state.Reset();
             _activeTime.Reset();
             _callHeldSinceUtc = null;
+            _heldFor = null;
             return;
         }
 
@@ -93,6 +95,43 @@ public sealed class BreakReminderService : IDisposable
         _timer = new DispatcherTimer { Interval = BreakReminderPolicy.SampleInterval };
         _timer.Tick += (_, _) => SampleOnce();
         _timer.Start();
+    }
+
+    /// <summary>
+    /// One line saying when the next break is due, or why a due one has not appeared (snoozed, outside
+    /// the chosen hours, a call, a full-screen app, migraine mode, away from the keyboard). For the tray menu.
+    /// </summary>
+    public string DescribeStatus()
+    {
+        try
+        {
+            DateTime nowUtc = _clock.GetUtcNow().UtcDateTime;
+            DateTime nowLocal = _clock.GetLocalNow().DateTime;
+            DateTime? snoozedUntilLocal = _state.IsSnoozed(nowUtc) ? _state.SnoozedUntilUtc!.Value.ToLocalTime() : null;
+            bool withinHours = BreakReminderPolicy.IsWithinActiveHours(
+                nowLocal, _settings.BreakReminderLimitToHours, _settings.BreakReminderFromLocal, _settings.BreakReminderToLocal);
+            return BreakReminderStatusText.Describe(
+                _settings.BreakReminderEnabled, snoozedUntilLocal, withinHours, _settings.BreakReminderFromLocal,
+                _activeTime.Accumulated, Interval, _heldFor);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: couldn't describe the status: {ex.Message}");
+            return "Break reminders";
+        }
+    }
+
+    /// <summary>Shows the reminder now, the way a real one would arrive (prompt or notification, with the sound if on), without touching the count. To preview the settings.</summary>
+    public void ShowTestReminder()
+    {
+        try
+        {
+            Deliver();
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: the test reminder failed: {ex.Message}");
+        }
     }
 
     /// <summary>The person took a break (the focus timer ran, or they chose to): start counting again.</summary>
@@ -121,13 +160,17 @@ public sealed class BreakReminderService : IDisposable
                 // full interval after the hours begin, not one the moment they do.
                 _activeTime.Reset();
                 _callHeldSinceUtc = null;
+                _heldFor = null;
                 return;
             }
 
             TimeSpan idle = _readIdle();
             _activeTime.Sample(nowUtc, idle, BreakReminderPolicy.SampleInterval, BreakReminderPolicy.AwayThreshold);
             if (!_activeTime.IsDue(Interval))
+            {
+                _heldFor = null;
                 return;
+            }
 
             BreakReminderTick tick = _state.Tick(nowUtc, () =>
             {
@@ -141,6 +184,7 @@ public sealed class BreakReminderService : IDisposable
                 return; // still due; shown once the snooze ends
             if (tick.SnoozeExpired)
                 DebugLog.Write("BreakReminder: snooze expired; reminders resumed.");
+            _heldFor = tick.Outcome == BreakReminderTickOutcome.Suppressed ? tick.Decision : null;
 
             if (tick.Outcome == BreakReminderTickOutcome.Show)
             {

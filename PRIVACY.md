@@ -6,6 +6,8 @@
 > on it for GDPR/UK-GDPR or similar compliance purposes. Replace `[placeholders]`.
 
 **Effective date:** 31 July 2026
+**Last updated:** 11 November 2026 — break reminder and call-awareness section added (nothing
+new is sent over the network)
 **Data controller:** Equinox Consulting Ltd, [registered address], [country]
 **Contact:** [insert contact email]
 
@@ -54,6 +56,27 @@ If you turn on "Nudge daytime brightness to match the room's actual light level"
 your device has one, the app reads a light-level (lux) value from your device's local
 sensor to adjust screen brightness. This reading is used immediately and locally — it is
 never stored or transmitted anywhere.
+
+## Break reminders and call awareness (optional)
+
+Break reminders are **off by default**. When you turn them on, the app does the following,
+entirely on your computer, and stores or transmits none of what it learns:
+
+- **Keyboard and mouse activity.** It asks Windows how long ago the last keyboard or mouse
+  input was, so it can tell whether you are at the computer. It learns only that elapsed
+  time — never which keys you pressed or what you clicked.
+- **Full-screen apps.** It checks whether the window in front covers a whole monitor, so
+  reminders wait during presentations, videos and games.
+- **Calls** (on once reminders are on; turn it off under Settings → Monitors & Breaks). To
+  hold a reminder until a call ends, it reads — read-only — the list Windows keeps of which
+  apps are currently using the microphone or camera (the data behind Windows' own "recently
+  used" privacy indicator, in your own user registry hive). It checks whether a camera is in
+  use, or whether the microphone is in use by an app on a built-in list of calling apps (for
+  example Teams, Zoom, Webex and web browsers). It **never opens the microphone or camera,
+  never listens to or records anything**, and the app names it sees are compared with that
+  list and then discarded — they are not logged, stored or sent anywhere.
+- **Your choices** (interval, hours, style, sound, break length) are saved in your settings
+  file like your other settings.
 
 ## Third-party services used
 
