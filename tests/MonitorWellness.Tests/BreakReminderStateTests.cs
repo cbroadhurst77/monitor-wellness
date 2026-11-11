@@ -48,7 +48,7 @@ public class BreakReminderStateTests
     [Theory]
     [InlineData(true, false, 0, BreakReminderDecision.SuppressedForMigraine)]
     [InlineData(false, true, 0, BreakReminderDecision.SuppressedForFullscreen)]
-    [InlineData(false, false, 180, BreakReminderDecision.SuppressedForIdle)]
+    [InlineData(false, false, 360, BreakReminderDecision.SuppressedForIdle)]
     public void Suppressing_signals_produce_a_suppressed_tick(bool migraine, bool fullscreen, int idleSeconds, BreakReminderDecision expected)
     {
         var state = new BreakReminderState();

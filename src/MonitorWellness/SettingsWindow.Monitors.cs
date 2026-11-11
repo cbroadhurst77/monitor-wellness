@@ -28,7 +28,12 @@ public partial class SettingsWindow
         _hardwareBrightnessBoxes.Clear();
         RefreshHardwareBrightnessReadiness();
 
-        var activeMonitorsByDeviceName = MonitorEnumerator.GetActiveMonitors(forceRefresh: true)
+        IReadOnlyList<MonitorInfo> activeMonitors = MonitorEnumerator.GetActiveMonitors(forceRefresh: true);
+        // The app converts old display-name entries when it starts and when displays change; do the
+        // same to this window's copy so the rows show (and saving keeps) the real values even if that
+        // has not happened to the app's own settings yet.
+        MonitorKeys.MigrateLegacyNames(_settings, activeMonitors);
+        var activeMonitorsByDeviceName = activeMonitors
             .ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         var rows = new List<UIElement>();
         foreach (var deviceName in _overlay.DeviceNames.OrderBy(d => d))

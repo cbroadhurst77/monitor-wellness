@@ -6,6 +6,14 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **The break reminder no longer treats reading as a break.** Pauses in keyboard and mouse use of up to 5 minutes (reading, a video, a call) now count as time at the screen; only 5 minutes or more away restarts the count. A reminder that comes due while you have not touched the keyboard for 2 minutes is held until you are back, and dropped if you leave for good, so it no longer pops up on an empty screen.
+- **Clicking a notification can no longer do something an earlier notification offered.** Every notification now clears what the previous one would have done on click (before, only the update and break notifications did), so a later one could still open an old release page.
+- **The break prompt is left out of screen sharing and recordings** (using the same "hide the dimming overlay from screen capture" setting), so colleagues on a call do not see it.
+- **A display that had its colour changed is handed back reliably.** Excluded, colour-accurate and HDR/remote displays are now returned to their native colour even after a display change or a failed colour write had cleared the app's record of changing them.
+- **Settings shows the right per-monitor values on first open after upgrading**, even before the app has converted old display-number entries.
+
 ## 0.2.12 — Break reminders you can act on, steadier monitor settings
 
 - **The break reminder now counts the time you are actually at the computer.** It used to fire on a fixed timer, so it could remind you a minute after you sat back down, or skip a whole cycle because you happened to be idle at that moment. Stepping away (2 minutes without keyboard or mouse), sleep, and taking a break all restart the count.

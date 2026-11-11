@@ -56,6 +56,11 @@ public sealed class GammaRampController : IDisposable
     // What the last real write asked for, what the display held right after it, and when. Lets a
     // repeat of the same request skip the (about 10 ms) driver write when nothing has changed.
     private GammaRamp? _lastRequested;
+
+    // True while the display holds a ramp we wrote that is not the baseline. Separate from
+    // _lastRequested, which is cleared by a context refresh or a failed write although the display
+    // still holds our colour, so it cannot say whether there is anything to undo.
+    private bool _rampModified;
     private GammaRamp? _lastReadBack;
     private long _lastWriteTicks;
 
@@ -175,7 +180,7 @@ public sealed class GammaRampController : IDisposable
     /// (migraine mode writes ramps too, outside the schedule). Safe to call every tick for
     /// displays that are meant to stay native: it costs nothing when there is nothing to undo.
     /// </summary>
-    public bool RestoreBaselineIfModified() => _lastRequested is null || RestoreBaseline();
+    public bool RestoreBaselineIfModified() => !_rampModified || RestoreBaseline();
 
     /// <summary>
     /// A cheap check (one ramp read, about 1.5 ms) for another program having reset this display's
@@ -231,6 +236,7 @@ public sealed class GammaRampController : IDisposable
         if (!WriteForReal(ramp))
             return false;
 
+        _rampModified = !ReferenceEquals(ramp, Baseline);
         _lastRequested = ramp;
         _lastReadBack = TryReadRamp(_hdc);   // null if unreadable: then nothing is ever skipped
         _lastWriteTicks = Stopwatch.GetTimestamp();

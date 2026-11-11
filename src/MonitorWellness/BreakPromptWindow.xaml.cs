@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using MonitorWellness.Core;
 
@@ -14,14 +16,29 @@ namespace MonitorWellness;
 public partial class BreakPromptWindow : Window
 {
     private static readonly TimeSpan AutoDismissAfter = TimeSpan.FromSeconds(60);
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+    private const uint WdaExcludeFromCapture = 0x00000011; // Windows 10 version 2004 and later
+
     private readonly Action<BreakPromptChoice> _onChoice;
     private readonly DispatcherTimer _autoDismiss;
     private bool _answered;
 
-    public BreakPromptWindow(Action<BreakPromptChoice> onChoice)
+    /// <param name="excludeFromCapture">Hide the prompt from screenshots, recordings and screen sharing (the person still sees it).</param>
+    public BreakPromptWindow(Action<BreakPromptChoice> onChoice, bool excludeFromCapture = true)
     {
         _onChoice = onChoice;
         InitializeComponent();
+        if (excludeFromCapture)
+        {
+            SourceInitialized += (_, _) =>
+            {
+                IntPtr handle = new WindowInteropHelper(this).Handle;
+                if (handle != IntPtr.Zero)
+                    SetWindowDisplayAffinity(handle, WdaExcludeFromCapture); // best effort: older Windows simply shows it
+            };
+        }
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         Icon = AppIconSource.Default;
 

@@ -150,7 +150,7 @@ public partial class App : Application
             {
                 if (_crashLoopDetector.RecordAndCheckIsLooping(DateTime.UtcNow))
                 {
-                    _trayIcon?.ShowBalloonTip(
+                    ShowTrayBalloon(
                         15_000,
                         "Monitor Wellness",
                         "Something's gone wrong repeatedly. Please restart Monitor Wellness — if it keeps happening, our log file can help us find out why.",
@@ -206,7 +206,7 @@ public partial class App : Application
         _overlay = new OverlayController { ExcludeFromCapture = _settings.ExcludeOverlayFromCapture };
         _migraine = new MigraineModeController(_gammaManager, _overlay, _settings, () => ComputeScheduleTarget(), FullscreenDetector.IsForegroundWindowLikelyFullscreen);
         _migraine.StateChanged += OnMigraineStateChanged;
-        _migraine.PossibleFullscreenConflict += () => _trayIcon?.ShowBalloonTip(
+        _migraine.PossibleFullscreenConflict += () => ShowTrayBalloon(
             10_000,
             "Monitor Wellness",
             "Migraine relief turned on, but a full-screen app may be hiding it. Try switching to windowed mode to see the full effect.",
@@ -223,7 +223,7 @@ public partial class App : Application
         _breakReminder = new BreakReminderService(
             _settings,
             () => _migraine?.IsActive == true,
-            (milliseconds, message, icon, onClick) => ShowTrayBalloon(milliseconds, message, icon, clickAction: onClick),
+            (milliseconds, message, icon, onClick) => ShowTrayBalloon(milliseconds, "Monitor Wellness", message, icon, clickAction: onClick),
             startBreak: ShowBreakFocusWindow,
             showPrompt: ShowBreakPrompt);
 
@@ -454,6 +454,7 @@ public partial class App : Application
         DebugLog.Write($"UpdateChecker: newer version available ({update.TagName})");
         ShowTrayBalloon(
             10_000,
+            "Monitor Wellness",
             $"Monitor Wellness {update.Version.ToString(3)}{(update.IsPreRelease ? " (pre-release)" : "")} is available (you have {typeof(App).Assembly.GetName().Version?.ToString(3)}). Click here to open the release page.",
             ToolTipIcon.Info,
             clickUrl: update.ReleaseUrl.ToString());
@@ -508,14 +509,14 @@ public partial class App : Application
     /// Shows a balloon and records what clicking it should do. Whatever an earlier balloon wanted
     /// is forgotten first, so clicking a later balloon can never open an earlier one's release page.
     /// </summary>
-    private void ShowTrayBalloon(int milliseconds, string message, ToolTipIcon icon, string? clickUrl = null, Action? clickAction = null)
+    private void ShowTrayBalloon(int milliseconds, string title, string message, ToolTipIcon icon, string? clickUrl = null, Action? clickAction = null)
     {
         if (_trayIcon is null)
             return;
 
         _pendingBalloonClickUrl = clickUrl;
         _pendingBalloonClickAction = clickAction;
-        _trayIcon.ShowBalloonTip(milliseconds, "Monitor Wellness", message, icon);
+        _trayIcon.ShowBalloonTip(milliseconds, title, message, icon);
     }
 
     /// <summary>Queues a startup-detection balloon instead of showing it immediately — see the field doc comment on _pendingStartupBalloons for why.</summary>
@@ -529,7 +530,7 @@ public partial class App : Application
             return;
 
         var (title, message, icon) = _pendingStartupBalloons.Dequeue();
-        _trayIcon?.ShowBalloonTip(10_000, title, message, icon);
+        ShowTrayBalloon(10_000, title, message, icon);
 
         if (_pendingStartupBalloons.Count == 0)
             return;
@@ -626,7 +627,7 @@ public partial class App : Application
         }
 
         OpenSettingsWindow(foregroundApplication.ProcessName);
-        _trayIcon?.ShowBalloonTip(
+        ShowTrayBalloon(
             4_000,
             "Monitor Wellness",
             $"Added {foregroundApplication.ProcessName}. Choose native display or a comfort plan, then Save.",
@@ -656,7 +657,7 @@ public partial class App : Application
 
         try
         {
-            var prompt = new BreakPromptWindow(onChoice);
+            var prompt = new BreakPromptWindow(onChoice, _settings.ExcludeOverlayFromCapture);
             prompt.Closed += (_, _) => _breakPrompt = null;
             _breakPrompt = prompt;
             prompt.Show();
@@ -703,7 +704,7 @@ public partial class App : Application
         _migraine?.Toggle();
 
         bool nowActive = !wasActive;
-        _trayIcon?.ShowBalloonTip(
+        ShowTrayBalloon(
             4_000,
             "Monitor Wellness",
             nowActive ? "Migraine relief is on." : "Migraine relief is easing off — back to normal in about 20 seconds.",
@@ -776,7 +777,7 @@ public partial class App : Application
         {
             candidate.Dispose();
             DebugLog.Write("Hotkey rebind refused: the new shortcut is already used by another app; keeping the previous one.");
-            _trayIcon?.ShowBalloonTip(
+            ShowTrayBalloon(
                 10_000,
                 "Monitor Wellness",
                 "That shortcut is already used by another app, so Monitor Wellness is keeping your previous migraine shortcut. Pick a different one in Settings.",
@@ -798,7 +799,7 @@ public partial class App : Application
             if (isStartup)
                 QueueStartupBalloon(title, message, ToolTipIcon.Warning);
             else
-                _trayIcon.ShowBalloonTip(10_000, title, message, ToolTipIcon.Warning);
+                ShowTrayBalloon(10_000, title, message, ToolTipIcon.Warning);
         }
     }
 
@@ -831,7 +832,7 @@ public partial class App : Application
         _migraine?.RestoreImmediately();
         _displayApplier?.RestoreNative();
         PauseScheduleFor(EmergencyRestorePauseDuration);
-        _trayIcon?.ShowBalloonTip(
+        ShowTrayBalloon(
             10_000,
             "Monitor Wellness",
             "Your screen has been restored. The normal schedule is paused for one hour.",
@@ -989,7 +990,7 @@ public partial class App : Application
             return;
 
         string shortName = deviceName[(deviceName.LastIndexOf('\\') + 1)..];
-        _trayIcon.ShowBalloonTip(
+        ShowTrayBalloon(
             10_000,
             "Monitor Wellness",
             $"Windows HDR is on for {shortName}, so Monitor Wellness is only dimming it and not changing its colour. Turn HDR off for that display to get colour warmth back.",
@@ -1062,7 +1063,7 @@ public partial class App : Application
         // transition, not on every StateChanged (which also fires on deactivate/fade-complete).
         if (_migraine.IsActive && !_migraineWasActive)
         {
-            _trayIcon.ShowBalloonTip(
+            ShowTrayBalloon(
                 6_000,
                 "Monitor Wellness",
                 _migraine.IsMild

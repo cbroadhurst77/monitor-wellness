@@ -46,4 +46,12 @@ public sealed class BreakReminderPolicyTests
 
         Assert.Equal(BreakReminderDecision.SuppressedForIdle, result);
     }
+
+    [Fact]
+    public void Decide_holds_a_reminder_while_the_last_input_is_older_than_the_show_limit_but_not_before()
+    {
+        Assert.Equal(BreakReminderDecision.Show, BreakReminderPolicy.Decide(false, false, BreakReminderPolicy.ShowIdleLimit - TimeSpan.FromSeconds(1)));
+        Assert.Equal(BreakReminderDecision.SuppressedForIdle, BreakReminderPolicy.Decide(false, false, BreakReminderPolicy.ShowIdleLimit));
+        Assert.True(BreakReminderPolicy.ShowIdleLimit < BreakReminderPolicy.AwayThreshold);
+    }
 }

@@ -74,7 +74,7 @@ public partial class App
                 autoStartItem.Checked = !wasOn;
                 _settings.AutoStartEnabled = !wasOn;
                 if (!wasOn && AutoStartManager.LastRegistrationNote is string registrationNote)
-                    _trayIcon?.ShowBalloonTip(10_000, "Monitor Wellness", registrationNote, ToolTipIcon.Info);
+                    ShowTrayBalloon(10_000, "Monitor Wellness", registrationNote, ToolTipIcon.Info);
                 try
                 {
                     SettingsStore.Save(_settings);
@@ -86,7 +86,7 @@ public partial class App
             }
             else if (_trayIcon is not null)
             {
-                _trayIcon.ShowBalloonTip(
+                ShowTrayBalloon(
                     10_000,
                     "Monitor Wellness",
                     wasOn
