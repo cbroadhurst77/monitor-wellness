@@ -6,6 +6,12 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **Importing a settings file no longer drops your application rules or the overlay-only compatibility preference.** Both were written by Export but silently ignored by Import (so a restored or moved configuration lost its per-app comfort rules and reset the compatibility option). A new test imports a file in which every setting has a non-default value and fails, naming the setting, if any of them does not arrive, so a future setting cannot be forgotten the same way. The settings an import deliberately leaves alone (first-run and one-time flags, the auto-start flag, the update-check time, and hardware-brightness approvals, which must never come from another PC's file) are listed with the reason.
+- **The README and the public landing page are up to date.** The landing page now describes break reminders, the stand-up reminder, the remembered comfort plan, the optional history and the theme option, and says what the reminders read (locally, never the microphone or camera themselves). The README no longer states a version number or a test count. Tests keep both from going stale again.
+- **Under the hood:** building the Settings window no longer probes your monitors' hardware-brightness support when tests build it (a slow real round trip, which made the test suite slow and intermittently unreliable), and the tests that read the shared data folder run one at a time.
+
 ## 0.2.16 — Your comfort plan is remembered, a Breaks tab
 
 - **The comfort plan you pick is remembered.** A plan chosen from the tray (or "Return to saved schedule", or Emergency Restore) now lasts until midnight and survives a restart, instead of resetting every time the app starts. A new **Start each day with a comfort plan** setting (Settings > Profiles & History) applies your usual plan each morning and whenever the app starts, and changing it takes effect at once if you have not chosen anything today. Your log showed the Reading plan being picked again on most days.

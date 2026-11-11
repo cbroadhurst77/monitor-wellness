@@ -112,10 +112,12 @@ utility and turn off all but one.
 
 ## Status
 
-v0.2.5. A full UX/accessibility audit pass has landed (see
+See [CHANGELOG.md](CHANGELOG.md) for the current version and what changed in each release. A
+full UX/accessibility audit pass has landed (see
 [UX_AUDIT_IMPLEMENTATION_TRACKER.md](UX_AUDIT_IMPLEMENTATION_TRACKER.md)) and the app has been
-built, tested (219 automated tests, all passing), and run for real on one Windows 11 3-monitor
-dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
+built, covered by an extensive automated test suite (including tests that open the real Settings
+window over fake displays, so the screens are never touched), and run for real on one Windows 11
+3-monitor dev machine. Not yet: code-signed, tested on other hardware (GPU vendors, HDR displays, a
 machine with a real ambient-light sensor — see [QA_CHECKLIST.md](QA_CHECKLIST.md) for exactly
 what's outstanding), or reviewed by a lawyer (the EULA/Privacy Policy below are DIY drafts, not
 legal advice). See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the full build log and
@@ -205,9 +207,9 @@ and SHA-256 hashes before publishing:
 ```powershell
 .\tools\Verify-Release.ps1 `
   -ApplicationPath .\publish\MonitorWellness.exe `
-  -InstallerPath .\dist\MonitorWellness-Setup-0.2.5.exe `
-  -ExpectedVersion 0.2.5 `
-  -ManifestPath .\dist\MonitorWellness-0.2.5-release-manifest.json
+  -InstallerPath .\dist\MonitorWellness-Setup-<version>.exe `
+  -ExpectedVersion <version> `
+  -ManifestPath .\dist\MonitorWellness-<version>-release-manifest.json
 ```
 
 The script intentionally fails for unsigned, invalidly signed, or version-mismatched artifacts.

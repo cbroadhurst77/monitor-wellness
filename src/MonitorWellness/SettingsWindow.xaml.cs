@@ -28,6 +28,7 @@ public partial class SettingsWindow : Window
     // field has passed validation and the user explicitly presses Save.
     private readonly AppSettings _settings;
     private readonly AppSettings _targetSettings;
+    private readonly Func<IReadOnlyList<DdcCiBrightnessCapability>> _probeCapabilities;
     private readonly IGammaSource _gammaManager;
     private readonly IPreviewOverlay _overlay;
     private readonly Action _onSaved;
@@ -80,8 +81,11 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>The same window over the small interfaces, so a test can open it with fakes and never touch the real screens.</summary>
-    internal SettingsWindow(AppSettings settings, IGammaSource gammaManager, IPreviewOverlay overlay, Action onSaved, Func<string> getStatusText)
+    /// <param name="probeCapabilities">Asks the monitors what hardware brightness they support (a slow, real round trip to each monitor); tests pass a fake so building the window stays fast and touches no hardware.</param>
+    internal SettingsWindow(AppSettings settings, IGammaSource gammaManager, IPreviewOverlay overlay, Action onSaved, Func<string> getStatusText,
+        Func<IReadOnlyList<DdcCiBrightnessCapability>>? probeCapabilities = null)
     {
+        _probeCapabilities = probeCapabilities ?? DdcCiBrightnessProbe.GetCapabilities;
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);

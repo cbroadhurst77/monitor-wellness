@@ -234,7 +234,11 @@ public sealed class AppDataStoreTests : IDisposable
     public void DiagnosticBundle_HasItsParts_AndRemovesTheAccountNameFromOldLogLines()
     {
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        File.WriteAllText(DebugLog.FilePath, $"2026-01-01 00:00:00.000 loaded settings from {profile}\\AppData\\Roaming\\MonitorWellness\\settings.json{Environment.NewLine}");
+        // Opened with the same sharing as DebugLog itself: any other test that logs at this moment holds the file
+        // open for writing, and File.WriteAllText (which refuses to share) would then fail at random.
+        using (var logStream = new FileStream(DebugLog.FilePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+        using (var logWriter = new StreamWriter(logStream))
+            logWriter.Write($"2026-01-01 00:00:00.000 loaded settings from {profile}\\AppData\\Roaming\\MonitorWellness\\settings.json{Environment.NewLine}");
         string zip = Path.Combine(Folder, "bundle.zip");
 
         DiagnosticBundleService.Create(zip);

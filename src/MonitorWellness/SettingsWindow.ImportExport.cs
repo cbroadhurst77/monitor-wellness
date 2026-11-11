@@ -106,6 +106,9 @@ public partial class SettingsWindow
         _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
         _settings.ExcludeOverlayFromCapture = imported.ExcludeOverlayFromCapture;
         _settings.UpdateNotifyPreReleases = imported.UpdateNotifyPreReleases;
+        // These two used to be silently dropped by an import although an export includes them.
+        _settings.PreferOverlayOnlyOnCompatibilityDisplays = imported.PreferOverlayOnlyOnCompatibilityDisplays;
+        _settings.ApplicationComfortRules = imported.ApplicationComfortRules.Select(rule => rule.Clone()).ToList();
 
         LatitudeBox.Text = _settings.Latitude.ToString(CultureInfo.InvariantCulture);
         LongitudeBox.Text = _settings.Longitude.ToString(CultureInfo.InvariantCulture);
@@ -127,6 +130,8 @@ public partial class SettingsWindow
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;
         CheckForPreReleasesCheckBox.IsChecked = _settings.UpdateNotifyPreReleases;
+        CompatibilityOverlayOnlyCheckBox.IsChecked = _settings.PreferOverlayOnlyOnCompatibilityDisplays;
+        BuildApplicationRuleRows();
 
         UpdateMapMarker();
         UpdateSunTimesDisplay();

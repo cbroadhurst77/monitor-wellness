@@ -15,6 +15,8 @@ namespace MonitorWellness.Tests;
 /// to it was verified by hand once and then not again. The window is constructed but never shown: its
 /// controls and its save validation can be read without that, and nothing appears on screen.
 /// </summary>
+// Builds the real Settings window, which reads the shared data folder (history, profiles); serialised with the store tests so the two cannot collide.
+[Collection("AppDataStores")]
 public class SettingsWindowFakeTests
 {
     private sealed class FakeGamma : IGammaController
@@ -56,7 +58,7 @@ public class SettingsWindowFakeTests
             {
                 var gamma = new FakeGammaSource();
                 var overlay = new FakeOverlay();
-                var window = new SettingsWindow(settings, gamma, overlay, () => { }, () => "test");
+                var window = new SettingsWindow(settings, gamma, overlay, () => { }, () => "test", probeCapabilities: () => Array.Empty<DdcCiBrightnessCapability>());
                 body(window, gamma, overlay);
             }
             catch (Exception ex) { failure = ex; }

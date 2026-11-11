@@ -157,7 +157,8 @@ public partial class SettingsWindow
     private void RefreshHardwareBrightnessReadiness()
     {
         HardwareBrightnessReadinessText.Text = "Checking whether your monitors support optional hardware brightness…";
-        _ = Task.Run(DdcCiBrightnessProbe.GetCapabilities).ContinueWith(task => Dispatcher.Invoke(() =>
+        // BeginInvoke, not Invoke: the answer is posted to the window rather than a pool thread waiting for it.
+        _ = Task.Run(_probeCapabilities).ContinueWith(task => Dispatcher.BeginInvoke(new Action(() =>
         {
             if (task.IsFaulted)
             {
@@ -171,7 +172,7 @@ public partial class SettingsWindow
             HardwareBrightnessReadinessText.Text = supported == 0
                 ? "Optional hardware brightness: no compatible DDC/CI monitor was detected. The flicker-free overlay remains in use."
                 : $"Optional hardware brightness: {supported} of {capabilities.Count} monitor(s) report DDC/CI support. Test a monitor first; after a successful test, tick HW and Save to opt in to scheduled physical brightness.";
-        }));
+        })));
     }
 
     private static string ShortDeviceName(string deviceName) => deviceName[(deviceName.LastIndexOf('\\') + 1)..];

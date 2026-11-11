@@ -155,6 +155,8 @@ public class OnboardingWindowTests
     }
 }
 
+// Builds the real Settings window, which reads the shared data folder (history, profiles); serialised with the store tests so the two cannot collide.
+[Collection("AppDataStores")]
 public class BreaksTabTests
 {
     private sealed class FakeGamma : IGammaController
@@ -187,7 +189,7 @@ public class BreaksTabTests
         Exception? failure = null;
         var thread = new Thread(() =>
         {
-            try { body(new SettingsWindow(new AppSettings(), new FakeGammaSource(), new FakeOverlay(), () => { }, () => "test")); }
+            try { body(new SettingsWindow(new AppSettings(), new FakeGammaSource(), new FakeOverlay(), () => { }, () => "test", probeCapabilities: () => Array.Empty<DdcCiBrightnessCapability>())); }
             catch (Exception ex) { failure = ex; }
         });
         thread.SetApartmentState(ApartmentState.STA);
