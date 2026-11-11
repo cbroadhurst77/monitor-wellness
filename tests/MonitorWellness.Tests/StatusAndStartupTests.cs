@@ -261,6 +261,26 @@ public class DocumentationMatchesBehaviourTests
     }
 
     [Fact]
+    public void The_documents_describe_the_history_and_theme_options_and_name_their_settings()
+    {
+        string privacy = RepoFile("PRIVACY.md");
+        string enterprise = RepoFile("ENTERPRISE_DEPLOYMENT.md");
+        string readme = RepoFile("README.md");
+
+        Assert.Contains("time at the computer", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("light/dark theme", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AppsUseLightTheme", enterprise);
+        Assert.Contains("FollowScheduleTheme", enterprise);
+        Assert.Contains("BreakHistoryEnabled", enterprise);
+        Assert.Contains("stand up", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("screen-time history", readme, StringComparison.OrdinalIgnoreCase);
+
+        var properties = typeof(AppSettings).GetProperties().Select(property => property.Name).ToHashSet();
+        Assert.Contains("FollowScheduleTheme", properties);
+        Assert.Contains("BreakHistoryEnabled", properties);
+    }
+
+    [Fact]
     public void Every_setting_the_documentation_names_exists()
     {
         var properties = typeof(AppSettings).GetProperties().Select(property => property.Name).ToHashSet();

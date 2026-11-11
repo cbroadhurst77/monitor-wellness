@@ -29,6 +29,16 @@ public static class BreakReminderPolicy
     /// </summary>
     public static readonly TimeSpan MaximumCallHold = TimeSpan.FromMinutes(90);
 
+    /// <summary>
+    /// For the stand-up reminder, being away this long counts as having stood up. Shorter than
+    /// <see cref="AwayThreshold"/> on purpose: a few minutes away from the desk is a movement break even
+    /// though the eyes were not necessarily resting (the eye reminder keeps the longer limit).
+    /// </summary>
+    public static readonly TimeSpan StandUpAwayThreshold = TimeSpan.FromMinutes(3);
+
+    public const int MinimumStandUpMinutes = 30;
+    public const int MaximumStandUpMinutes = 240;
+
     public const int MinimumIntervalMinutes = 1;
     public const int MaximumIntervalMinutes = 8 * 60;
 

@@ -240,6 +240,15 @@ public partial class SettingsWindow
 
     private void BreakLimitHoursCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateBreakControlsEnabled();
 
+    private void StandUpEnabledCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateBreakControlsEnabled();
+
+    private void StandUpIntervalSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (StandUpIntervalLabel is null) return; // raised once during InitializeComponent, before the label exists
+        int minutes = (int)StandUpIntervalSlider.Value;
+        StandUpIntervalLabel.Text = minutes % 60 == 0 ? $"{minutes / 60} hour(s)" : $"{minutes} minutes";
+    }
+
     private void BreakFocusSecondsSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (BreakFocusSecondsLabel is null) return; // raised once during InitializeComponent, before the label exists (see the interval slider below)
@@ -249,7 +258,7 @@ public partial class SettingsWindow
     /// <summary>The call, hours, style, sound and length options only matter while reminders are on (the hour boxes also need their own tick).</summary>
     private void UpdateBreakControlsEnabled()
     {
-        if (BreakHoldDuringCallsCheckBox is null || BreakLimitHoursCheckBox is null) return; // still constructing
+        if (BreakHoldDuringCallsCheckBox is null || BreakLimitHoursCheckBox is null || StandUpEnabledCheckBox is null || StandUpIntervalSlider is null) return; // still constructing
         bool on = BreakReminderCheckBox.IsChecked == true;
         BreakHoldDuringCallsCheckBox.IsEnabled = on;
         BreakLimitHoursCheckBox.IsEnabled = on;
@@ -258,6 +267,8 @@ public partial class SettingsWindow
         BreakStyleComboBox.IsEnabled = on;
         BreakSoundCheckBox.IsEnabled = on;
         BreakFocusSecondsSlider.IsEnabled = on;
+        StandUpEnabledCheckBox.IsEnabled = on;
+        StandUpIntervalSlider.IsEnabled = on && StandUpEnabledCheckBox.IsChecked == true;
     }
 
     /// <summary>Fills the break reminder options added after the on/off box and interval from the given settings.</summary>
@@ -269,6 +280,8 @@ public partial class SettingsWindow
         BreakToBox.Text = settings.BreakReminderToLocal;
         BreakSoundCheckBox.IsChecked = settings.BreakReminderSound;
         BreakFocusSecondsSlider.Value = settings.BreakFocusSeconds;
+        StandUpEnabledCheckBox.IsChecked = settings.StandUpReminderEnabled;
+        StandUpIntervalSlider.Value = settings.StandUpIntervalMinutes;
         foreach (ComboBoxItem item in BreakStyleComboBox.Items)
         {
             if (string.Equals(item.Tag as string, settings.BreakReminderStyle, StringComparison.Ordinal))

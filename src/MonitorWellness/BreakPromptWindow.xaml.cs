@@ -39,7 +39,8 @@ public partial class BreakPromptWindow : Window
     /// <param name="excludeFromCapture">Hide the prompt from screenshots, recordings and screen sharing (the person still sees it).</param>
     /// <param name="focusSeconds">Length of the break the Start button begins; shown in its text.</param>
     /// <param name="screen">The monitor to appear on; by default the one with the window the person is working in.</param>
-    public BreakPromptWindow(Action<BreakPromptChoice> onChoice, bool excludeFromCapture = true, int focusSeconds = 20, Screen? screen = null)
+    /// <param name="kind">The eye break (default) or the longer stand-up-and-move break, which has its own wording.</param>
+    public BreakPromptWindow(Action<BreakPromptChoice> onChoice, bool excludeFromCapture = true, int focusSeconds = 20, Screen? screen = null, BreakPromptKind kind = BreakPromptKind.Eye)
     {
         _onChoice = onChoice;
         _screen = screen ?? PromptPlacement.ActiveScreen();
@@ -48,9 +49,21 @@ public partial class BreakPromptWindow : Window
         Icon = AppIconSource.Default;
 
         focusSeconds = Math.Clamp(focusSeconds, BreakReminderStyles.MinimumFocusSeconds, BreakReminderStyles.MaximumFocusSeconds);
-        MessageText.Text = $"Look at something about 20 feet away for {focusSeconds} seconds.";
-        StartButton.Content = $"Start {focusSeconds} seconds";
-        System.Windows.Automation.AutomationProperties.SetName(StartButton, $"Start the {focusSeconds}-second break");
+        if (kind == BreakPromptKind.StandUp)
+        {
+            Title = "Time to stand up";
+            HeadingText.Text = Title;
+            System.Windows.Automation.AutomationProperties.SetName(HeadingText, Title);
+            MessageText.Text = "You have been at the computer a while. Stand up, stretch or walk for a few minutes.";
+            StartButton.Content = "I'll take a break";
+            System.Windows.Automation.AutomationProperties.SetName(StartButton, "I am taking a movement break");
+        }
+        else
+        {
+            MessageText.Text = $"Look at something about 20 feet away for {focusSeconds} seconds.";
+            StartButton.Content = $"Start {focusSeconds} seconds";
+            System.Windows.Automation.AutomationProperties.SetName(StartButton, $"Start the {focusSeconds}-second break");
+        }
 
         SourceInitialized += (_, _) =>
         {

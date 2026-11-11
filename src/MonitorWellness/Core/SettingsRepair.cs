@@ -30,6 +30,7 @@ public static class SettingsRepair
         new("break reminder interval", (to, from) => to.BreakReminderIntervalMinutes = from.BreakReminderIntervalMinutes),
         new("break reminder hours", (to, from) => { to.BreakReminderLimitToHours = from.BreakReminderLimitToHours; to.BreakReminderFromLocal = from.BreakReminderFromLocal; to.BreakReminderToLocal = from.BreakReminderToLocal; }),
         new("break reminder style", (to, from) => to.BreakReminderStyle = from.BreakReminderStyle),
+        new("stand-up reminder", (to, from) => { to.StandUpReminderEnabled = from.StandUpReminderEnabled; to.StandUpIntervalMinutes = from.StandUpIntervalMinutes; }),
         new("focus break length", (to, from) => to.BreakFocusSeconds = from.BreakFocusSeconds),
         new("migraine hotkey", (to, from) => { to.MigraineHotkeyModifiers = from.MigraineHotkeyModifiers; to.MigraineHotkeyKey = from.MigraineHotkeyKey; }),
         new("excluded monitors", (to, from) => to.ExcludedMonitors = from.ExcludedMonitors),

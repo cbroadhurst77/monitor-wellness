@@ -89,8 +89,57 @@ public partial class SettingsWindow
         }
     }
 
+    private void BreakHistoryCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        RefreshBreakHistorySummary();
+    }
+
+    /// <summary>The daily summary: one row per day from the first recorded event to today, for a spreadsheet.</summary>
+    private void ExportDailyHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var events = HistoryStore.Load();
+        if (BreakHistory.Range(events, DateTime.UtcNow, TimeZoneInfo.Local) is not (DateOnly from, DateOnly to))
+        {
+            System.Windows.MessageBox.Show(this, "There is no history to export yet.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            FileName = "MonitorWellness-daily-summary.csv",
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            Title = "Export Daily Summary",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            File.WriteAllText(dialog.FileName, BreakHistory.ToCsv(BreakHistory.BuildDaily(events, from, to, TimeZoneInfo.Local)));
+            System.Windows.MessageBox.Show(this, $"Daily summary exported to {dialog.FileName}.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't export the daily summary: {ex.Message}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void RefreshBreakHistorySummary()
+    {
+        if (BreakHistoryCheckBox.IsChecked != true)
+        {
+            BreakHistorySummaryText.Text = "Break history is off.";
+            return;
+        }
+
+        BreakHistorySummaryText.Text = BreakHistory.Describe(HistoryStore.Load(), DateTime.UtcNow, TimeZoneInfo.Local);
+    }
+
     private void RefreshHistorySummary()
     {
+        RefreshBreakHistorySummary();
+
         if (HistoryTrackingCheckBox.IsChecked != true)
         {
             HistorySummaryText.Text = "History tracking is off.";

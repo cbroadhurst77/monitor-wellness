@@ -10,6 +10,22 @@ namespace MonitorWellness.Core;
 /// </summary>
 public static class BreakReminderStatusText
 {
+    /// <summary>The stand-up part of the status line, or nothing when that reminder is off.</summary>
+    public static string StandUpSuffix(bool enabled, TimeSpan accumulated, TimeSpan interval)
+    {
+        if (!enabled)
+            return "";
+
+        TimeSpan remaining = interval - accumulated;
+        if (remaining <= TimeSpan.Zero)
+            return " · Stand-up break due";
+
+        int minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
+        return minutes >= 60
+            ? string.Create(CultureInfo.InvariantCulture, $" · Stand-up break in about {minutes / 60} h {minutes % 60} min")
+            : string.Create(CultureInfo.InvariantCulture, $" · Stand-up break in about {minutes} min");
+    }
+
     public static string Describe(
         bool enabled,
         DateTime? snoozedUntilLocal,

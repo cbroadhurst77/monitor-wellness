@@ -21,6 +21,13 @@ public sealed class BreakReminderService : IDisposable
     private readonly Action<int, string, ToolTipIcon, Action?> _showBalloon;
     private readonly Action? _startBreak;
     private readonly Func<Action<BreakPromptChoice>, bool>? _showPrompt;
+    private readonly Func<Action<BreakPromptChoice>, bool>? _showStandUpPrompt;
+    private readonly Action<HistoryEvent> _recordHistory;
+    private TimeSpan _unrecordedActive;
+    private DateTime _lastCountedUtc;
+
+    /// <summary>Time at the computer is written to the history in chunks this big (and on exit and at midnight), not every few seconds.</summary>
+    private static readonly TimeSpan ActiveTimeFlushEvery = TimeSpan.FromMinutes(10);
     private readonly Func<TimeSpan> _readIdle;
     private readonly Func<bool> _isFullscreen;
     private readonly Func<bool> _isInCall;
@@ -28,6 +35,7 @@ public sealed class BreakReminderService : IDisposable
     private readonly TimeProvider _clock;
     private readonly BreakReminderState _state = new();
     private readonly ActiveTimeTracker _activeTime = new();
+    private readonly ActiveTimeTracker _standUpTime = new();
     private DispatcherTimer? _timer;
     private ToolStripMenuItem[] _snoozeItems = Array.Empty<ToolStripMenuItem>();
     private DateTime? _callHeldSinceUtc;
@@ -39,6 +47,8 @@ public sealed class BreakReminderService : IDisposable
     /// <param name="showPrompt">Shows the reminder prompt and reports the person's choice to the callback; returns false if it could not be shown (the balloon is used instead).</param>
     /// <param name="isInCall">Whether a microphone or camera is in use; only asked when reminders are set to wait during calls.</param>
     /// <param name="playSound">Plays the reminder sound; only called when the sound setting is on.</param>
+    /// <param name="showStandUpPrompt">Shows the stand-up prompt; without it (or if it cannot be shown) a balloon is used.</param>
+    /// <param name="recordHistory">Writes one history event (only used when the break history setting is on); the local history file by default.</param>
     public BreakReminderService(
         AppSettings settings,
         Func<bool> isMigraineActive,
@@ -49,13 +59,17 @@ public sealed class BreakReminderService : IDisposable
         Func<bool>? isFullscreen = null,
         TimeProvider? clock = null,
         Func<bool>? isInCall = null,
-        Action? playSound = null)
+        Action? playSound = null,
+        Func<Action<BreakPromptChoice>, bool>? showStandUpPrompt = null,
+        Action<HistoryEvent>? recordHistory = null)
     {
         _settings = settings;
         _isMigraineActive = isMigraineActive;
         _showBalloon = showBalloon;
         _startBreak = startBreak;
         _showPrompt = showPrompt;
+        _showStandUpPrompt = showStandUpPrompt;
+        _recordHistory = recordHistory ?? HistoryStore.Append;
         _readIdle = readIdle ?? UserIdleDetector.GetIdleDuration;
         _isFullscreen = isFullscreen ?? FullscreenDetector.IsForegroundWindowLikelyFullscreen;
         _isInCall = isInCall ?? CallActivityDetector.IsInCall;
@@ -64,6 +78,9 @@ public sealed class BreakReminderService : IDisposable
     }
 
     private TimeSpan Interval => TimeSpan.FromMinutes(BreakReminderPolicy.ClampIntervalMinutes(_settings.BreakReminderIntervalMinutes));
+
+    private TimeSpan StandUpInterval => TimeSpan.FromMinutes(Math.Clamp(
+        _settings.StandUpIntervalMinutes, BreakReminderPolicy.MinimumStandUpMinutes, BreakReminderPolicy.MaximumStandUpMinutes));
 
     private int FocusSeconds => Math.Clamp(_settings.BreakFocusSeconds, BreakReminderStyles.MinimumFocusSeconds, BreakReminderStyles.MaximumFocusSeconds);
 
@@ -80,8 +97,10 @@ public sealed class BreakReminderService : IDisposable
                 DebugLog.Write("BreakReminder: disabled, sampling stopped");
             _timer?.Stop();
             _timer = null;
+            FlushActiveTime();
             _state.Reset();
             _activeTime.Reset();
+            _standUpTime.Reset();
             _callHeldSinceUtc = null;
             _heldFor = null;
             return;
@@ -92,6 +111,7 @@ public sealed class BreakReminderService : IDisposable
 
         DebugLog.Write($"BreakReminder: sampling started, interval={Interval.TotalMinutes} min of active time");
         _activeTime.Reset();
+        _standUpTime.Reset();
         _timer = new DispatcherTimer { Interval = BreakReminderPolicy.SampleInterval };
         _timer.Tick += (_, _) => SampleOnce();
         _timer.Start();
@@ -110,9 +130,12 @@ public sealed class BreakReminderService : IDisposable
             DateTime? snoozedUntilLocal = _state.IsSnoozed(nowUtc) ? _state.SnoozedUntilUtc!.Value.ToLocalTime() : null;
             bool withinHours = BreakReminderPolicy.IsWithinActiveHours(
                 nowLocal, _settings.BreakReminderLimitToHours, _settings.BreakReminderFromLocal, _settings.BreakReminderToLocal);
-            return BreakReminderStatusText.Describe(
+            string status = BreakReminderStatusText.Describe(
                 _settings.BreakReminderEnabled, snoozedUntilLocal, withinHours, _settings.BreakReminderFromLocal,
                 _activeTime.Accumulated, Interval, _heldFor);
+            return _settings.BreakReminderEnabled && snoozedUntilLocal is null && withinHours
+                ? status + BreakReminderStatusText.StandUpSuffix(_settings.StandUpReminderEnabled, _standUpTime.Accumulated, StandUpInterval)
+                : status;
         }
         catch (Exception ex)
         {
@@ -126,7 +149,7 @@ public sealed class BreakReminderService : IDisposable
     {
         try
         {
-            Deliver();
+            Deliver(record: false); // a test is not a real reminder and must not appear in the history
         }
         catch (Exception ex)
         {
@@ -135,10 +158,16 @@ public sealed class BreakReminderService : IDisposable
     }
 
     /// <summary>The person took a break (the focus timer ran, or they chose to): start counting again.</summary>
-    public void NotifyBreakTaken()
+    /// <param name="movement">True when the person got up and moved (the stand-up count restarts too); the 20-second eye break does not count as that.</param>
+    public void NotifyBreakTaken(bool movement = false)
     {
         _activeTime.Reset();
-        DebugLog.Write("BreakReminder: a break was taken; the count restarts.");
+        if (movement)
+            _standUpTime.Reset();
+        Record(movement ? BreakHistory.MovementBreakTaken : BreakHistory.BreakTaken);
+        DebugLog.Write(movement
+            ? "BreakReminder: a movement break was taken; both counts restart."
+            : "BreakReminder: a break was taken; the count restarts.");
     }
 
     /// <summary>One look at the keyboard/mouse and, if the interval is reached, the decision whether to show the reminder.</summary>
@@ -159,6 +188,7 @@ public sealed class BreakReminderService : IDisposable
                 // Outside the chosen hours nothing counts, so the first reminder of the day is a
                 // full interval after the hours begin, not one the moment they do.
                 _activeTime.Reset();
+                _standUpTime.Reset();
                 _callHeldSinceUtc = null;
                 _heldFor = null;
                 return;
@@ -166,7 +196,14 @@ public sealed class BreakReminderService : IDisposable
 
             TimeSpan idle = _readIdle();
             _activeTime.Sample(nowUtc, idle, BreakReminderPolicy.SampleInterval, BreakReminderPolicy.AwayThreshold);
-            if (!_activeTime.IsDue(Interval))
+            CountActiveTime(nowUtc);
+            if (_settings.StandUpReminderEnabled)
+                _standUpTime.Sample(nowUtc, idle, BreakReminderPolicy.SampleInterval, BreakReminderPolicy.StandUpAwayThreshold);
+            else
+                _standUpTime.Reset();
+
+            bool standUpDue = _settings.StandUpReminderEnabled && _standUpTime.IsDue(StandUpInterval);
+            if (!standUpDue && !_activeTime.IsDue(Interval))
             {
                 _heldFor = null;
                 return;
@@ -188,11 +225,20 @@ public sealed class BreakReminderService : IDisposable
 
             if (tick.Outcome == BreakReminderTickOutcome.Show)
             {
-                _activeTime.Reset();
+                _activeTime.Reset(); // standing up rests the eyes too, so the eye count restarts either way
                 _callHeldSinceUtc = null;
                 if (_tickLog.ShouldLog("show", nowUtc))
                     DebugLog.Write("BreakReminder: reminder shown (further identical reminders are logged only every 6 hours)");
-                Deliver();
+                if (standUpDue)
+                {
+                    _standUpTime.Reset();
+                    DebugLog.Write("BreakReminder: stand-up reminder shown.");
+                    DeliverStandUp();
+                }
+                else
+                {
+                    Deliver();
+                }
             }
             else if (_tickLog.ShouldLog($"hold:{tick.Decision}", nowUtc))
             {
@@ -222,8 +268,10 @@ public sealed class BreakReminderService : IDisposable
         return nowUtc - _callHeldSinceUtc.Value < BreakReminderPolicy.MaximumCallHold;
     }
 
-    private void Deliver()
+    private void Deliver(bool record = true)
     {
+        if (record)
+            Record(BreakHistory.EyeReminderShown);
         if (_settings.BreakReminderSound)
         {
             try { _playSound(); }
@@ -239,6 +287,129 @@ public sealed class BreakReminderService : IDisposable
             $"Time for a break — look at something about 20 feet away for {FocusSeconds} seconds. Click here for a {FocusSeconds}-second timer.",
             ToolTipIcon.Info,
             _startBreak);
+    }
+
+    private void DeliverStandUp()
+    {
+        Record(BreakHistory.StandUpReminderShown);
+        if (_settings.BreakReminderSound)
+        {
+            try { _playSound(); }
+            catch (Exception ex) { DebugLog.Write($"BreakReminder: couldn't play the reminder sound: {ex.Message}"); }
+        }
+
+        bool windowStyle = !string.Equals(_settings.BreakReminderStyle, BreakReminderStyles.Notification, StringComparison.Ordinal);
+        if (windowStyle && _showStandUpPrompt is not null)
+        {
+            try
+            {
+                if (_showStandUpPrompt(OnStandUpChoice))
+                    return;
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"BreakReminder: the stand-up prompt could not be shown, using a balloon: {ex.Message}");
+            }
+        }
+
+        _showBalloon(
+            8_000,
+            "Time to stand up — you have been at the computer a while. Stretch or walk for a few minutes.",
+            ToolTipIcon.Info,
+            null);
+    }
+
+    private void OnStandUpChoice(BreakPromptChoice choice)
+    {
+        try
+        {
+            switch (choice)
+            {
+                case BreakPromptChoice.StartBreak:
+                    NotifyBreakTaken(movement: true);
+                    break;
+                case BreakPromptChoice.Snooze:
+                    _standUpTime.SetAccumulated(StandUpInterval - PromptSnoozeDelay);
+                    Record(BreakHistory.ReminderSnoozed);
+                    DebugLog.Write("BreakReminder: stand-up prompt snoozed for 5 minutes.");
+                    break;
+                case BreakPromptChoice.Skip:
+                    Record(BreakHistory.ReminderSkipped);
+                    DebugLog.Write("BreakReminder: stand-up prompt skipped.");
+                    break;
+                case BreakPromptChoice.TimedOut:
+                    Record(BreakHistory.ReminderTimedOut);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: handling the stand-up choice failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Writes one history event when the person has turned the break history on. A history problem must never get in the way of a reminder.</summary>
+    private void Record(string eventType)
+    {
+        if (!_settings.BreakHistoryEnabled)
+            return;
+
+        try
+        {
+            _recordHistory(new HistoryEvent(_clock.GetUtcNow().UtcDateTime, eventType, null, null));
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: couldn't record {eventType}: {ex.Message}");
+        }
+    }
+
+    /// <summary>Adds what the latest sample counted to the pending time at the computer, writing it out in chunks and at midnight so each day gets its own.</summary>
+    private void CountActiveTime(DateTime nowUtc)
+    {
+        if (!_settings.BreakHistoryEnabled)
+        {
+            _unrecordedActive = TimeSpan.Zero;
+            return;
+        }
+
+        if (_activeTime.LastCounted <= TimeSpan.Zero)
+            return;
+
+        if (_unrecordedActive > TimeSpan.Zero && LocalDay(_lastCountedUtc) != LocalDay(nowUtc))
+            FlushActiveTime(); // belongs to the day before
+
+        _unrecordedActive += _activeTime.LastCounted;
+        _lastCountedUtc = nowUtc;
+        if (_unrecordedActive >= ActiveTimeFlushEvery)
+            FlushActiveTime();
+    }
+
+    private DateOnly LocalDay(DateTime utc)
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _clock.LocalTimeZone));
+
+    /// <summary>Writes the pending time at the computer to the history (stamped with the time of its last sample).</summary>
+    public void FlushActiveTime()
+    {
+        if (_unrecordedActive < TimeSpan.FromSeconds(1))
+        {
+            _unrecordedActive = TimeSpan.Zero;
+            return;
+        }
+
+        int seconds = (int)Math.Round(_unrecordedActive.TotalSeconds);
+        _unrecordedActive = TimeSpan.Zero;
+        if (!_settings.BreakHistoryEnabled)
+            return;
+
+        try
+        {
+            _recordHistory(new HistoryEvent(_lastCountedUtc, BreakHistory.ActiveTime, null, seconds));
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"BreakReminder: couldn't record time at the computer: {ex.Message}");
+        }
     }
 
     /// <summary>How long "In 5 minutes" on the prompt waits before asking again.</summary>
@@ -272,10 +443,15 @@ public sealed class BreakReminderService : IDisposable
                 case BreakPromptChoice.Snooze:
                     // The count restarted when the prompt appeared; make the next one come in a few minutes, not a full interval.
                     _activeTime.SetAccumulated(Interval - PromptSnoozeDelay);
+                    Record(BreakHistory.ReminderSnoozed);
                     DebugLog.Write("BreakReminder: prompt snoozed for 5 minutes.");
                     break;
                 case BreakPromptChoice.Skip:
+                    Record(BreakHistory.ReminderSkipped);
                     DebugLog.Write("BreakReminder: prompt skipped.");
+                    break;
+                case BreakPromptChoice.TimedOut:
+                    Record(BreakHistory.ReminderTimedOut);
                     break;
             }
         }
@@ -334,6 +510,7 @@ public sealed class BreakReminderService : IDisposable
 
     public void Dispose()
     {
+        FlushActiveTime();
         _timer?.Stop();
         _timer = null;
     }

@@ -86,6 +86,8 @@ public partial class SettingsWindow
         _settings.MonitorDimMultiplier = imported.MonitorDimMultiplier;
         _settings.MonitorKelvinOffset = imported.MonitorKelvinOffset;
         _settings.HistoryTrackingEnabled = imported.HistoryTrackingEnabled;
+        _settings.BreakHistoryEnabled = imported.BreakHistoryEnabled;
+        _settings.FollowScheduleTheme = imported.FollowScheduleTheme;
         _settings.PromptForMigraineRating = imported.PromptForMigraineRating;
         _settings.MatchAmbientLight = imported.MatchAmbientLight;
         _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
@@ -97,6 +99,8 @@ public partial class SettingsWindow
         _settings.BreakReminderStyle = imported.BreakReminderStyle;
         _settings.BreakReminderSound = imported.BreakReminderSound;
         _settings.BreakFocusSeconds = imported.BreakFocusSeconds;
+        _settings.StandUpReminderEnabled = imported.StandUpReminderEnabled;
+        _settings.StandUpIntervalMinutes = imported.StandUpIntervalMinutes;
         _settings.RestoreNativeDisplayInFullscreen = imported.RestoreNativeDisplayInFullscreen;
         _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
         _settings.ExcludeOverlayFromCapture = imported.ExcludeOverlayFromCapture;
@@ -110,6 +114,8 @@ public partial class SettingsWindow
         LoadPreferencesFrom(imported);
         BuildMonitorRows();
         HistoryTrackingCheckBox.IsChecked = _settings.HistoryTrackingEnabled;
+        BreakHistoryCheckBox.IsChecked = _settings.BreakHistoryEnabled;
+        FollowThemeCheckBox.IsChecked = _settings.FollowScheduleTheme;
         PromptForRatingCheckBox.IsChecked = _settings.PromptForMigraineRating;
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;

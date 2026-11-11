@@ -26,7 +26,11 @@ are never transmitted anywhere:
   per-monitor setup, saved profiles);
 - diagnostic logs (`debug.log`), used only for your own troubleshooting;
 - Migraine Mode / schedule-pause history, and helpfulness ratings — both entirely
-  opt-in and off by default (Settings → Profiles & History).
+  opt-in and off by default (Settings → Profiles & History);
+- the break and screen-time history (reminders shown, breaks taken, and how long you were at
+  the computer, in chunks of about ten minutes) — also entirely opt-in and off by default
+  (Settings → Profiles & History), kept in the same local history file, and removed by
+  "Clear History".
 
 Uninstalling the app does not delete this folder automatically, so you can reinstall
 without losing your settings; delete it yourself if you want a clean removal.
@@ -49,6 +53,13 @@ version exists you'll see a one-time notification linking to it; nothing downloa
 installs automatically.
 
 Neither call includes your name, an identifier, or any of your settings/history data.
+
+## Light/dark theme (optional)
+
+If you turn on "Also switch Windows between light and dark theme with this schedule", the app
+changes Windows' own light/dark theme setting (in your user settings) as the day/night schedule
+turns, and tells running apps to re-read it. It only changes at that turn of the day, never touches
+High Contrast, and sends nothing anywhere. It is off by default.
 
 ## Ambient light sensor (optional)
 
@@ -75,8 +86,13 @@ entirely on your computer, and stores or transmits none of what it learns:
   example Teams, Zoom, Webex and web browsers). It **never opens the microphone or camera,
   never listens to or records anything**, and the app names it sees are compared with that
   list and then discarded — they are not logged, stored or sent anywhere.
-- **Your choices** (interval, hours, style, sound, break length) are saved in your settings
-  file like your other settings.
+- **Your choices** (interval, hours, style, sound, break length, the optional stand-up reminder)
+  are saved in your settings file like your other settings.
+- **Break and screen-time history** (separate opt-in, off by default). Only if you tick it, the
+  app writes, to the local history file, when a reminder was shown, whether you took, skipped or
+  snoozed it, and how much time you were at the computer. Time at the computer is measured only
+  from the keyboard and mouse activity described above, never from what is on the screen. Nothing
+  leaves your computer; you can export it yourself as a CSV and clear it at any time.
 
 ## Third-party services used
 

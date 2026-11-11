@@ -19,6 +19,9 @@ public sealed class ActiveTimeTracker
     /// <summary>Time at the computer since the last break, as of the latest sample.</summary>
     public TimeSpan Accumulated { get; private set; }
 
+    /// <summary>How much time the latest sample added (zero when it only anchored, or the person was away). For the time-at-the-computer record.</summary>
+    public TimeSpan LastCounted { get; private set; }
+
     public bool IsDue(TimeSpan interval) => Accumulated >= interval;
 
     /// <summary>Starts counting again from zero (a break was taken, or reminders were turned on).</summary>
@@ -33,6 +36,7 @@ public sealed class ActiveTimeTracker
 
     public void Sample(DateTime nowUtc, TimeSpan idle, TimeSpan samplePeriod, TimeSpan awayThreshold)
     {
+        LastCounted = TimeSpan.Zero;
         if (_lastSampleUtc is not DateTime last)
         {
             _lastSampleUtc = nowUtc; // the first sample only anchors the clock
@@ -51,5 +55,6 @@ public sealed class ActiveTimeTracker
         }
 
         Accumulated += elapsed;
+        LastCounted = elapsed;
     }
 }

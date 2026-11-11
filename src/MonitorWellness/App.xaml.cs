@@ -54,6 +54,7 @@ public partial class App : Application
     private GlobalHotkey? _emergencyRestoreHotkey;
     private ToolStripMenuItem? _resumeScheduleMenuItem;
     private ToolStripMenuItem? _focusBreakMenuItem;
+    private readonly ScheduleThemeFollower _themeFollower = new(new RegistryWindowsThemeStore());
     private DispatcherTimer? _pauseTimer;
     private readonly ScheduleOverrideState _overrides = new();
     private string? _lastForegroundApplicationContext;
@@ -233,7 +234,8 @@ public partial class App : Application
             () => _migraine?.IsActive == true,
             (milliseconds, message, icon, onClick) => ShowTrayBalloon(milliseconds, "Monitor Wellness", message, icon, clickAction: onClick),
             startBreak: ShowBreakFocusWindow,
-            showPrompt: ShowBreakPrompt);
+            showPrompt: onChoice => ShowBreakPrompt(onChoice),
+            showStandUpPrompt: onChoice => ShowBreakPrompt(onChoice, BreakPromptKind.StandUp));
 
         startup.Mark("display controllers and services");
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -319,13 +321,18 @@ public partial class App : Application
         startup.Mark("tray menu");
 
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
-        _timer.Tick += (_, _) => RunScheduleTick();
+        _timer.Tick += (_, _) =>
+        {
+            RunScheduleTick();
+            UpdateWindowsTheme();
+        };
         _timer.Start();
 
         StartApplicationRuleMonitoring();
         startup.Mark("timers and rules");
 
         RunScheduleTick();
+        UpdateWindowsTheme();
         startup.Mark("first schedule tick");
         _breakReminder.Rebuild();
 
@@ -753,6 +760,7 @@ public partial class App : Application
             _overlay.ExcludeFromCapture = _settings.ExcludeOverlayFromCapture;
         RebuildHotkey();
         _breakReminder?.Rebuild();
+        UpdateWindowsTheme(); // turning the option on takes effect now, not at the next tick
         if (_focusBreakMenuItem is not null)
             _focusBreakMenuItem.Text = FocusBreakMenuText();
         // Deliberately not calling RunScheduleTick() here: the settings window's own preview
@@ -764,14 +772,14 @@ public partial class App : Application
     private BreakPromptWindow? _breakPrompt;
 
     /// <summary>Shows the break reminder prompt. False means it could not be shown and the caller should fall back to a balloon.</summary>
-    private bool ShowBreakPrompt(Action<BreakPromptChoice> onChoice)
+    private bool ShowBreakPrompt(Action<BreakPromptChoice> onChoice, BreakPromptKind kind = BreakPromptKind.Eye)
     {
         if (_breakPrompt is not null)
             return true; // one is already waiting for an answer
 
         try
         {
-            var prompt = new BreakPromptWindow(onChoice, _settings.ExcludeOverlayFromCapture, _settings.BreakFocusSeconds);
+            var prompt = new BreakPromptWindow(onChoice, _settings.ExcludeOverlayFromCapture, _settings.BreakFocusSeconds, kind: kind);
             prompt.Closed += (_, _) => _breakPrompt = null;
             _breakPrompt = prompt;
             prompt.Show();
@@ -1411,6 +1419,19 @@ public partial class App : Application
         DebugLog.Write("Schedule pause ended (detected by clock check)");
         ResumeSchedule();
         return true;
+    }
+
+    /// <summary>Switches Windows between light and dark with the schedule, if the person asked for that. Never allowed to affect anything else.</summary>
+    private void UpdateWindowsTheme()
+    {
+        try
+        {
+            _themeFollower.Update(_settings.FollowScheduleTheme, ScheduleSource.GetElevationDegrees(_settings, DateTime.UtcNow, DateTime.Now));
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"UpdateWindowsTheme failed: {ex.Message}");
+        }
     }
 
     private void RunScheduleTick()

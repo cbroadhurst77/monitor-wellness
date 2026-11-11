@@ -163,6 +163,8 @@ public partial class SettingsWindow : Window
 
         LoadWorldMapImage();
         HistoryTrackingCheckBox.IsChecked = _settings.HistoryTrackingEnabled;
+        BreakHistoryCheckBox.IsChecked = _settings.BreakHistoryEnabled;
+        FollowThemeCheckBox.IsChecked = _settings.FollowScheduleTheme;
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
@@ -396,6 +398,8 @@ public partial class SettingsWindow : Window
         // version. New hardware approvals are persisted only against physical identities.
         _settings.HardwareBrightnessEnabledMonitors.RemoveAll(_hardwareBrightnessBoxes.ContainsKey);
         _settings.HistoryTrackingEnabled = HistoryTrackingCheckBox.IsChecked == true;
+        _settings.BreakHistoryEnabled = BreakHistoryCheckBox.IsChecked == true;
+        _settings.FollowScheduleTheme = FollowThemeCheckBox.IsChecked == true;
         _settings.PromptForMigraineRating = PromptForRatingCheckBox.IsChecked == true;
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
@@ -410,6 +414,8 @@ public partial class SettingsWindow : Window
         _settings.BreakReminderStyle = (BreakStyleComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? BreakReminderStyles.Window;
         _settings.BreakReminderSound = BreakSoundCheckBox.IsChecked == true;
         _settings.BreakFocusSeconds = (int)BreakFocusSecondsSlider.Value;
+        _settings.StandUpReminderEnabled = StandUpEnabledCheckBox.IsChecked == true;
+        _settings.StandUpIntervalMinutes = (int)StandUpIntervalSlider.Value;
         _settings.RestoreNativeDisplayInFullscreen = FullscreenPresentationGuardCheckBox.IsChecked == true;
         _settings.PreferOverlayOnlyOnCompatibilityDisplays = CompatibilityOverlayOnlyCheckBox.IsChecked == true;
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;

@@ -69,6 +69,8 @@ public static class AppSettingsValidator
             return Invalid("Break reminder hours must be times between 00:00 and 23:59.", out error);
         if (!BreakReminderStyles.IsSupported(settings.BreakReminderStyle))
             return Invalid("The break reminder style is not recognised.", out error);
+        if (settings.StandUpIntervalMinutes is < BreakReminderPolicy.MinimumStandUpMinutes or > BreakReminderPolicy.MaximumStandUpMinutes)
+            return Invalid($"The stand-up reminder interval must be between {BreakReminderPolicy.MinimumStandUpMinutes} and {BreakReminderPolicy.MaximumStandUpMinutes} minutes.", out error);
         if (settings.BreakFocusSeconds is < BreakReminderStyles.MinimumFocusSeconds or > BreakReminderStyles.MaximumFocusSeconds)
             return Invalid($"The focus break must be between {BreakReminderStyles.MinimumFocusSeconds} and {BreakReminderStyles.MaximumFocusSeconds} seconds.", out error);
         if ((settings.MigraineHotkeyModifiers & ~AllowedHotkeyModifiers) != 0 || settings.MigraineHotkeyModifiers == 0 || settings.MigraineHotkeyKey == 0)

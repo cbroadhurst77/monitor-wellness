@@ -67,8 +67,17 @@ require you to either click something or opt in first — see [PRIVACY.md](PRIVA
   Migraine Mode is on, during full-screen work, while you are on a call (a camera in use, or the
   microphone in use by a calling app — read locally from Windows' own privacy records, nothing is
   recorded or sent), and outside hours you choose; the break length is yours to set (10–120 seconds,
-  20 by default). The tray menu shows when the next break is due (or why it is waiting), can show
-  a test reminder, start a simple always-dismissible focus timer, and snooze for the session
+  20 by default). An optional second reminder, off by default, asks you to **stand up and move** every
+  30–180 minutes (three minutes away from the computer counts as having done so). The tray menu shows
+  when the next break is due (or why it is waiting), can show a test reminder, start a simple
+  always-dismissible focus timer, and snooze for the session
+- Optional, local **break and screen-time history** (off by default): reminders shown, breaks taken, time at
+  the computer, next to your Migraine Mode records, with a plain summary in Settings, a daily-summary CSV
+  export, and — once there are a couple of weeks of records — a careful comparison of days with and without
+  Migraine Mode that describes your own records and never claims a cause
+- Optional **light/dark theme that follows the schedule** (off by default): Windows switches to its dark theme
+  as evening comes in and back to light in the morning, only at that turn of the day so a manual switch is
+  never undone; it never touches High Contrast
 - **Display Capability Passport** in Diagnostics: a local, read-only explanation of each
   display's physical identity, DDC/CI eligibility, HDR state, and safest brightness backend;
   copy or refresh it for support, and view local Flicker Guard counters; it deliberately reports

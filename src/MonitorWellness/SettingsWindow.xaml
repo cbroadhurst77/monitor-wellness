@@ -264,6 +264,10 @@
                         </StackPanel>
                         <TextBlock x:Name="DeepNightColorWarning" FontSize="14" Foreground="{DynamicResource MW.WarningText}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"
                                    AutomationProperties.LiveSetting="Assertive"/>
+
+                        <Separator Margin="0,12,0,12"/>
+                        <CheckBox x:Name="FollowThemeCheckBox" Content="Also switch Windows between light and dark theme with this schedule" Margin="0,0,0,4"/>
+                        <TextBlock Text="Off by default. When on, Windows changes to the dark theme as evening comes in and back to light in the morning, following the same sun times (or fixed times) as the colour schedule. It only changes at that turn of the day, so you can still switch by hand in between. It never touches High Contrast, and turning this off leaves whatever theme is current." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -440,6 +444,20 @@
                                     ValueChanged="BreakFocusSecondsSlider_ValueChanged" AutomationProperties.Name="Focus break length in seconds"/>
                         </Grid>
                         <TextBlock x:Name="BreakFocusSecondsLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
+
+                        <CheckBox x:Name="StandUpEnabledCheckBox" Content="Also remind me to stand up and move" Margin="0,10,0,4"
+                                  Checked="StandUpEnabledCheckBox_Changed" Unchecked="StandUpEnabledCheckBox_Changed"/>
+                        <TextBlock Text="A longer break for your body, not your eyes: stand, stretch or walk for a few minutes. Being away from the computer for 3 minutes counts as one. It waits for calls and full-screen apps, just like the eye-break reminder." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Every" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Slider x:Name="StandUpIntervalSlider" Grid.Column="1" Minimum="30" Maximum="180" TickFrequency="15" IsSnapToTickEnabled="True"
+                                    ValueChanged="StandUpIntervalSlider_ValueChanged" AutomationProperties.Name="Stand-up reminder interval in minutes"/>
+                        </Grid>
+                        <TextBlock x:Name="StandUpIntervalLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -506,6 +524,13 @@
                             <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                             <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
                         </StackPanel>
+
+                        <CheckBox x:Name="BreakHistoryCheckBox" Content="Also keep a local history of break reminders, breaks taken and time at the computer" Margin="0,0,0,4"
+                                  Checked="BreakHistoryCheckBox_Changed" Unchecked="BreakHistoryCheckBox_Changed"/>
+                        <TextBlock Text="Off by default. Stays on your computer only. It lets you see how many reminders you acted on, and, once there are a couple of weeks of records, how days with Migraine Mode compare with other days. Needs break reminders to be on." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="BreakHistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                   AutomationProperties.LiveSetting="Polite"/>
+                        <Button x:Name="ExportDailyHistoryButton" Content="Export Daily Summary (CSV)..." HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,16" Click="ExportDailyHistoryButton_Click"/>
 
                         <Separator Margin="0,0,0,16"/>
 

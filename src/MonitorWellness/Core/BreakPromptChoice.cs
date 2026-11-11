@@ -1,5 +1,15 @@
 namespace MonitorWellness.Core;
 
+/// <summary>Which reminder the prompt is for.</summary>
+public enum BreakPromptKind
+{
+    /// <summary>The 20-20-20 eye break.</summary>
+    Eye,
+
+    /// <summary>The longer stand-up-and-move break.</summary>
+    StandUp,
+}
+
 /// <summary>What the person did with the break reminder prompt.</summary>
 public enum BreakPromptChoice
 {

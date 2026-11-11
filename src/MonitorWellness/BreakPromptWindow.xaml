@@ -11,7 +11,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Time for a break" FontWeight="Bold" FontSize="16"
+        <TextBlock x:Name="HeadingText" Grid.Row="0" Text="Time for a break" FontWeight="Bold" FontSize="16"
                    AutomationProperties.Name="Time for a break"/>
         <TextBlock x:Name="MessageText" Grid.Row="1" Margin="0,6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MW.HelperText}"
                    Text="Look at something about 20 feet away for 20 seconds."/>

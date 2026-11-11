@@ -275,6 +275,24 @@ public sealed class AppSettings
     /// <summary>Length of the focus break, in seconds (20 matches the 20-20-20 rule).</summary>
     public int BreakFocusSeconds { get; set; } = 20;
 
+    /// <summary>Also remind the person to stand up and move now and then (a longer break for the body, not the eyes). Off by default.</summary>
+    public bool StandUpReminderEnabled { get; set; }
+
+    /// <summary>
+    /// Keep a local history of reminders shown, breaks taken and time at the computer (next to the Migraine
+    /// Mode history), for the summary and the CSV export in Settings. Off by default; stays on the computer.
+    /// </summary>
+    public bool BreakHistoryEnabled { get; set; }
+
+    /// <summary>
+    /// Also switch Windows between its light and dark theme with the day/night schedule. Off by default: it
+    /// changes a setting outside this app (the person's own, and only at the change from day to night and back).
+    /// </summary>
+    public bool FollowScheduleTheme { get; set; }
+
+    /// <summary>Minutes at the computer between stand-up reminders.</summary>
+    public int StandUpIntervalMinutes { get; set; } = 60;
+
     /// <summary>
     /// Opt-in presentation safeguard: restores native gamma, overlay, and approved hardware
     /// brightness while Windows reports that a foreground app is fullscreen. Off by default so
@@ -358,6 +376,10 @@ public sealed class AppSettings
         BreakReminderStyle = BreakReminderStyle,
         BreakReminderSound = BreakReminderSound,
         BreakFocusSeconds = BreakFocusSeconds,
+        StandUpReminderEnabled = StandUpReminderEnabled,
+        BreakHistoryEnabled = BreakHistoryEnabled,
+        FollowScheduleTheme = FollowScheduleTheme,
+        StandUpIntervalMinutes = StandUpIntervalMinutes,
         RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
         PreferOverlayOnlyOnCompatibilityDisplays = PreferOverlayOnlyOnCompatibilityDisplays,
         CheckForUpdatesEnabled = CheckForUpdatesEnabled,
@@ -442,6 +464,10 @@ public sealed class AppSettings
         BreakReminderStyle = copy.BreakReminderStyle;
         BreakReminderSound = copy.BreakReminderSound;
         BreakFocusSeconds = copy.BreakFocusSeconds;
+        StandUpReminderEnabled = copy.StandUpReminderEnabled;
+        BreakHistoryEnabled = copy.BreakHistoryEnabled;
+        FollowScheduleTheme = copy.FollowScheduleTheme;
+        StandUpIntervalMinutes = copy.StandUpIntervalMinutes;
         RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
         PreferOverlayOnlyOnCompatibilityDisplays = copy.PreferOverlayOnlyOnCompatibilityDisplays;
         CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;

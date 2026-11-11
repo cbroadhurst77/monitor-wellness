@@ -50,6 +50,11 @@ individual’s comfort settings.
   `...\webcam` (which apps are using those devices) so a reminder waits until a call ends. It never
   opens the devices and does not store or log the app names. The option is
   `BreakReminderHoldDuringCalls` in settings.json.
+- Optional features that write outside the app's own folder, all off by default and per user: the
+  light/dark theme option (`FollowScheduleTheme`) writes `AppsUseLightTheme` and `SystemUsesLightTheme`
+  under `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` and broadcasts
+  `WM_SETTINGCHANGE`; it never acts under High Contrast. The break history (`BreakHistoryEnabled`) adds
+  event lines to the local `history.jsonl` only.
 - `MonitorWellness.exe --restore` puts the display back to normal and exits (it refuses while
   another instance is running). `--restart-wait <pid>` is used by the tray "Restart" item: the new
   process waits up to 20 seconds for the old one to exit before taking over; it is not meant to be
@@ -62,6 +67,8 @@ individual’s comfort settings.
 
 - Diagnostic bundles are manually exported and exclude settings, location, history, and
   profiles. Users should review the bundled log before sharing it.
+- The break and screen-time history shows how long a person is at their computer. Do not collect it
+  centrally or use it to measure work or performance; it exists only for the person's own review.
 - Do not collect migraine activation history, ratings, window titles, or display capability
   data centrally without documented purpose, minimisation, retention, access, and consent/
   lawful-basis review.
