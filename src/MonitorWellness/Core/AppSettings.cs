@@ -254,6 +254,27 @@ public sealed class AppSettings
     /// <summary>Minutes between break reminders when BreakReminderEnabled is true. 20 matches the 20-20-20 rule this feature is based on.</summary>
     public int BreakReminderIntervalMinutes { get; set; } = 20;
 
+    /// <summary>Wait for a call to end before showing a reminder: while a microphone or camera is in use (see CallActivityDetector).</summary>
+    public bool BreakReminderHoldDuringCalls { get; set; } = true;
+
+    /// <summary>Only count time and show reminders between <see cref="BreakReminderFromLocal"/> and <see cref="BreakReminderToLocal"/>.</summary>
+    public bool BreakReminderLimitToHours { get; set; }
+
+    /// <summary>Start of the reminder hours, "HH:mm". May be later than the end for hours that run past midnight.</summary>
+    public string BreakReminderFromLocal { get; set; } = "08:00";
+
+    /// <summary>End of the reminder hours, "HH:mm".</summary>
+    public string BreakReminderToLocal { get; set; } = "18:00";
+
+    /// <summary>How the reminder arrives: see <see cref="BreakReminderStyles"/>.</summary>
+    public string BreakReminderStyle { get; set; } = BreakReminderStyles.Window;
+
+    /// <summary>Play a short sound with the reminder. Off by default (some people are sound-sensitive).</summary>
+    public bool BreakReminderSound { get; set; }
+
+    /// <summary>Length of the focus break, in seconds (20 matches the 20-20-20 rule).</summary>
+    public int BreakFocusSeconds { get; set; } = 20;
+
     /// <summary>
     /// Opt-in presentation safeguard: restores native gamma, overlay, and approved hardware
     /// brightness while Windows reports that a foreground app is fullscreen. Off by default so
@@ -330,6 +351,13 @@ public sealed class AppSettings
         MatchAmbientLight = MatchAmbientLight,
         BreakReminderEnabled = BreakReminderEnabled,
         BreakReminderIntervalMinutes = BreakReminderIntervalMinutes,
+        BreakReminderHoldDuringCalls = BreakReminderHoldDuringCalls,
+        BreakReminderLimitToHours = BreakReminderLimitToHours,
+        BreakReminderFromLocal = BreakReminderFromLocal,
+        BreakReminderToLocal = BreakReminderToLocal,
+        BreakReminderStyle = BreakReminderStyle,
+        BreakReminderSound = BreakReminderSound,
+        BreakFocusSeconds = BreakFocusSeconds,
         RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
         PreferOverlayOnlyOnCompatibilityDisplays = PreferOverlayOnlyOnCompatibilityDisplays,
         CheckForUpdatesEnabled = CheckForUpdatesEnabled,
@@ -407,6 +435,13 @@ public sealed class AppSettings
         MatchAmbientLight = copy.MatchAmbientLight;
         BreakReminderEnabled = copy.BreakReminderEnabled;
         BreakReminderIntervalMinutes = copy.BreakReminderIntervalMinutes;
+        BreakReminderHoldDuringCalls = copy.BreakReminderHoldDuringCalls;
+        BreakReminderLimitToHours = copy.BreakReminderLimitToHours;
+        BreakReminderFromLocal = copy.BreakReminderFromLocal;
+        BreakReminderToLocal = copy.BreakReminderToLocal;
+        BreakReminderStyle = copy.BreakReminderStyle;
+        BreakReminderSound = copy.BreakReminderSound;
+        BreakFocusSeconds = copy.BreakFocusSeconds;
         RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
         PreferOverlayOnlyOnCompatibilityDisplays = copy.PreferOverlayOnlyOnCompatibilityDisplays;
         CheckForUpdatesEnabled = copy.CheckForUpdatesEnabled;

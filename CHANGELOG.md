@@ -6,6 +6,15 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **Break reminders can wait for your calls.** While a camera is in use, or a microphone is in use by a calling app (Teams, Zoom, Webex, Skype, Slack, Discord, WhatsApp, a browser and similar), a reminder that comes due waits and is shown when the call ends, or after 90 minutes at most. Recorders and other tools that keep the microphone open all day do not count. It uses Windows' own record of which apps use the microphone and camera; nothing is recorded or sent. Turn it off in Settings > Monitors & Breaks.
+- **Reminder hours.** "Only remind me between these times" (for example 08:00 to 18:00, or hours that run past midnight). Nothing is counted outside them, so the first reminder of the day is a full interval after they begin.
+- **The reminder window appears on the monitor you are working on**, in its bottom-right corner (it was always on the main monitor).
+- **Choose how to be reminded.** A small window (recommended) or a quiet notification only. An optional short sound, off by default.
+- **Choose how long the break is** (10 to 120 seconds; 20 by default). The reminder, the Start button, the focus-break window and the tray menu all follow it.
+- **A "Restart Monitor Wellness" item in the tray menu**, next to Exit. Closing the app, restarting it, or Windows signing out now gives the displays back straight away, and the log records the sequence.
+
 ## 0.2.13 — Break reminders that fire when they should
 
 - **The break reminder no longer treats reading as a break.** Pauses in keyboard and mouse use of up to 5 minutes (reading, a video, a call) now count as time at the screen; only 5 minutes or more away restarts the count. A reminder that comes due while you have not touched the keyboard for 2 minutes is held until you are back, and dropped if you leave for good, so it no longer pops up on an empty screen.

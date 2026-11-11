@@ -410,6 +410,36 @@
                                     ValueChanged="BreakReminderIntervalSlider_ValueChanged" AutomationProperties.Name="Break reminder interval in minutes"/>
                         </Grid>
                         <TextBlock x:Name="BreakReminderIntervalLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
+
+                        <CheckBox x:Name="BreakHoldDuringCallsCheckBox" Content="Wait while my microphone or camera is in use (calls and recordings)" Margin="0,10,0,4"/>
+                        <TextBlock Text="A reminder that comes due during a call is shown when the call ends, or after 90 minutes at most. This uses Windows' own record of which apps are using the microphone or camera; nothing is recorded or sent anywhere." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                        <CheckBox x:Name="BreakLimitHoursCheckBox" Content="Only remind me between these times" Margin="0,10,0,4"
+                                  Checked="BreakLimitHoursCheckBox_Changed" Unchecked="BreakLimitHoursCheckBox_Changed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBox x:Name="BreakFromBox" Width="60" TextAlignment="Center" AutomationProperties.Name="Break reminders start at (HH:mm)"/>
+                            <TextBlock Text="and" VerticalAlignment="Center" Margin="8,0,8,0"/>
+                            <TextBox x:Name="BreakToBox" Width="60" TextAlignment="Center" AutomationProperties.Name="Break reminders end at (HH:mm)"/>
+                            <TextBlock Text="(24-hour, HH:mm)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource MW.HelperText}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="How to remind me" Margin="0,10,0,4"/>
+                        <ComboBox x:Name="BreakStyleComboBox" AutomationProperties.Name="How to show break reminders">
+                            <ComboBoxItem Tag="Window" Content="A small window on the screen I am using (recommended)"/>
+                            <ComboBoxItem Tag="Notification" Content="A quiet notification only (Windows may hide it under Focus Assist)"/>
+                        </ComboBox>
+                        <CheckBox x:Name="BreakSoundCheckBox" Content="Play a short sound with the reminder" Margin="0,8,0,4"/>
+
+                        <Grid Margin="0,8,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Break length" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Slider x:Name="BreakFocusSecondsSlider" Grid.Column="1" Minimum="10" Maximum="120" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="BreakFocusSecondsSlider_ValueChanged" AutomationProperties.Name="Focus break length in seconds"/>
+                        </Grid>
+                        <TextBlock x:Name="BreakFocusSecondsLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

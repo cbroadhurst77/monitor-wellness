@@ -53,6 +53,7 @@ public partial class App : Application
     private uint _hotkeyKey;
     private GlobalHotkey? _emergencyRestoreHotkey;
     private ToolStripMenuItem? _resumeScheduleMenuItem;
+    private ToolStripMenuItem? _focusBreakMenuItem;
     private DispatcherTimer? _pauseTimer;
     private readonly ScheduleOverrideState _overrides = new();
     private string? _lastForegroundApplicationContext;
@@ -91,7 +92,9 @@ public partial class App : Application
         // timer and a hotkey that silently fails (see TECHNICAL_UX_REVIEW.md §3.1) — this app's
         // own portable + auto-start design makes an accidental double-launch a real scenario,
         // not just a hypothetical one.
-        bool restoreOnly = e.Args.Any(arg => string.Equals(arg, RestoreSwitch, StringComparison.OrdinalIgnoreCase));
+        bool restoreOnly = StartupArguments.HasSwitch(e.Args, StartupArguments.Restore);
+        if (StartupArguments.TryGetRestartWaitProcessId(e.Args, out int previousProcessId))
+            WaitForPreviousInstance(previousProcessId);
         _singleInstanceGuard = new SingleInstanceGuard();
         if (!_singleInstanceGuard.IsPrimaryInstance)
         {
@@ -372,6 +375,78 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// A restart starts the replacement process while this one is still shutting down; the
+    /// replacement waits here (briefly) so it does not mistake the old instance for "already running".
+    /// </summary>
+    private static void WaitForPreviousInstance(int processId)
+    {
+        try
+        {
+            using var previous = System.Diagnostics.Process.GetProcessById(processId);
+            DebugLog.Write($"Restart: waiting for the previous instance (process {processId}) to exit.");
+            if (!previous.WaitForExit(20_000))
+                DebugLog.Write("Restart: the previous instance did not exit within 20 seconds; carrying on anyway.");
+        }
+        catch (ArgumentException)
+        {
+            // Already gone.
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            DebugLog.Write($"Restart: couldn't wait for the previous instance: {ex.Message}");
+        }
+    }
+
+    /// <summary>Starts a replacement instance that waits for this one to exit, then exits this one (which gives the display back first).</summary>
+    private void RestartApplication()
+    {
+        try
+        {
+            string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("The path of this program is unknown.");
+            DebugLog.Write("Restart requested from the tray menu.");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath, StartupArguments.BuildRestartArguments(Environment.ProcessId))
+            {
+                UseShellExecute = false,
+                WorkingDirectory = System.IO.Path.GetDirectoryName(exePath) ?? "",
+            })?.Dispose();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            DebugLog.Write($"Restart failed, staying open: {ex.Message}");
+            System.Windows.MessageBox.Show(
+                "Monitor Wellness couldn't restart itself. It is still running.",
+                "Monitor Wellness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        Shutdown();
+    }
+
+    /// <summary>
+    /// Windows is signing out or shutting down. Hand the displays back immediately, before anything
+    /// else, since the process may be ended soon after; the normal exit path then repeats it harmlessly.
+    /// The log lines here and in OnExit show, after the fact, how that sequence went.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        DebugLog.Write($"Windows is ending the session ({e.ReasonSessionEnding}); giving the displays back now.");
+        try
+        {
+            _hardwareBrightness.RestoreAll(TimeSpan.FromSeconds(1.5));
+            _gammaManager?.RestoreAllToBaseline();
+            _overlay?.Clear();
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Write($"Giving the displays back at session end failed: {ex.Message}");
+        }
+
+        base.OnSessionEnding(e);
+    }
+
     private const string RestoreSwitch = "--restore";
 
     /// <summary>
@@ -641,6 +716,8 @@ public partial class App : Application
             _overlay.ExcludeFromCapture = _settings.ExcludeOverlayFromCapture;
         RebuildHotkey();
         _breakReminder?.Rebuild();
+        if (_focusBreakMenuItem is not null)
+            _focusBreakMenuItem.Text = FocusBreakMenuText();
         // Deliberately not calling RunScheduleTick() here: the settings window's own preview
         // already has the correct saved values on screen right now (that's the whole point
         // of previewing before Save), and the window is about to close anyway, which reapplies
@@ -657,7 +734,7 @@ public partial class App : Application
 
         try
         {
-            var prompt = new BreakPromptWindow(onChoice, _settings.ExcludeOverlayFromCapture);
+            var prompt = new BreakPromptWindow(onChoice, _settings.ExcludeOverlayFromCapture, _settings.BreakFocusSeconds);
             prompt.Closed += (_, _) => _breakPrompt = null;
             _breakPrompt = prompt;
             prompt.Show();
@@ -679,7 +756,7 @@ public partial class App : Application
             return;
         }
 
-        _breakFocusWindow = new BreakFocusWindow();
+        _breakFocusWindow = new BreakFocusWindow(_settings.BreakFocusSeconds);
         _breakFocusWindow.Closed += (_, _) =>
         {
             if (_breakFocusWindow?.CountsAsBreak == true)
@@ -1460,6 +1537,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        var exitTimer = System.Diagnostics.Stopwatch.StartNew();
+        DebugLog.Write("App exiting: shutting down and handing the displays back.");
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _displayReapplyTimer?.Stop();
@@ -1481,6 +1560,7 @@ public partial class App : Application
         _iconOn?.Dispose();
         _iconOff?.Dispose();
         _singleInstanceGuard?.Dispose();
+        DebugLog.Write($"App exit complete in {exitTimer.ElapsedMilliseconds} ms; displays handed back.");
         base.OnExit(e);
     }
 }

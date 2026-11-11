@@ -92,7 +92,7 @@ public class AwayThresholdTests
         int sample = 0;
         int shown = 0;
         var service = new BreakReminderService(settings, () => false, (_, _, _, _) => shown++,
-            readIdle: () => idleAtSample(sample), isFullscreen: () => false, clock: clock);
+            readIdle: () => idleAtSample(sample), isFullscreen: () => false, clock: clock, isInCall: () => false);
         for (sample = 1; sample <= samples; sample++)
         {
             clock.Now += BreakReminderPolicy.SampleInterval;

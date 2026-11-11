@@ -1,7 +1,7 @@
 namespace MonitorWellness.Core;
 
 /// <summary>What the machine currently looks like to a break reminder tick.</summary>
-public readonly record struct BreakReminderSignals(bool MigraineActive, bool LikelyFullscreen, TimeSpan IdleDuration);
+public readonly record struct BreakReminderSignals(bool MigraineActive, bool LikelyFullscreen, TimeSpan IdleDuration, bool InCall = false);
 
 public enum BreakReminderTickOutcome
 {
@@ -71,7 +71,7 @@ public sealed class BreakReminderState
             SnoozedUntilUtc = null;
 
         BreakReminderSignals signals = readSignals();
-        BreakReminderDecision decision = BreakReminderPolicy.Decide(signals.MigraineActive, signals.LikelyFullscreen, signals.IdleDuration);
+        BreakReminderDecision decision = BreakReminderPolicy.Decide(signals.MigraineActive, signals.LikelyFullscreen, signals.IdleDuration, signals.InCall);
         return new BreakReminderTick(
             decision == BreakReminderDecision.Show ? BreakReminderTickOutcome.Show : BreakReminderTickOutcome.Suppressed,
             decision,

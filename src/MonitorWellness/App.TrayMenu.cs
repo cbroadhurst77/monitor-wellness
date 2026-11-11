@@ -39,7 +39,8 @@ public partial class App
         pauseMenu.DropDownItems.Add("Until tomorrow", null, (_, _) =>
             PauseScheduleFor(SchedulePause.ComputeUntilTomorrowLocal(DateTime.Now) - DateTime.Now));
         menu.Items.Add(pauseMenu);
-        menu.Items.Add("Start a &20-second focus break", null, (_, _) => ShowBreakFocusWindow());
+        _focusBreakMenuItem = new ToolStripMenuItem(FocusBreakMenuText(), null, (_, _) => ShowBreakFocusWindow());
+        menu.Items.Add(_focusBreakMenuItem);
         menu.Items.Add(breakReminder.BuildSnoozeMenu());
         _resumeScheduleMenuItem = new ToolStripMenuItem("&Resume Schedule", null, (_, _) => ResumeSchedule()) { Enabled = false };
         menu.Items.Add(_resumeScheduleMenuItem);
@@ -115,7 +116,10 @@ public partial class App
         menu.Items.Add("&About Monitor Wellness...", null, (_, _) => ShowAboutWindow());
         menu.Items.Add("&Troubleshooting...", null, (_, _) => ShowTroubleshootingWindow());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("&Restart Monitor Wellness", null, (_, _) => RestartApplication());
         menu.Items.Add("E&xit", null, (_, _) => Shutdown());
         return menu;
     }
+
+    private string FocusBreakMenuText() => $"Start a &{_settings.BreakFocusSeconds}-second focus break";
 }

@@ -23,6 +23,12 @@ public static class BreakReminderPolicy
     /// </summary>
     public static readonly TimeSpan ShowIdleLimit = TimeSpan.FromMinutes(2);
 
+    /// <summary>
+    /// A reminder held for a call is shown anyway after this long: an app that keeps the microphone
+    /// open all day is not a call.
+    /// </summary>
+    public static readonly TimeSpan MaximumCallHold = TimeSpan.FromMinutes(90);
+
     public const int MinimumIntervalMinutes = 1;
     public const int MaximumIntervalMinutes = 8 * 60;
 
@@ -31,6 +37,25 @@ public static class BreakReminderPolicy
 
     /// <summary>The one place the reminder interval is bounded; the validator and the service both use it.</summary>
     public static int ClampIntervalMinutes(int minutes) => Math.Clamp(minutes, MinimumIntervalMinutes, MaximumIntervalMinutes);
+
+    /// <summary>
+    /// Whether reminders are wanted at this local time. With the limit off, always. Hours that run past
+    /// midnight (start later than end) are supported; equal start and end, or a time that cannot be read,
+    /// mean no limit rather than never reminding.
+    /// </summary>
+    public static bool IsWithinActiveHours(DateTime nowLocal, bool limitToHours, string? from, string? to)
+    {
+        if (!limitToHours
+            || !FixedTimeSchedule.TryParseTimeOfDay(from, out TimeSpan start)
+            || !FixedTimeSchedule.TryParseTimeOfDay(to, out TimeSpan end)
+            || start == end)
+            return true;
+
+        TimeSpan now = nowLocal.TimeOfDay;
+        return start < end
+            ? now >= start && now < end
+            : now >= start || now < end;
+    }
 
     /// <summary>"Until morning": 08:00 today if it is earlier than that now, otherwise 08:00 tomorrow.</summary>
     public static DateTime NextMorningLocal(DateTime nowLocal)
@@ -43,12 +68,14 @@ public static class BreakReminderPolicy
     public static bool IsSnoozed(DateTime nowUtc, DateTime? snoozedUntilUtc) =>
         snoozedUntilUtc is DateTime until && until > nowUtc;
 
-    public static BreakReminderDecision Decide(bool migraineActive, bool likelyFullscreen, TimeSpan idleDuration)
+    public static BreakReminderDecision Decide(bool migraineActive, bool likelyFullscreen, TimeSpan idleDuration, bool inCall = false)
     {
         if (migraineActive)
             return BreakReminderDecision.SuppressedForMigraine;
         if (likelyFullscreen)
             return BreakReminderDecision.SuppressedForFullscreen;
+        if (inCall)
+            return BreakReminderDecision.SuppressedForCall;
         if (idleDuration >= ShowIdleLimit)
             return BreakReminderDecision.SuppressedForIdle;
 
@@ -61,5 +88,6 @@ public enum BreakReminderDecision
     Show,
     SuppressedForMigraine,
     SuppressedForFullscreen,
+    SuppressedForCall,
     SuppressedForIdle,
 }

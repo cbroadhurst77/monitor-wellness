@@ -166,6 +166,7 @@ public partial class SettingsWindow : Window
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        LoadBreakExtras(_settings);
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CompatibilityOverlayOnlyCheckBox.IsChecked = _settings.PreferOverlayOnlyOnCompatibilityDisplays;
         // HistoryTrackingCheckBox's own Checked/Unchecked handler (fired by setting its
@@ -331,6 +332,14 @@ public partial class SettingsWindow : Window
             });
         }
 
+        if (BreakLimitHoursCheckBox.IsChecked == true
+            && (!FixedTimeSchedule.TryParseTimeOfDay(BreakFromBox.Text, out TimeSpan breakFrom)
+                || !FixedTimeSchedule.TryParseTimeOfDay(BreakToBox.Text, out TimeSpan breakTo)))
+        {
+            error = "Break reminder hours must be times in HH:mm format, for example 08:00 and 18:00.";
+            return false;
+        }
+
         // Per-monitor settings are stored against each monitor's physical identity, and entries for
         // monitors that are not connected right now are kept rather than dropped.
         var activeByName = MonitorEnumerator.GetActiveMonitors()
@@ -391,6 +400,16 @@ public partial class SettingsWindow : Window
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;
         _settings.BreakReminderIntervalMinutes = (int)BreakReminderIntervalSlider.Value;
+        _settings.BreakReminderHoldDuringCalls = BreakHoldDuringCallsCheckBox.IsChecked == true;
+        _settings.BreakReminderLimitToHours = BreakLimitHoursCheckBox.IsChecked == true;
+        // Kept as typed times in a fixed format; an unticked, unparseable box keeps the previous value.
+        if (FixedTimeSchedule.TryParseTimeOfDay(BreakFromBox.Text, out TimeSpan savedFrom))
+            _settings.BreakReminderFromLocal = savedFrom.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        if (FixedTimeSchedule.TryParseTimeOfDay(BreakToBox.Text, out TimeSpan savedTo))
+            _settings.BreakReminderToLocal = savedTo.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        _settings.BreakReminderStyle = (BreakStyleComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? BreakReminderStyles.Window;
+        _settings.BreakReminderSound = BreakSoundCheckBox.IsChecked == true;
+        _settings.BreakFocusSeconds = (int)BreakFocusSecondsSlider.Value;
         _settings.RestoreNativeDisplayInFullscreen = FullscreenPresentationGuardCheckBox.IsChecked == true;
         _settings.PreferOverlayOnlyOnCompatibilityDisplays = CompatibilityOverlayOnlyCheckBox.IsChecked == true;
         _settings.CheckForUpdatesEnabled = CheckForUpdatesCheckBox.IsChecked == true;

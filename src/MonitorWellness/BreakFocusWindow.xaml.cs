@@ -5,22 +5,27 @@ using MonitorWellness.Core;
 namespace MonitorWellness;
 
 /// <summary>
-/// A user-initiated, non-modal visual aid for a 20-second distance-focus break. It never dims,
-/// captures input, or prevents dismissal, so it cannot create a recovery hazard.
+/// A user-initiated, non-modal visual aid for a short distance-focus break (20 seconds by default; the
+/// length is a setting). It never dims, captures input, or prevents dismissal, so it cannot create a
+/// recovery hazard.
 /// </summary>
 public partial class BreakFocusWindow : Window
 {
-    private static readonly TimeSpan FocusDuration = TimeSpan.FromSeconds(20);
     private readonly DispatcherTimer _timer;
     private readonly DateTime _endsAtUtc;
 
-    public BreakFocusWindow()
+    public BreakFocusWindow(int seconds = 20)
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         Icon = AppIconSource.Default;
 
-        _endsAtUtc = DateTime.UtcNow + FocusDuration;
+        seconds = Math.Clamp(seconds, BreakReminderStyles.MinimumFocusSeconds, BreakReminderStyles.MaximumFocusSeconds);
+        Title = $"{seconds}-second focus break";
+        HeadingText.Text = Title;
+        System.Windows.Automation.AutomationProperties.SetName(HeadingText, Title);
+
+        _endsAtUtc = DateTime.UtcNow + TimeSpan.FromSeconds(seconds);
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => UpdateCountdown();
         Closed += (_, _) => _timer.Stop();

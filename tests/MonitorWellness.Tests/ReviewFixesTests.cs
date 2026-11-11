@@ -120,7 +120,7 @@ public class BreakReminderServiceTests
                 (_, _, _, _) => Shown++,
                 readIdle: () => ThrowOnIdle ? throw new InvalidOperationException("boom") : Idle,
                 isFullscreen: () => Fullscreen,
-                clock: Clock);
+                clock: Clock, isInCall: () => false);
         }
 
         public void Step(int samples)

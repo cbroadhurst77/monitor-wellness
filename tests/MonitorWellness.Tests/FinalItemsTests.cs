@@ -305,7 +305,7 @@ public class BreakReminderPromptTests
                 },
                 readIdle: () => TimeSpan.FromSeconds(1),
                 isFullscreen: () => false,
-                clock: Clock);
+                clock: Clock, isInCall: () => false);
         }
 
         public void Step(int samples)
@@ -385,7 +385,7 @@ public class BreakReminderPromptTests
         int balloons = 0;
         var service = new BreakReminderService(settings, () => false, (_, _, _, _) => balloons++,
             showPrompt: _ => throw new InvalidOperationException("no window"),
-            readIdle: () => TimeSpan.Zero, isFullscreen: () => false, clock: clock);
+            readIdle: () => TimeSpan.Zero, isFullscreen: () => false, clock: clock, isInCall: () => false);
 
         for (int i = 0; i < 25; i++)
         {

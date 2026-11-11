@@ -8,11 +8,11 @@ namespace MonitorWellness;
 /// The opt-in 20-20-20 break reminder. It samples keyboard/mouse activity every few seconds and
 /// counts the time the person has actually been at the computer (<see cref="ActiveTimeTracker"/>);
 /// when that reaches the chosen interval it shows a reminder, unless migraine mode, a fullscreen
-/// app or a snooze says not to. A reminder that is held back stays due and is shown as soon as the
-/// reason goes away, instead of being skipped until the next cycle. Taking a break (the 20-second
-/// focus timer, or simply stepping away) restarts the count.
+/// app, a call or a snooze says not to. A reminder that is held back stays due and is shown as soon as
+/// the reason goes away, instead of being skipped until the next cycle. Outside the person's chosen
+/// hours nothing is counted. Taking a break (the focus timer, or simply stepping away) restarts the count.
 /// The rules live in BreakReminderState/BreakReminderPolicy/ActiveTimeTracker (tested); this class
-/// is the wiring to the Windows signals, the tray balloon and the tray menu.
+/// is the wiring to the Windows signals, the prompt, the tray balloon and the tray menu.
 /// </summary>
 public sealed class BreakReminderService : IDisposable
 {
@@ -23,16 +23,21 @@ public sealed class BreakReminderService : IDisposable
     private readonly Func<Action<BreakPromptChoice>, bool>? _showPrompt;
     private readonly Func<TimeSpan> _readIdle;
     private readonly Func<bool> _isFullscreen;
+    private readonly Func<bool> _isInCall;
+    private readonly Action _playSound;
     private readonly TimeProvider _clock;
     private readonly BreakReminderState _state = new();
     private readonly ActiveTimeTracker _activeTime = new();
     private DispatcherTimer? _timer;
     private ToolStripMenuItem[] _snoozeItems = Array.Empty<ToolStripMenuItem>();
+    private DateTime? _callHeldSinceUtc;
     private readonly LogOnChange _tickLog = new(TimeSpan.FromHours(6));
 
     /// <param name="showBalloon">Shows a tray balloon: (milliseconds, message, icon, action to run if the balloon is clicked).</param>
-    /// <param name="startBreak">Starts the 20-second focus break; offered by the prompt and when the fallback balloon is clicked.</param>
+    /// <param name="startBreak">Starts the focus break; offered by the prompt and when the fallback balloon is clicked.</param>
     /// <param name="showPrompt">Shows the reminder prompt and reports the person's choice to the callback; returns false if it could not be shown (the balloon is used instead).</param>
+    /// <param name="isInCall">Whether a microphone or camera is in use; only asked when reminders are set to wait during calls.</param>
+    /// <param name="playSound">Plays the reminder sound; only called when the sound setting is on.</param>
     public BreakReminderService(
         AppSettings settings,
         Func<bool> isMigraineActive,
@@ -41,7 +46,9 @@ public sealed class BreakReminderService : IDisposable
         Func<Action<BreakPromptChoice>, bool>? showPrompt = null,
         Func<TimeSpan>? readIdle = null,
         Func<bool>? isFullscreen = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        Func<bool>? isInCall = null,
+        Action? playSound = null)
     {
         _settings = settings;
         _isMigraineActive = isMigraineActive;
@@ -50,10 +57,14 @@ public sealed class BreakReminderService : IDisposable
         _showPrompt = showPrompt;
         _readIdle = readIdle ?? UserIdleDetector.GetIdleDuration;
         _isFullscreen = isFullscreen ?? FullscreenDetector.IsForegroundWindowLikelyFullscreen;
+        _isInCall = isInCall ?? CallActivityDetector.IsInCall;
+        _playSound = playSound ?? (() => System.Media.SystemSounds.Asterisk.Play());
         _clock = clock ?? TimeProvider.System;
     }
 
     private TimeSpan Interval => TimeSpan.FromMinutes(BreakReminderPolicy.ClampIntervalMinutes(_settings.BreakReminderIntervalMinutes));
+
+    private int FocusSeconds => Math.Clamp(_settings.BreakFocusSeconds, BreakReminderStyles.MinimumFocusSeconds, BreakReminderStyles.MaximumFocusSeconds);
 
     /// <summary>
     /// Starts or stops sampling to match the settings. Called at startup and after every Settings
@@ -70,6 +81,7 @@ public sealed class BreakReminderService : IDisposable
             _timer = null;
             _state.Reset();
             _activeTime.Reset();
+            _callHeldSinceUtc = null;
             return;
         }
 
@@ -101,6 +113,17 @@ public sealed class BreakReminderService : IDisposable
                 return;
 
             DateTime nowUtc = _clock.GetUtcNow().UtcDateTime;
+            if (!BreakReminderPolicy.IsWithinActiveHours(
+                    _clock.GetLocalNow().DateTime, _settings.BreakReminderLimitToHours,
+                    _settings.BreakReminderFromLocal, _settings.BreakReminderToLocal))
+            {
+                // Outside the chosen hours nothing counts, so the first reminder of the day is a
+                // full interval after the hours begin, not one the moment they do.
+                _activeTime.Reset();
+                _callHeldSinceUtc = null;
+                return;
+            }
+
             TimeSpan idle = _readIdle();
             _activeTime.Sample(nowUtc, idle, BreakReminderPolicy.SampleInterval, BreakReminderPolicy.AwayThreshold);
             if (!_activeTime.IsDue(Interval))
@@ -110,7 +133,8 @@ public sealed class BreakReminderService : IDisposable
             {
                 bool migraineActive = _isMigraineActive();
                 bool likelyFullscreen = !migraineActive && _isFullscreen();
-                return new BreakReminderSignals(migraineActive, likelyFullscreen, idle);
+                bool inCall = !migraineActive && !likelyFullscreen && IsHeldForCall(nowUtc);
+                return new BreakReminderSignals(migraineActive, likelyFullscreen, idle, inCall);
             });
 
             if (tick.Outcome == BreakReminderTickOutcome.SkippedSnoozed)
@@ -121,16 +145,10 @@ public sealed class BreakReminderService : IDisposable
             if (tick.Outcome == BreakReminderTickOutcome.Show)
             {
                 _activeTime.Reset();
+                _callHeldSinceUtc = null;
                 if (_tickLog.ShouldLog("show", nowUtc))
                     DebugLog.Write("BreakReminder: reminder shown (further identical reminders are logged only every 6 hours)");
-                if (!TryShowPrompt())
-                {
-                    _showBalloon(
-                        8_000,
-                        "Time for a break — look at something about 20 feet away for 20 seconds. Click here for a 20-second timer.",
-                        ToolTipIcon.Info,
-                        _startBreak);
-                }
+                Deliver();
             }
             else if (_tickLog.ShouldLog($"hold:{tick.Decision}", nowUtc))
             {
@@ -141,6 +159,42 @@ public sealed class BreakReminderService : IDisposable
         {
             DebugLog.Write($"BreakReminder: sample failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// True while a microphone or camera is in use and reminders are set to wait for calls. A device that
+    /// has held the reminder this long is not a call (an app that keeps the microphone open all day, say),
+    /// so the reminder is shown after all.
+    /// </summary>
+    private bool IsHeldForCall(DateTime nowUtc)
+    {
+        if (!_settings.BreakReminderHoldDuringCalls || !_isInCall())
+        {
+            _callHeldSinceUtc = null;
+            return false;
+        }
+
+        _callHeldSinceUtc ??= nowUtc;
+        return nowUtc - _callHeldSinceUtc.Value < BreakReminderPolicy.MaximumCallHold;
+    }
+
+    private void Deliver()
+    {
+        if (_settings.BreakReminderSound)
+        {
+            try { _playSound(); }
+            catch (Exception ex) { DebugLog.Write($"BreakReminder: couldn't play the reminder sound: {ex.Message}"); }
+        }
+
+        bool windowStyle = !string.Equals(_settings.BreakReminderStyle, BreakReminderStyles.Notification, StringComparison.Ordinal);
+        if (windowStyle && TryShowPrompt())
+            return;
+
+        _showBalloon(
+            8_000,
+            $"Time for a break — look at something about 20 feet away for {FocusSeconds} seconds. Click here for a {FocusSeconds}-second timer.",
+            ToolTipIcon.Info,
+            _startBreak);
     }
 
     /// <summary>How long "In 5 minutes" on the prompt waits before asking again.</summary>

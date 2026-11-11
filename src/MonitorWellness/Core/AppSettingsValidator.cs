@@ -64,6 +64,13 @@ public static class AppSettingsValidator
             return Invalid($"Migraine auto-revert must be between 0 and {MaximumAutoRevertMinutes} minutes.", out error);
         if (settings.BreakReminderIntervalMinutes is < BreakReminderPolicy.MinimumIntervalMinutes or > BreakReminderPolicy.MaximumIntervalMinutes)
             return Invalid($"Break reminder interval must be between {BreakReminderPolicy.MinimumIntervalMinutes} and {BreakReminderPolicy.MaximumIntervalMinutes} minutes.", out error);
+        if (!FixedTimeSchedule.TryParseTimeOfDay(settings.BreakReminderFromLocal, out _)
+            || !FixedTimeSchedule.TryParseTimeOfDay(settings.BreakReminderToLocal, out _))
+            return Invalid("Break reminder hours must be times between 00:00 and 23:59.", out error);
+        if (!BreakReminderStyles.IsSupported(settings.BreakReminderStyle))
+            return Invalid("The break reminder style is not recognised.", out error);
+        if (settings.BreakFocusSeconds is < BreakReminderStyles.MinimumFocusSeconds or > BreakReminderStyles.MaximumFocusSeconds)
+            return Invalid($"The focus break must be between {BreakReminderStyles.MinimumFocusSeconds} and {BreakReminderStyles.MaximumFocusSeconds} seconds.", out error);
         if ((settings.MigraineHotkeyModifiers & ~AllowedHotkeyModifiers) != 0 || settings.MigraineHotkeyModifiers == 0 || settings.MigraineHotkeyKey == 0)
             return Invalid("Migraine hotkey settings are invalid.", out error);
         if (settings.ExcludedMonitors is null || settings.ColorExcludedMonitors is null

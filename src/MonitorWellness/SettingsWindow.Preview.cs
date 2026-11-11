@@ -235,6 +235,48 @@ public partial class SettingsWindow
     private void BreakReminderCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         BreakReminderIntervalSlider.IsEnabled = BreakReminderCheckBox.IsChecked == true;
+        UpdateBreakControlsEnabled();
+    }
+
+    private void BreakLimitHoursCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateBreakControlsEnabled();
+
+    private void BreakFocusSecondsSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (BreakFocusSecondsLabel is null) return; // raised once during InitializeComponent, before the label exists (see the interval slider below)
+        BreakFocusSecondsLabel.Text = $"{(int)BreakFocusSecondsSlider.Value} seconds";
+    }
+
+    /// <summary>The call, hours, style, sound and length options only matter while reminders are on (the hour boxes also need their own tick).</summary>
+    private void UpdateBreakControlsEnabled()
+    {
+        if (BreakHoldDuringCallsCheckBox is null || BreakLimitHoursCheckBox is null) return; // still constructing
+        bool on = BreakReminderCheckBox.IsChecked == true;
+        BreakHoldDuringCallsCheckBox.IsEnabled = on;
+        BreakLimitHoursCheckBox.IsEnabled = on;
+        BreakFromBox.IsEnabled = on && BreakLimitHoursCheckBox.IsChecked == true;
+        BreakToBox.IsEnabled = BreakFromBox.IsEnabled;
+        BreakStyleComboBox.IsEnabled = on;
+        BreakSoundCheckBox.IsEnabled = on;
+        BreakFocusSecondsSlider.IsEnabled = on;
+    }
+
+    /// <summary>Fills the break reminder options added after the on/off box and interval from the given settings.</summary>
+    private void LoadBreakExtras(AppSettings settings)
+    {
+        BreakHoldDuringCallsCheckBox.IsChecked = settings.BreakReminderHoldDuringCalls;
+        BreakLimitHoursCheckBox.IsChecked = settings.BreakReminderLimitToHours;
+        BreakFromBox.Text = settings.BreakReminderFromLocal;
+        BreakToBox.Text = settings.BreakReminderToLocal;
+        BreakSoundCheckBox.IsChecked = settings.BreakReminderSound;
+        BreakFocusSecondsSlider.Value = settings.BreakFocusSeconds;
+        foreach (ComboBoxItem item in BreakStyleComboBox.Items)
+        {
+            if (string.Equals(item.Tag as string, settings.BreakReminderStyle, StringComparison.Ordinal))
+                BreakStyleComboBox.SelectedItem = item;
+        }
+        if (BreakStyleComboBox.SelectedItem is null)
+            BreakStyleComboBox.SelectedIndex = 0;
+        UpdateBreakControlsEnabled();
     }
 
     private void BreakReminderIntervalSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

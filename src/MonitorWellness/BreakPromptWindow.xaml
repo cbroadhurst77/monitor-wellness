@@ -13,10 +13,10 @@
 
         <TextBlock Grid.Row="0" Text="Time for a break" FontWeight="Bold" FontSize="16"
                    AutomationProperties.Name="Time for a break"/>
-        <TextBlock Grid.Row="1" Margin="0,6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MW.HelperText}"
+        <TextBlock x:Name="MessageText" Grid.Row="1" Margin="0,6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MW.HelperText}"
                    Text="Look at something about 20 feet away for 20 seconds."/>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Start 20 seconds" Padding="12,4" IsDefault="True" Click="Start_Click"
+            <Button x:Name="StartButton" Content="Start 20 seconds" Padding="12,4" IsDefault="True" Click="Start_Click"
                     AutomationProperties.Name="Start the 20-second break"/>
             <Button Content="In 5 minutes" Padding="12,4" Margin="8,0,0,0" Click="Snooze_Click"
                     AutomationProperties.Name="Remind me again in 5 minutes"/>

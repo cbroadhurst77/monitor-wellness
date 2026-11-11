@@ -90,6 +90,13 @@ public partial class SettingsWindow
         _settings.MatchAmbientLight = imported.MatchAmbientLight;
         _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
         _settings.BreakReminderIntervalMinutes = imported.BreakReminderIntervalMinutes;
+        _settings.BreakReminderHoldDuringCalls = imported.BreakReminderHoldDuringCalls;
+        _settings.BreakReminderLimitToHours = imported.BreakReminderLimitToHours;
+        _settings.BreakReminderFromLocal = imported.BreakReminderFromLocal;
+        _settings.BreakReminderToLocal = imported.BreakReminderToLocal;
+        _settings.BreakReminderStyle = imported.BreakReminderStyle;
+        _settings.BreakReminderSound = imported.BreakReminderSound;
+        _settings.BreakFocusSeconds = imported.BreakFocusSeconds;
         _settings.RestoreNativeDisplayInFullscreen = imported.RestoreNativeDisplayInFullscreen;
         _settings.CheckForUpdatesEnabled = imported.CheckForUpdatesEnabled;
         _settings.ExcludeOverlayFromCapture = imported.ExcludeOverlayFromCapture;
@@ -107,6 +114,7 @@ public partial class SettingsWindow
         MatchAmbientLightCheckBox.IsChecked = _settings.MatchAmbientLight;
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
+        LoadBreakExtras(_settings);
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;
