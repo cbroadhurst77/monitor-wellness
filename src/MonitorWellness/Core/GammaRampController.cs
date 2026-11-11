@@ -14,7 +14,7 @@ namespace MonitorWellness.Core;
 /// native one (see <see cref="GammaRampMath.IsPlausibleBaseline"/>) the linear identity ramp is
 /// used instead, so a leftover warm/dim ramp is never adopted as "normal".
 /// </summary>
-public sealed class GammaRampController : IDisposable
+public sealed class GammaRampController : IDisposable, IGammaController
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct RAMP

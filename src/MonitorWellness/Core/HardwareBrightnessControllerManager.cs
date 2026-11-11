@@ -23,7 +23,7 @@ internal interface IHardwareBrightnessSession : IDisposable
 /// UI thread) when something worth acting on happened. The worker thread is only created once a
 /// monitor is actually approved, so most people never get one.
 /// </summary>
-public sealed class HardwareBrightnessControllerManager : IDisposable
+public sealed class HardwareBrightnessControllerManager : IDisposable, IHardwareBrightness
 {
     internal delegate bool SessionOpener(string deviceName, out IHardwareBrightnessSession? session, out string error);
 

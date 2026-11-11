@@ -17,7 +17,7 @@ namespace MonitorWellness.Core;
 /// wants relief now) is instant and the app's startup isn't spent building three transparent
 /// full-screen windows that daytime never uses.
 /// </summary>
-public sealed class OverlayController : IDisposable, IOverlayTarget
+public sealed class OverlayController : IDisposable, IOverlayTarget, IDimOverlay
 {
     private static readonly TimeSpan TopologyRefreshDebounce = TimeSpan.FromMilliseconds(250);
     private readonly Dictionary<string, OverlayWindow> _windows = new();

@@ -134,7 +134,7 @@ public partial class SettingsWindow
                     : "Temporarily dims this monitor's physical backlight by a small amount, then restores it automatically. Does not enable hardware dimming.",
             };
             System.Windows.Automation.AutomationProperties.SetName(testHardwareBrightnessButton, $"Test hardware brightness for {ShortDeviceName(deviceName)}");
-            testHardwareBrightnessButton.Click += (_, _) => TestHardwareBrightness(deviceName, monitor, hardwareBrightnessBox);
+            testHardwareBrightnessButton.Click += async (_, _) => await TestHardwareBrightnessAsync(deviceName, monitor, hardwareBrightnessBox);
             Grid.SetColumn(testHardwareBrightnessButton, 6);
 
             row.Children.Add(label);

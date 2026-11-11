@@ -10,7 +10,7 @@ namespace MonitorWellness.Core;
 /// never rebuilt, so a monitor added/removed after launch (or a device context invalidated
 /// by a sleep/resume cycle) would silently go stale.
 /// </summary>
-public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarget
+public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarget, IGammaSource
 {
     // Guards _controllers: OnDisplaySettingsChanged can rebuild it off the UI thread when
     // Application.Current is null (e.g. during shutdown), concurrently with a schedule-tick
@@ -138,6 +138,8 @@ public sealed class GammaControllerManager : IDisposable, IColorTemperatureTarge
     }
 
     /// <summary>A snapshot of the current controllers, safe to enumerate even if a display-topology change rebuilds the live set concurrently.</summary>
+    IReadOnlyCollection<IGammaController> IGammaSource.Controllers => Controllers;
+
     public IReadOnlyCollection<GammaRampController> Controllers
     {
         get { lock (_lock) return _controllers.Values.ToList(); }

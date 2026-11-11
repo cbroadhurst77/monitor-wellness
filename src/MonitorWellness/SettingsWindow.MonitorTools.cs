@@ -21,8 +21,18 @@ public partial class SettingsWindow
 {
     private void IdentifyButton_Click(object sender, RoutedEventArgs e) => _overlay.IdentifyMonitors(TimeSpan.FromSeconds(6));
 
-    private void TestHardwareBrightness(string deviceName, MonitorInfo? monitor, CheckBox hardwareBrightnessBox)
+    private bool _hardwareTestRunning;
+
+    /// <summary>
+    /// The user-requested reversible test of a monitor's physical backlight. Every call that talks to the
+    /// monitor (opening it, dimming it, giving the brightness back) runs on a background thread: they are
+    /// slow round trips that can hang on some monitors and docks, and must not freeze this window.
+    /// </summary>
+    private async Task TestHardwareBrightnessAsync(string deviceName, MonitorInfo? monitor, CheckBox hardwareBrightnessBox)
     {
+        if (_hardwareTestRunning)
+            return;
+
         if (System.Windows.MessageBox.Show(
                 this,
                 $"Monitor Wellness will temporarily reduce {ShortDeviceName(deviceName)}'s physical backlight by a small amount, then restore the exact previous value after at most 10 seconds. This does not enable hardware dimming for the schedule. Continue?",
@@ -32,22 +42,40 @@ public partial class SettingsWindow
                 MessageBoxResult.No) != MessageBoxResult.Yes)
             return;
 
-        if (!DdcCiBrightnessProbe.TryOpenTestSession(deviceName, out DdcCiBrightnessTestSession? session, out string error) || session is null)
+        _hardwareTestRunning = true;
+        DdcCiBrightnessTestSession? session = null;
+        try
         {
-            System.Windows.MessageBox.Show(this, $"Hardware brightness test isn't available: {error}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        using (session)
-        {
-            if (!session.TryDimForTest(out error))
+            var (opened, openedSession, openError) = await Task.Run(() =>
             {
-                System.Windows.MessageBox.Show(this, $"Hardware brightness test couldn't start: {error}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
+                bool ok = DdcCiBrightnessProbe.TryOpenTestSession(deviceName, out DdcCiBrightnessTestSession? s, out string e);
+                return (ok && s is not null, s, e);
+            });
+            session = openedSession;
+            if (!opened)
+            {
+                System.Windows.MessageBox.Show(this, $"Hardware brightness test isn't available: {openError}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var (dimmed, dimError) = await Task.Run(() =>
+            {
+                bool ok = session!.TryDimForTest(out string e);
+                return (ok, e);
+            });
+            if (!dimmed)
+            {
+                System.Windows.MessageBox.Show(this, $"Hardware brightness test couldn't start: {dimError}", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             var dialog = new HardwareBrightnessTestDialog { Owner = this };
             dialog.ShowDialog();
+
+            // Give the brightness back before saying anything about the result.
+            await Task.Run(() => session!.Dispose());
+            session = null;
+
             if (dialog.Confirmed)
             {
                 if (monitor is null || !HardwareBrightnessSafety.MarkVerified(_settings, monitor))
@@ -61,6 +89,13 @@ public partial class SettingsWindow
                 hardwareBrightnessBox.ToolTip = "This monitor passed its reversible hardware-brightness test. Click Save to keep the approval.";
                 System.Windows.MessageBox.Show(this, "Hardware brightness responded correctly. HW is now selected for this physically identified monitor; click Save to opt in to scheduled physical brightness.", "Monitor Wellness", MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+        finally
+        {
+            // Whatever happened, the monitor must not be left dimmed.
+            if (session is not null)
+                await Task.Run(() => session.Dispose());
+            _hardwareTestRunning = false;
         }
     }
 }

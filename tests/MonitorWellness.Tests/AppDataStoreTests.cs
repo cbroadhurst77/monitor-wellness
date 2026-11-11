@@ -114,6 +114,22 @@ public sealed class AppDataStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_OfARepairedFile_SavesTheRepair_SoTheNoticeIsShownOnlyOnce()
+    {
+        File.WriteAllText(SettingsFile, "{ \"DayKelvin\": 5700, \"DayBrightness\": 7.5 }");
+
+        SettingsStore.Load();
+        Assert.Contains("saved", SettingsStore.LastLoadProblem);
+
+        AppSettings second = SettingsStore.Load();
+
+        Assert.Null(SettingsStore.LastLoadProblem);
+        Assert.Equal(5700, second.DayKelvin);
+        Assert.Equal(new AppSettings().DayBrightness, second.DayBrightness);
+        Assert.Contains("7.5", File.ReadAllText(Assert.Single(Directory.GetFiles(Folder, "settings.invalid-*.json")))); // the original is still there as a copy
+    }
+
+    [Fact]
     public void Save_AfterAFailedLoad_DoesNotDestroyTheKeptCopy()
     {
         File.WriteAllText(SettingsFile, "garbage");

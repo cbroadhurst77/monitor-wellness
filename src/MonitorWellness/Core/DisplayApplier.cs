@@ -13,9 +13,10 @@ namespace MonitorWellness.Core;
 public sealed class DisplayApplier
 {
     private readonly AppSettings _settings;
-    private readonly GammaControllerManager _gamma;
-    private readonly OverlayController _overlay;
-    private readonly HardwareBrightnessControllerManager _hardware;
+    private readonly IGammaSource _gamma;
+    private readonly IDimOverlay _overlay;
+    private readonly IHardwareBrightness _hardware;
+    private readonly IMonitorSource _monitors;
     private readonly HashSet<string> _compatibilityFallbackDevices = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Raised when a display first switches to overlay-only: (device name, reason, whether the reason is HDR).</summary>
@@ -26,11 +27,22 @@ public sealed class DisplayApplier
         GammaControllerManager gamma,
         OverlayController overlay,
         HardwareBrightnessControllerManager hardware)
+        : this(settings, gamma, overlay, hardware, new SystemMonitorSource())
+    {
+    }
+
+    internal DisplayApplier(
+        AppSettings settings,
+        IGammaSource gamma,
+        IDimOverlay overlay,
+        IHardwareBrightness hardware,
+        IMonitorSource monitors)
     {
         _settings = settings;
         _gamma = gamma;
         _overlay = overlay;
         _hardware = hardware;
+        _monitors = monitors;
         _hardware.ResultChanged += OnHardwareResultChanged;
     }
 
@@ -41,7 +53,7 @@ public sealed class DisplayApplier
     {
         try
         {
-            PersistHardwareBrightnessQuarantines(MonitorEnumerator.GetActiveMonitors(), result);
+            PersistHardwareBrightnessQuarantines(_monitors.GetActiveMonitors(), result);
         }
         catch (Exception ex)
         {
@@ -65,7 +77,7 @@ public sealed class DisplayApplier
     /// <summary>Applies the colour temperature and brightness schedule target to every active display.</summary>
     public void Apply(int kelvin, IReadOnlyDictionary<string, double> brightnessByDevice, Color dimColor)
     {
-        IReadOnlyList<MonitorInfo> activeMonitors = MonitorEnumerator.GetActiveMonitors();
+        IReadOnlyList<MonitorInfo> activeMonitors = _monitors.GetActiveMonitors();
         var activeMonitorsByDeviceName = activeMonitors.ToDictionary(monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
         foreach (var controller in _gamma.Controllers)
             ApplyColor(controller, kelvin, activeMonitorsByDeviceName);
@@ -89,7 +101,7 @@ public sealed class DisplayApplier
         _overlay.ApplyDim(overlayBrightnessByDevice, dimColor);
     }
 
-    private void ApplyColor(GammaRampController controller, int kelvin, Dictionary<string, MonitorInfo> activeMonitorsByDeviceName)
+    private void ApplyColor(IGammaController controller, int kelvin, Dictionary<string, MonitorInfo> activeMonitorsByDeviceName)
     {
         activeMonitorsByDeviceName.TryGetValue(controller.DeviceName, out MonitorInfo? knownMonitor);
         MonitorInfo identity = knownMonitor ?? MonitorKeys.Unidentified(controller.DeviceName);

@@ -48,7 +48,7 @@ public static class SettingsStore
                             DebugLog.Write($"SettingsStore: settings.json is schema v{loaded.SchemaVersion}, newer than this build (v{AppSettings.CurrentSchemaVersion}); original kept as {kept ?? "(copy failed)"}.");
                         }
                         if (problems.Count > 0)
-                            RecordRepairedSettings(problems);
+                            RecordRepairedSettings(problems, loaded);
                         return loaded;
                     }
                 }
@@ -97,14 +97,31 @@ public static class SettingsStore
     }
 
     /// <summary>Some values were invalid and have been reset; everything else was kept. Keeps a dated copy of the original and says so.</summary>
-    private static void RecordRepairedSettings(IReadOnlyList<string> problems)
+    private static void RecordRepairedSettings(IReadOnlyList<string> problems, AppSettings repaired)
     {
         string list = string.Join(", ", problems.Distinct());
         string? kept = PreserveCopy(SettingsPath, "invalid-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture), pruneOldCopies: true);
         DebugLog.Write($"SettingsStore: reset invalid settings to their defaults and kept the rest: {list}");
+
+        // Write the repaired settings back so the same notice is not shown at every launch. The original
+        // is only replaced once a copy of it exists (or the copy itself failed, in which case it stays).
+        bool saved = false;
+        if (kept is not null)
+        {
+            try
+            {
+                Save(repaired, keepBackup: false);
+                saved = true;
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                DebugLog.Write($"SettingsStore: couldn't save the repaired settings: {ex.Message}");
+            }
+        }
+
         LastLoadProblem = kept is null
             ? $"Some of your saved settings were not valid and were reset to their defaults ({list}). Everything else was kept."
-            : $"Some of your saved settings were not valid and were reset to their defaults ({list}). Everything else was kept, and the original file was kept as {Path.GetFileName(kept)} in the Monitor Wellness folder.";
+            : $"Some of your saved settings were not valid and were reset to their defaults ({list}). Everything else was kept{(saved ? " and saved" : "")}, and the original file was kept as {Path.GetFileName(kept)} in the Monitor Wellness folder.";
     }
 
     /// <summary>
@@ -175,7 +192,10 @@ public static class SettingsStore
         }
     }
 
-    public static void Save(AppSettings settings)
+    public static void Save(AppSettings settings) => Save(settings, keepBackup: true);
+
+    /// <param name="keepBackup">Keep the file being replaced as settings.json.bak. Not wanted when what is being replaced is a file that had to be repaired: it would push the last good backup out.</param>
+    internal static void Save(AppSettings settings, bool keepBackup)
     {
         if (!AppSettingsValidator.TryValidate(settings, out string validationError))
             throw new ArgumentException($"Refusing to save invalid settings: {validationError}", nameof(settings));
@@ -186,7 +206,7 @@ public static class SettingsStore
 
         settings.SchemaVersion = AppSettings.CurrentSchemaVersion;
         string json = JsonSerializer.Serialize(settings, JsonOptions);
-        WriteAtomically(SettingsPath, json, keepBackup: true);
+        WriteAtomically(SettingsPath, json, keepBackup);
     }
 
     /// <summary>
