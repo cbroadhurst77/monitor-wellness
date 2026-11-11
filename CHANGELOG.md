@@ -6,7 +6,7 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
-## Unreleased
+## 0.2.16 — Your comfort plan is remembered, a Breaks tab
 
 - **The comfort plan you pick is remembered.** A plan chosen from the tray (or "Return to saved schedule", or Emergency Restore) now lasts until midnight and survives a restart, instead of resetting every time the app starts. A new **Start each day with a comfort plan** setting (Settings > Profiles & History) applies your usual plan each morning and whenever the app starts, and changing it takes effect at once if you have not chosen anything today. Your log showed the Reading plan being picked again on most days.
 - **The break prompt has an "I already took one" button.** For when you rested already (after a call, say): it counts as a break taken and restarts the count, instead of being skipped. If you skip three break (or stand-up) reminders in a row, the app offers, once a day, to make them less frequent and opens Settings > Breaks when you click it.

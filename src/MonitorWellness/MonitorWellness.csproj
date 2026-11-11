@@ -25,7 +25,7 @@
          by hand on each release (Inno Setup can't read this file). Was previously unset here,
          defaulting to the SDK's own 1.0.0.0, while the installer separately said 0.1.0: a
          silent mismatch, since nothing ever compared the two. -->
-    <Version>0.2.15</Version>
+    <Version>0.2.16</Version>
     <!-- Single-file compression is deliberately NOT enabled. It shrank the exe from ~190 MB to ~80 MB, but
          the compressed app is unpacked into memory when it runs: measured on the same build, the idle
          app used ~68 MB more private working set (188 vs 120 MB) and ~120 MB more working set (366 vs
