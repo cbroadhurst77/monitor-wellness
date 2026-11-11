@@ -34,8 +34,10 @@ jobs:
       - name: Build release application
         run: dotnet build src/MonitorWellness/MonitorWellness.csproj --configuration Release --no-restore --nologo -warnaserror
 
-      - name: Run tests
-        run: dotnet test tests/MonitorWellness.Tests/MonitorWellness.Tests.csproj --configuration Release --no-restore --nologo
+      # Runs the tests once, with coverage; the summary lands on the job page and a drop below the minimum fails.
+      - name: Run tests with coverage
+        shell: pwsh
+        run: ./tools/Get-Coverage.ps1 -NoRestore -Minimum 50
 
       - name: Check known vulnerable dependencies
         shell: pwsh
@@ -72,3 +74,40 @@ jobs:
           path: dist/MonitorWellness-Setup-*.exe
           if-no-files-found: error
           retention-days: 30
+
+  # A pushed v* tag publishes the release from the installer CI just built from that exact commit.
+  # Only this job can write to the repository, and only on tags. Prerelease tags (v1.2.3-beta) are not
+  # accepted by the version check, so every release made here is a normal one.
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-and-test, release-package]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer
+          path: dist
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          . ./tools/ReleaseHelpers.ps1
+          Assert-TagMatchesVersion -Root . -Tag $env:TAG
+          $version = $env:TAG -replace '^v', ''
+          Get-ReleaseNotes -ChangelogPath CHANGELOG.md -Version $version | Set-Content release-notes.md -Encoding utf8
+
+          $installer = Get-ChildItem dist -Filter "MonitorWellness-Setup-$version.exe" | Select-Object -First 1
+          if (-not $installer) { throw "dist has no installer for $version" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Set-Content dist/SHA256SUMS.txt -Encoding ascii
+
+          gh release create $env:TAG $installer.FullName dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --title "Monitor Wellness $version" --notes-file release-notes.md --verify-tag
