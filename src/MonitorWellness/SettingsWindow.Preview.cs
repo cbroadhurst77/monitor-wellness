@@ -271,6 +271,18 @@ public partial class SettingsWindow
         StandUpIntervalSlider.IsEnabled = on && StandUpEnabledCheckBox.IsChecked == true;
     }
 
+    /// <summary>Selects the saved "start each day with" comfort plan in its box.</summary>
+    private void LoadDefaultComfortPlan(AppSettings settings)
+    {
+        foreach (ComboBoxItem item in DefaultComfortPlanComboBox.Items)
+        {
+            if (string.Equals(item.Tag as string ?? "", settings.DefaultComfortPlan ?? "", StringComparison.Ordinal))
+                DefaultComfortPlanComboBox.SelectedItem = item;
+        }
+        if (DefaultComfortPlanComboBox.SelectedItem is null)
+            DefaultComfortPlanComboBox.SelectedIndex = 0;
+    }
+
     /// <summary>Fills the break reminder options added after the on/off box and interval from the given settings.</summary>
     private void LoadBreakExtras(AppSettings settings)
     {

@@ -290,6 +290,12 @@ public sealed class AppSettings
     /// </summary>
     public bool FollowScheduleTheme { get; set; }
 
+    /// <summary>
+    /// A comfort plan (see SensoryComfortPlans) to start each day with, as if picked from the tray's
+    /// Temporary Comfort Plan menu; empty for none. A plan picked by hand overrides it until midnight.
+    /// </summary>
+    public string DefaultComfortPlan { get; set; } = "";
+
     /// <summary>Minutes at the computer between stand-up reminders.</summary>
     public int StandUpIntervalMinutes { get; set; } = 60;
 
@@ -379,6 +385,7 @@ public sealed class AppSettings
         StandUpReminderEnabled = StandUpReminderEnabled,
         BreakHistoryEnabled = BreakHistoryEnabled,
         FollowScheduleTheme = FollowScheduleTheme,
+        DefaultComfortPlan = DefaultComfortPlan,
         StandUpIntervalMinutes = StandUpIntervalMinutes,
         RestoreNativeDisplayInFullscreen = RestoreNativeDisplayInFullscreen,
         PreferOverlayOnlyOnCompatibilityDisplays = PreferOverlayOnlyOnCompatibilityDisplays,
@@ -467,6 +474,7 @@ public sealed class AppSettings
         StandUpReminderEnabled = copy.StandUpReminderEnabled;
         BreakHistoryEnabled = copy.BreakHistoryEnabled;
         FollowScheduleTheme = copy.FollowScheduleTheme;
+        DefaultComfortPlan = copy.DefaultComfortPlan;
         StandUpIntervalMinutes = copy.StandUpIntervalMinutes;
         RestoreNativeDisplayInFullscreen = copy.RestoreNativeDisplayInFullscreen;
         PreferOverlayOnlyOnCompatibilityDisplays = copy.PreferOverlayOnlyOnCompatibilityDisplays;

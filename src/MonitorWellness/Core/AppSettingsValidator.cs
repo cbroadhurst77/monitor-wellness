@@ -67,6 +67,8 @@ public static class AppSettingsValidator
         if (!FixedTimeSchedule.TryParseTimeOfDay(settings.BreakReminderFromLocal, out _)
             || !FixedTimeSchedule.TryParseTimeOfDay(settings.BreakReminderToLocal, out _))
             return Invalid("Break reminder hours must be times between 00:00 and 23:59.", out error);
+        if (!string.IsNullOrEmpty(settings.DefaultComfortPlan) && !SensoryComfortPlans.IsSupported(settings.DefaultComfortPlan))
+            return Invalid("The default comfort plan is not recognised.", out error);
         if (!BreakReminderStyles.IsSupported(settings.BreakReminderStyle))
             return Invalid("The break reminder style is not recognised.", out error);
         if (settings.StandUpIntervalMinutes is < BreakReminderPolicy.MinimumStandUpMinutes or > BreakReminderPolicy.MaximumStandUpMinutes)

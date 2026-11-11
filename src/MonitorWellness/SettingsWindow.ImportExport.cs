@@ -88,6 +88,7 @@ public partial class SettingsWindow
         _settings.HistoryTrackingEnabled = imported.HistoryTrackingEnabled;
         _settings.BreakHistoryEnabled = imported.BreakHistoryEnabled;
         _settings.FollowScheduleTheme = imported.FollowScheduleTheme;
+        _settings.DefaultComfortPlan = imported.DefaultComfortPlan;
         _settings.PromptForMigraineRating = imported.PromptForMigraineRating;
         _settings.MatchAmbientLight = imported.MatchAmbientLight;
         _settings.BreakReminderEnabled = imported.BreakReminderEnabled;
@@ -121,6 +122,7 @@ public partial class SettingsWindow
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
         LoadBreakExtras(_settings);
+        LoadDefaultComfortPlan(_settings);
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CheckForUpdatesCheckBox.IsChecked = _settings.CheckForUpdatesEnabled;
         ExcludeFromCaptureCheckBox.IsChecked = _settings.ExcludeOverlayFromCapture;

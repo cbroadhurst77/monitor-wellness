@@ -32,6 +32,8 @@ public class DisplayApplierTests
             return ApplyResult;
         }
 
+        public bool ApplyColorTemperatureWithContrast(int kelvin, double contrastReduction) => ApplyColorTemperature(kelvin);
+
         public bool RestoreBaseline()
         {
             Restores++;

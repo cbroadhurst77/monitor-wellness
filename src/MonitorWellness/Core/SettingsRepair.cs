@@ -29,6 +29,7 @@ public static class SettingsRepair
         new("migraine auto-off time", (to, from) => to.MigraineAutoRevertMinutes = from.MigraineAutoRevertMinutes),
         new("break reminder interval", (to, from) => to.BreakReminderIntervalMinutes = from.BreakReminderIntervalMinutes),
         new("break reminder hours", (to, from) => { to.BreakReminderLimitToHours = from.BreakReminderLimitToHours; to.BreakReminderFromLocal = from.BreakReminderFromLocal; to.BreakReminderToLocal = from.BreakReminderToLocal; }),
+        new("default comfort plan", (to, from) => to.DefaultComfortPlan = from.DefaultComfortPlan),
         new("break reminder style", (to, from) => to.BreakReminderStyle = from.BreakReminderStyle),
         new("stand-up reminder", (to, from) => { to.StandUpReminderEnabled = from.StandUpReminderEnabled; to.StandUpIntervalMinutes = from.StandUpIntervalMinutes; }),
         new("focus break length", (to, from) => to.BreakFocusSeconds = from.BreakFocusSeconds),

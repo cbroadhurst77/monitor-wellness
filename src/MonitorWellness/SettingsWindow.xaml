@@ -496,6 +496,16 @@
                             <Button Grid.Column="1" Content="Preview plan" Padding="8,2" Click="PreviewBuiltInComfortPlanButton_Click" AutomationProperties.Name="Preview selected sensory comfort plan"/>
                         </Grid>
                         <TextBlock Text="Plans are editable comfort starting points, not treatment recommendations. Previewing does not save anything; use the normal Save button only if the result feels right." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <TextBlock Text="Start each day with a comfort plan" Margin="0,10,0,4"/>
+                        <ComboBox x:Name="DefaultComfortPlanComboBox" SelectedIndex="0" AutomationProperties.Name="Comfort plan to start each day with">
+                            <ComboBoxItem Tag="" Content="None — follow my saved schedule"/>
+                            <ComboBoxItem Tag="Balanced" Content="Balanced — normal day/night comfort"/>
+                            <ComboBoxItem Tag="Reading" Content="Reading — softer daytime contrast"/>
+                            <ComboBoxItem Tag="ColourCritical" Content="Colour-critical — least-adjusted starting point"/>
+                            <ComboBoxItem Tag="EarlySensitivity" Content="Early sensitivity — gentler starting point"/>
+                            <ComboBoxItem Tag="Recovery" Content="Recovery — lower-stimulation starting point"/>
+                        </ComboBox>
+                        <TextBlock Text="Used like the tray menu's Temporary Comfort Plan, each morning and whenever the app starts. If you pick a plan from the tray (or return to your saved schedule) that choice is remembered until midnight, even if the app restarts. It does not change your saved settings." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,4,0,8"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <Button x:Name="ExportSettingsButton" Content="Export Settings..." Padding="8,2" Margin="0,0,8,0" Click="ExportSettingsButton_Click"/>
                             <Button x:Name="ImportSettingsButton" Content="Import Settings..." Padding="8,2" Click="ImportSettingsButton_Click"/>

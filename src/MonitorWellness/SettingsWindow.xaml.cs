@@ -28,8 +28,8 @@ public partial class SettingsWindow : Window
     // field has passed validation and the user explicitly presses Save.
     private readonly AppSettings _settings;
     private readonly AppSettings _targetSettings;
-    private readonly GammaControllerManager _gammaManager;
-    private readonly OverlayController _overlay;
+    private readonly IGammaSource _gammaManager;
+    private readonly IPreviewOverlay _overlay;
     private readonly Action _onSaved;
     private readonly Func<string> _getStatusText;
 
@@ -75,6 +75,12 @@ public partial class SettingsWindow : Window
     private readonly List<(TextBox Input, Slider Slider, bool IsPercentage)> _numericInputs = new();
 
     public SettingsWindow(AppSettings settings, GammaControllerManager gammaManager, OverlayController overlay, Action onSaved, Func<string> getStatusText)
+        : this(settings, (IGammaSource)gammaManager, (IPreviewOverlay)overlay, onSaved, getStatusText)
+    {
+    }
+
+    /// <summary>The same window over the small interfaces, so a test can open it with fakes and never touch the real screens.</summary>
+    internal SettingsWindow(AppSettings settings, IGammaSource gammaManager, IPreviewOverlay overlay, Action onSaved, Func<string> getStatusText)
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
@@ -169,6 +175,7 @@ public partial class SettingsWindow : Window
         BreakReminderCheckBox.IsChecked = _settings.BreakReminderEnabled;
         BreakReminderIntervalSlider.Value = _settings.BreakReminderIntervalMinutes;
         LoadBreakExtras(_settings);
+        LoadDefaultComfortPlan(_settings);
         FullscreenPresentationGuardCheckBox.IsChecked = _settings.RestoreNativeDisplayInFullscreen;
         CompatibilityOverlayOnlyCheckBox.IsChecked = _settings.PreferOverlayOnlyOnCompatibilityDisplays;
         // HistoryTrackingCheckBox's own Checked/Unchecked handler (fired by setting its
@@ -400,6 +407,7 @@ public partial class SettingsWindow : Window
         _settings.HistoryTrackingEnabled = HistoryTrackingCheckBox.IsChecked == true;
         _settings.BreakHistoryEnabled = BreakHistoryCheckBox.IsChecked == true;
         _settings.FollowScheduleTheme = FollowThemeCheckBox.IsChecked == true;
+        _settings.DefaultComfortPlan = (DefaultComfortPlanComboBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
         _settings.PromptForMigraineRating = PromptForRatingCheckBox.IsChecked == true;
         _settings.MatchAmbientLight = MatchAmbientLightCheckBox.IsChecked == true;
         _settings.BreakReminderEnabled = BreakReminderCheckBox.IsChecked == true;

@@ -179,6 +179,7 @@ public partial class App : Application
         if (SettingsStore.LastLoadProblem is string settingsProblem)
             QueueStartupBalloon("Monitor Wellness", settingsProblem, ToolTipIcon.Warning);
         MigrateMonitorSettings();
+        RestoreComfortPlan();
         if (_settings.MatchAmbientLight)
             AmbientLightSensor.WarmUp(); // slow right after a boot, so start it now, off the UI thread
         startup.Mark("settings");
@@ -323,6 +324,7 @@ public partial class App : Application
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
         _timer.Tick += (_, _) =>
         {
+            UpdateComfortPlanForNewDay();
             RunScheduleTick();
             UpdateWindowsTheme();
         };
@@ -760,6 +762,7 @@ public partial class App : Application
             _overlay.ExcludeFromCapture = _settings.ExcludeOverlayFromCapture;
         RebuildHotkey();
         _breakReminder?.Rebuild();
+        ApplyDefaultComfortPlanIfNoChoiceToday();
         UpdateWindowsTheme(); // turning the option on takes effect now, not at the next tick
         if (_focusBreakMenuItem is not null)
             _focusBreakMenuItem.Text = FocusBreakMenuText();
@@ -949,6 +952,7 @@ public partial class App : Application
         if (_overrides.ManualComfortPlanName is not null)
         {
             DebugLog.Write($"Emergency Restore Screen cleared temporary comfort plan: {_overrides.ManualComfortPlanName}.");
+            RememberComfortPlan(null); // an emergency restore means "native screen today", also after a restart
             _overrides.ManualComfortPlanName = null;
         }
         _migraine?.RestoreImmediately();
@@ -1386,11 +1390,58 @@ public partial class App : Application
         return menu;
     }
 
+    private DateOnly _comfortPlanDay = DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>At start-up: today's remembered choice if there is one, otherwise the "start each day with" plan.</summary>
+    private void RestoreComfortPlan()
+    {
+        _comfortPlanDay = DateOnly.FromDateTime(DateTime.Now);
+        string? plan = ComfortPlanMemory.PlanAtStartup(ComfortPlanStore.Load(), _settings.DefaultComfortPlan, _comfortPlanDay);
+        _overrides.ManualComfortPlanName = plan;
+        if (plan is not null)
+            DebugLog.Write($"Comfort plan restored at start: {plan}.");
+    }
+
+    /// <summary>A choice made by hand lasts until midnight (and survives a restart); then the daily default applies again.</summary>
+    private static void RememberComfortPlan(string? plan)
+        => ComfortPlanStore.Save(ComfortPlanMemory.Remember(plan, DateOnly.FromDateTime(DateTime.Now)));
+
+    private void UpdateComfortPlanForNewDay()
+    {
+        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+        if (today == _comfortPlanDay)
+            return;
+
+        _comfortPlanDay = today;
+        string? plan = ComfortPlanMemory.PlanWhenDayChanges(_settings.DefaultComfortPlan);
+        if (!string.Equals(plan, _overrides.ManualComfortPlanName, StringComparison.Ordinal))
+        {
+            _overrides.ManualComfortPlanName = plan;
+            DebugLog.Write(plan is null ? "New day: the comfort plan chosen yesterday has ended." : $"New day: starting with the {plan} comfort plan.");
+        }
+    }
+
+    /// <summary>Changing "start each day with" in Settings takes effect now, unless the person already chose something today.</summary>
+    private void ApplyDefaultComfortPlanIfNoChoiceToday()
+    {
+        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+        if (ComfortPlanMemory.HasChoiceFor(ComfortPlanStore.Load(), today))
+            return;
+
+        string? plan = ComfortPlanMemory.PlanAtStartup(null, _settings.DefaultComfortPlan, today);
+        if (!string.Equals(plan, _overrides.ManualComfortPlanName, StringComparison.Ordinal))
+        {
+            _overrides.ManualComfortPlanName = plan; // the schedule is re-applied when the Settings window closes
+            DebugLog.Write(plan is null ? "Default comfort plan cleared." : $"Default comfort plan set to {plan}.");
+        }
+    }
+
     private void SelectManualComfortPlan(string plan)
     {
         if (!SensoryComfortPlans.IsSupported(plan))
             return;
 
+        RememberComfortPlan(plan);
         _overrides.ManualComfortPlanName = plan;
         DebugLog.Write($"Temporary comfort plan selected: {plan}.");
         RunScheduleTick();
@@ -1402,6 +1453,7 @@ public partial class App : Application
             return;
 
         DebugLog.Write($"Temporary comfort plan cleared: {_overrides.ManualComfortPlanName}.");
+        RememberComfortPlan(null);
         _overrides.ManualComfortPlanName = null;
         RunScheduleTick();
     }

@@ -13,6 +13,7 @@ internal interface IGammaController
     string DeviceName { get; }
     int LastWin32Error { get; }
     bool ApplyColorTemperature(int kelvin, double brightnessAssist = 1.0);
+    bool ApplyColorTemperatureWithContrast(int kelvin, double contrastReduction);
     bool RestoreBaseline();
 
     /// <summary>Restores the native ramp only if something of ours is on it; free when there is nothing to undo.</summary>
@@ -31,6 +32,16 @@ internal interface IDimOverlay
 {
     void ApplyDim(IReadOnlyDictionary<string, double> brightnessByDevice, Color dimColor);
     void Clear();
+}
+
+/// <summary>
+/// What the Settings window needs from the overlay: the dim/tint itself, the list of screens, and the
+/// "which monitor is which" labels. With this (and <see cref="IGammaSource"/>) the window can be
+/// opened in a test with fakes, without touching the real screens.
+/// </summary>
+internal interface IPreviewOverlay : IDimOverlay, IOverlayTarget
+{
+    void IdentifyMonitors(TimeSpan duration);
 }
 
 /// <summary>Physical (DDC/CI) brightness, set off the UI thread.</summary>
