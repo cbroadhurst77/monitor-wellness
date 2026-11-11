@@ -12,7 +12,7 @@
 ;     -o publish
 
 #define MyAppName "Monitor Wellness"
-#define MyAppVersion "0.2.16"
+#define MyAppVersion "0.2.17"
 #ifndef MyPublishDir
   #define MyPublishDir "..\publish"
 #endif
