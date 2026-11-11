@@ -78,7 +78,7 @@ entirely on your computer, and stores or transmits none of what it learns:
   time — never which keys you pressed or what you clicked.
 - **Full-screen apps.** It checks whether the window in front covers a whole monitor, so
   reminders wait during presentations, videos and games.
-- **Calls** (on once reminders are on; turn it off under Settings → Monitors & Breaks). To
+- **Calls** (on once reminders are on; turn it off under Settings → Breaks). To
   hold a reminder until a call ends, it reads — read-only — the list Windows keeps of which
   apps are currently using the microphone or camera (the data behind Windows' own "recently
   used" privacy indicator, in your own user registry hive). It checks whether a camera is in

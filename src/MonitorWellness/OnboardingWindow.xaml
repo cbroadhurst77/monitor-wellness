@@ -57,6 +57,26 @@
                 </Border>
             </StackPanel>
 
+            <StackPanel x:Name="StepBreaksPanel" Visibility="Collapsed">
+                <TextBlock TextWrapping="Wrap" FontSize="14" Margin="0,0,0,10">
+                    Two optional extras. Both are off unless you choose them here, and you can change
+                    them any time in Settings.
+                </TextBlock>
+                <CheckBox x:Name="OnboardingRemindersCheckBox" Margin="0,0,0,12"
+                          AutomationProperties.Name="Remind me to rest my eyes with the 20-20-20 rule">
+                    <TextBlock TextWrapping="Wrap" FontSize="14"
+                               Text="Remind me to rest my eyes: every 20 minutes at the screen, look at something about 20 feet away for 20 seconds."/>
+                </CheckBox>
+                <TextBlock Text="Start each day with a comfort plan" FontSize="14" Margin="0,0,0,4"/>
+                <ComboBox x:Name="OnboardingPlanComboBox" SelectedIndex="0" AutomationProperties.Name="Comfort plan to start each day with">
+                    <ComboBoxItem Tag="" Content="None — follow the normal day/night schedule"/>
+                    <ComboBoxItem Tag="Reading" Content="Reading — softer daytime contrast"/>
+                    <ComboBoxItem Tag="Balanced" Content="Balanced — normal day/night comfort"/>
+                    <ComboBoxItem Tag="EarlySensitivity" Content="Early sensitivity — gentler starting point"/>
+                    <ComboBoxItem Tag="Recovery" Content="Recovery — lower-stimulation starting point"/>
+                </ComboBox>
+            </StackPanel>
+
             <StackPanel x:Name="Step4Panel" Visibility="Collapsed">
                 <TextBlock TextWrapping="Wrap" FontSize="14" Margin="0,0,0,10">
                     Everything is controlled from the tray icon near your clock — right-click it

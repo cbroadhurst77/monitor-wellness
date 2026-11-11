@@ -439,5 +439,18 @@ public partial class SettingsWindow : Window
         return true;
     }
 
+    /// <summary>Shows the tab with this header (for example "Breaks"); anything else is ignored.</summary>
+    public void SelectTab(string header)
+    {
+        foreach (TabItem tab in SettingsTabs.Items.OfType<TabItem>())
+        {
+            if (string.Equals(tab.Header as string, header, StringComparison.Ordinal))
+            {
+                SettingsTabs.SelectedItem = tab;
+                return;
+            }
+        }
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
 }

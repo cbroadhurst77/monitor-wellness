@@ -29,7 +29,7 @@
 
         <!--
             Restructured from a single ~9-section scrolling page into four grouped tabs
-            (Schedule / Migraine Mode / Monitors & Breaks / Profiles & History) so a user only
+            (Schedule / Migraine Mode / Monitors / Breaks / Profiles & History) so a user only
             ever scrolls through the one topic they came here for, not past every other
             section on the way — see MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).
             Every control below keeps its original x:Name and event handler, so
@@ -359,7 +359,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Monitors &amp; Breaks">
+            <TabItem Header="Monitors">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="12">
                         <TextBlock Text="Monitors" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
@@ -397,9 +397,13 @@
                         <CheckBox x:Name="ExcludeFromCaptureCheckBox" Content="Hide the dimming overlay from screenshots and screen sharing" IsChecked="True" Margin="0,8,0,0"
                                   AutomationProperties.Name="Hide the dimming overlay from screenshots and screen sharing"/>
                         <TextBlock Text="Recommended. Screenshots, recordings and screen sharing show your real, un-dimmed screen instead of the dimmed and tinted view only you see. Needs Windows 10 version 2004 or later; turn it off if you want captures to match exactly what you see." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                        <Separator Margin="0,16,0,16"/>
-
+            <TabItem Header="Breaks">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
                         <TextBlock Text="Break Reminders" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
                         <CheckBox x:Name="BreakReminderCheckBox" Content="Remind me to take a break (the 20-20-20 rule)" Margin="0,0,0,4"
                                   Checked="BreakReminderCheckBox_Changed" Unchecked="BreakReminderCheckBox_Changed"/>
@@ -458,6 +462,16 @@
                                     ValueChanged="StandUpIntervalSlider_ValueChanged" AutomationProperties.Name="Stand-up reminder interval in minutes"/>
                         </Grid>
                         <TextBlock x:Name="StandUpIntervalLabel" HorizontalAlignment="Center" FontSize="13" Foreground="{DynamicResource MW.HelperText}" Margin="0,-10,0,4"/>
+
+                        <Separator Margin="0,16,0,16"/>
+
+                        <TextBlock Text="Break history" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="BreakHistoryCheckBox" Content="Also keep a local history of break reminders, breaks taken and time at the computer" Margin="0,0,0,4"
+                                  Checked="BreakHistoryCheckBox_Changed" Unchecked="BreakHistoryCheckBox_Changed"/>
+                        <TextBlock Text="Off by default. Stays on your computer only. It lets you see how many reminders you acted on, and, once there are a couple of weeks of records, how days with Migraine Mode compare with other days. Needs break reminders to be on." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="BreakHistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                   AutomationProperties.LiveSetting="Polite"/>
+                        <Button x:Name="ExportDailyHistoryButton" Content="Export Daily Summary (CSV)..." HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,16" Click="ExportDailyHistoryButton_Click"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -534,13 +548,6 @@
                             <Button x:Name="ClearHistoryButton" Content="Clear History" Padding="8,2" Margin="0,0,8,0" Click="ClearHistoryButton_Click"/>
                             <Button x:Name="ExportHistoryButton" Content="Export History (CSV)..." Padding="8,2" Click="ExportHistoryButton_Click"/>
                         </StackPanel>
-
-                        <CheckBox x:Name="BreakHistoryCheckBox" Content="Also keep a local history of break reminders, breaks taken and time at the computer" Margin="0,0,0,4"
-                                  Checked="BreakHistoryCheckBox_Changed" Unchecked="BreakHistoryCheckBox_Changed"/>
-                        <TextBlock Text="Off by default. Stays on your computer only. It lets you see how many reminders you acted on, and, once there are a couple of weeks of records, how days with Migraine Mode compare with other days. Needs break reminders to be on." FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                        <TextBlock x:Name="BreakHistorySummaryText" FontSize="14" Foreground="{DynamicResource MW.HelperText}" TextWrapping="Wrap" Margin="0,0,0,6"
-                                   AutomationProperties.LiveSetting="Polite"/>
-                        <Button x:Name="ExportDailyHistoryButton" Content="Export Daily Summary (CSV)..." HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,16" Click="ExportDailyHistoryButton_Click"/>
 
                         <Separator Margin="0,0,0,16"/>
 

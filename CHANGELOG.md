@@ -6,6 +6,13 @@ development log (architecture decisions, bugs found, why things work the way the
 [TECHNICAL_UX_REVIEW.md](TECHNICAL_UX_REVIEW.md) for the independent gap analysis driving
 recent work.
 
+## Unreleased
+
+- **The comfort plan you pick is remembered.** A plan chosen from the tray (or "Return to saved schedule", or Emergency Restore) now lasts until midnight and survives a restart, instead of resetting every time the app starts. A new **Start each day with a comfort plan** setting (Settings > Profiles & History) applies your usual plan each morning and whenever the app starts, and changing it takes effect at once if you have not chosen anything today. Your log showed the Reading plan being picked again on most days.
+- **The break prompt has an "I already took one" button.** For when you rested already (after a call, say): it counts as a break taken and restarts the count, instead of being skipped. If you skip three break (or stand-up) reminders in a row, the app offers, once a day, to make them less frequent and opens Settings > Breaks when you click it.
+- **Settings has a Breaks tab.** Break reminders, the stand-up reminder and the break history moved out of the crowded Monitors tab (now just Monitors) into their own tab, and the first-run welcome has an optional "Breaks and comfort" step to switch on eye-rest reminders and pick a daily comfort plan (nothing changes unless you choose).
+- **The Settings window is now covered by automated tests** that open the real window over fake displays (nothing appears on screen and your screens are untouched), so a change to it can be checked without trying it by hand. The user guide is updated for all of the above.
+
 ## 0.2.15 — Stand-up breaks, break history, a clearer tray
 
 - **The tray menu says when your next break is due, and why one is waiting.** A line such as "Next break in about 12 min", "A break is due — waiting for your call to end", "Break reminders snoozed until 14:00" or "Outside your reminder hours (back at 08:00)". A new **Show a test reminder** item shows the reminder exactly as a real one would arrive (window or notification, with the sound if on), so you can check where it appears and how it looks.

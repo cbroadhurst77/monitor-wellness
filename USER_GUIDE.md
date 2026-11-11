@@ -39,7 +39,7 @@ tool changes colour. For exclusive-fullscreen, protected video, or HDR content, 
 overlay may not be visible; use windowed mode or Emergency Restore Screen.
 
 For Remote Desktop, virtual-monitor software, and USB/indirect display paths, **Settings →
-Monitors & Breaks** enables overlay-only compatibility mode by default. It avoids gamma-ramp
+Monitors** enables overlay-only compatibility mode by default. It avoids gamma-ramp
 and physical-brightness commands on displays Windows explicitly identifies that way, while
 keeping the reversible overlay dimmer available. Turn it off only after testing that exact
 display path yourself.
@@ -63,7 +63,7 @@ settings, or personal content.
 ## Optional hardware brightness
 
 External monitors that expose DDC/CI may offer physical brightness control in
-**Settings → Monitors & Breaks**. It is off by default.
+**Settings → Monitors**. It is off by default.
 
 1. Check the Passport or the monitor row for availability.
 2. Choose **Test hardware brightness** for that specific monitor.
@@ -82,10 +82,15 @@ Reading, Colour-critical, Early sensitivity, or Recovery settings. These are edi
 points, not treatment recommendations. Previewing does not save; use **Save** only after you
 have adjusted and accepted the result.
 
-For a quick, non-persistent change, open **tray icon → Temporary Comfort Plan** and select a
-plan. It stays active until you choose **Return to saved schedule**, select a different plan,
-or use Emergency Restore Screen. A matching application rule set to **Restore native display**
+For a quick change that does not alter your saved settings, open **tray icon → Temporary
+Comfort Plan** and select a plan. It stays active until you choose **Return to saved schedule**,
+select a different plan, or use Emergency Restore Screen, and your choice is remembered until
+midnight, even if the app restarts. A matching application rule set to **Restore native display**
 still takes precedence for colour-critical work.
+
+If you pick the same plan most days, set **Settings → Profiles & History → Start each day with a
+comfort plan**. It is applied each morning and whenever the app starts, as if you had picked it
+from the tray; anything you pick yourself replaces it until midnight.
 
 For work that needs an actually unmodified display, use **Restore native display** in an
 application rule or **Pause Schedule**. The Colour-critical plan is a least-adjusted comfort
@@ -118,14 +123,30 @@ Mode. It activates immediately and fades out gradually when deactivated to avoid
 brightness transition. Choose Gentle or Strong as a personal comfort preference; neither is a
 medical treatment.
 
-The optional 20-20-20 reminder is off by default. When enabled, it stays quiet during Migraine
-Mode, full-screen work, and time away from the PC. The tray menu also provides a dismissible
-20-second focus timer. Use **Snooze Break Reminders** in the tray for 30 minutes, an hour, or
-until tomorrow; snoozes are local to the current session and clear if reminders are disabled.
+## Break reminders
+
+The optional 20-20-20 reminder is off by default; turn it on, and choose how it behaves, in
+**Settings → Breaks**. It counts the time you are actually at the computer (not a fixed timer):
+stepping away for five minutes, sleeping the PC or taking a break restarts the count. When it is
+time, a small window appears in the corner of the monitor you are using with **Start 20 seconds**,
+**I already took one**, **In 5 minutes** and **Skip** (or a quiet notification, if you prefer, with
+an optional sound). It stays out of screen sharing by default.
+
+A due reminder waits, and appears when the reason ends, while Migraine Mode is on, during
+full-screen work, while you are on a call (a camera in use, or the microphone in use by a calling
+app), when you have not touched the keyboard for two minutes, and outside any hours you set. If you
+skip three in a row, the app offers to make them less frequent.
+
+You can also add a **stand-up reminder** (every 30 to 180 minutes; three minutes away from the
+computer counts as having stood up) and choose the break length. The tray menu shows when the next
+break is due, or why one is waiting, and has **Show a test reminder**, a dismissible focus timer, and
+**Snooze Break Reminders** (30 minutes, an hour, or until 08:00; snoozes are local to the current
+session and clear if reminders are disabled). An optional local break history, off by default, is
+kept next to the Migraine Mode history, with a daily CSV export, under **Settings → Breaks**.
 
 ## Fullscreen presentations
 
-In **Settings → Monitors & Breaks**, you can opt in to the fullscreen presentation guard. It
+In **Settings → Monitors**, you can opt in to the fullscreen presentation guard. It
 temporarily restores native gamma, dimming, and approved hardware brightness when Windows
 identifies a fullscreen presentation, video, or game. It is off by default: leave it off if you
 need your comfort settings during fullscreen work. Migraine Mode and Emergency Restore remain

@@ -237,7 +237,7 @@ public partial class App : Application
             startBreak: ShowBreakFocusWindow,
             showPrompt: onChoice => ShowBreakPrompt(onChoice),
             showStandUpPrompt: onChoice => ShowBreakPrompt(onChoice, BreakPromptKind.StandUp),
-            openSettings: () => OpenSettingsWindow());
+            openSettings: () => OpenSettingsWindowOnTab("Breaks"));
 
         startup.Mark("display controllers and services");
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -567,7 +567,7 @@ public partial class App : Application
     /// <summary>Shows the real first-run onboarding flow — the only path that persists HasCompletedOnboarding. Reopening this content later from the tray menu was replaced by the distinct About/Troubleshooting windows (see ShowAboutWindow/ShowTroubleshootingWindow) rather than resurfacing the welcome-voiced wizard, per MonitorWellness_UX_Accessibility_Audit.html §2.1/§6 (P1).</summary>
     private void ShowFirstRunOnboarding()
     {
-        var onboarding = new OnboardingWindow(OpenSettingsWindow);
+        var onboarding = new OnboardingWindow(OpenSettingsWindow, ApplyOnboardingChoices);
         onboarding.Closed += (_, _) =>
         {
             _settings.HasCompletedOnboarding = true;
@@ -695,6 +695,34 @@ public partial class App : Application
     /// </summary>
 
     private void OpenSettingsWindow() => OpenSettingsWindow(null);
+
+    /// <summary>Opens Settings (or brings it forward) on one tab, for example the Breaks tab from a notification.</summary>
+    private void OpenSettingsWindowOnTab(string tab)
+    {
+        OpenSettingsWindow(null);
+        _settingsWindow?.SelectTab(tab);
+    }
+
+    /// <summary>The optional choices from the first-run "Breaks and comfort" step; nothing is changed unless something was chosen.</summary>
+    private void ApplyOnboardingChoices(bool wantsBreakReminders, string? defaultComfortPlan)
+    {
+        if (!OnboardingChoices.Apply(_settings, wantsBreakReminders, defaultComfortPlan))
+            return;
+
+        try
+        {
+            SettingsStore.Save(_settings);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            DebugLog.Write($"Couldn't persist the first-run choices: {ex.Message}");
+        }
+
+        DebugLog.Write($"First-run choices applied: break reminders {(wantsBreakReminders ? "on" : "unchanged")}, default comfort plan '{defaultComfortPlan}'.");
+        _breakReminder?.Rebuild();
+        ApplyDefaultComfortPlanIfNoChoiceToday();
+        RunScheduleTick();
+    }
 
     private void OpenSettingsWindow(string? initialRuleProcessName)
     {

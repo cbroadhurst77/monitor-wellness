@@ -19,20 +19,38 @@ public partial class OnboardingWindow : Window
         "What Monitor Wellness does",
         "Migraine Mode",
         "A quick safety note",
+        "Breaks and comfort",
         "One last thing",
     };
 
     private readonly Action _openSettings;
+    private readonly Action<bool, string?>? _applyChoices;
+    private bool _choicesApplied;
     private int _step;
 
-    public OnboardingWindow(Action openSettings)
+    /// <param name="applyChoices">Receives the "Breaks and comfort" step's choices (remind me to rest my eyes, default comfort plan) once, however the window is left.</param>
+    public OnboardingWindow(Action openSettings, Action<bool, string?>? applyChoices = null)
     {
         InitializeComponent();
         ThemeDetector.ApplyDarkThemeIfNeeded(this);
         ThemeDetector.EnableLiveThemeUpdates(this);
         Icon = AppIconSource.Default;
         _openSettings = openSettings;
+        _applyChoices = applyChoices;
+        Closed += (_, _) => ApplyChoicesOnce(); // the window's own close button
         ShowStep(0);
+    }
+
+    /// <summary>Hands the optional choices over exactly once, before anything else (Settings opens from a copy of the settings, so they must be in first).</summary>
+    private void ApplyChoicesOnce()
+    {
+        if (_choicesApplied)
+            return;
+
+        _choicesApplied = true;
+        _applyChoices?.Invoke(
+            OnboardingRemindersCheckBox.IsChecked == true,
+            (OnboardingPlanComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string);
     }
 
     private void ShowStep(int step)
@@ -42,7 +60,8 @@ public partial class OnboardingWindow : Window
         Step1Panel.Visibility = step == 0 ? Visibility.Visible : Visibility.Collapsed;
         Step2Panel.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
         Step3Panel.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
-        Step4Panel.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+        StepBreaksPanel.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+        Step4Panel.Visibility = step == 4 ? Visibility.Visible : Visibility.Collapsed;
 
         StepProgressText.Text = $"Step {step + 1} of {StepTitles.Length}";
         StepTitleText.Text = StepTitles[step];
@@ -65,12 +84,14 @@ public partial class OnboardingWindow : Window
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e)
     {
+        ApplyChoicesOnce(); // before Settings opens, which starts from a copy of the current settings
         _openSettings();
         Close();
     }
 
     private void Dismiss_Click(object sender, RoutedEventArgs e)
     {
+        ApplyChoicesOnce();
         Close();
     }
 }

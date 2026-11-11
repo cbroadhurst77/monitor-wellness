@@ -2,6 +2,7 @@
 using System.Windows;
 using MonitorWellness.Core;
 using Button = System.Windows.Controls.Button;
+using Size = System.Windows.Size;
 
 namespace MonitorWellness.Tests;
 
@@ -198,6 +199,43 @@ public class PromptRefinementWindowTests
         thread.Join();
         if (failure is not null)
             throw new InvalidOperationException("The window test failed on its UI thread.", failure);
+    }
+
+    [Theory]
+    [InlineData(BreakPromptKind.Eye, 20)]
+    [InlineData(BreakPromptKind.Eye, 120)]
+    [InlineData(BreakPromptKind.StandUp, 20)]
+    public void Every_button_is_wide_enough_for_its_text_and_the_window_is_a_sensible_size(BreakPromptKind kind, int seconds)
+    {
+        OnStaThread(() =>
+        {
+            var window = new BreakPromptWindow(_ => { }, focusSeconds: seconds, kind: kind);
+            // An unshown window does not lay its children out, so work from the markup's own numbers:
+            // 18 px margin each side, two equal columns, 4 px between a button and its neighbour.
+            var content = (FrameworkElement)window.Content;
+            content.Measure(new Size(window.Width, double.PositiveInfinity));
+            double availablePerButton = (window.Width - 36) / 2 - 4;
+
+            var buttons = new List<Button>();
+            void Collect(DependencyObject node)
+            {
+                foreach (object child in LogicalTreeHelper.GetChildren(node))
+                {
+                    if (child is Button button) buttons.Add(button);
+                    if (child is DependencyObject next) Collect(next);
+                }
+            }
+            Collect(window);
+
+            Assert.Equal(4, buttons.Count);
+            foreach (Button button in buttons)
+            {
+                button.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Assert.True(button.DesiredSize.Width <= availablePerButton,
+                    $"'{button.Content}' needs {button.DesiredSize.Width:0} px but only {availablePerButton:0} are available");
+            }
+            Assert.InRange(content.DesiredSize.Height, 100, 260);
+        });
     }
 
     [Theory]
