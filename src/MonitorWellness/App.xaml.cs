@@ -67,16 +67,15 @@ public partial class App : Application
     // — a noisy first impression for a "calm" product. These are queued instead of shown
     // immediately, then drained one at a time (after onboarding closes, if this is a first run)
     // with a short gap between each. See MonitorWellness_UX_Accessibility_Audit.html §1/§6 (P0).
-    private static readonly TimeSpan StartupBalloonSpacing = TimeSpan.FromSeconds(6);
-    private readonly Queue<(string Title, string Message, ToolTipIcon Icon)> _pendingStartupBalloons = new();
+    private readonly StartupBalloons _startupBalloons = new();
     private DispatcherTimer? _startupBalloonTimer;
 
     // NotifyIcon.BalloonTipClicked doesn't say which balloon was clicked -- there's only ever
     // one visible at a time, so this just remembers what the currently-showing balloon should
     // do if clicked, and is cleared the moment that balloon closes (clicked or not) so a stale
-    // URL can't get triggered by an unrelated balloon shown much later. See ShowUpdateBalloon.
-    private string? _pendingBalloonClickUrl;
-    private Action? _pendingBalloonClickAction;
+    // URL can't get triggered by an unrelated balloon shown much later. See BalloonClickState.
+    private readonly BalloonClickState _balloonClick = new();
+    private ComfortPlanCoordinator _comfortPlans = null!; // created at the start of OnStartup, before anything uses it
     private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromDays(1);
     private static readonly TimeSpan UpdateCheckPollInterval = TimeSpan.FromHours(6);
     private DispatcherTimer? _updateCheckTimer;
@@ -179,7 +178,10 @@ public partial class App : Application
         if (SettingsStore.LastLoadProblem is string settingsProblem)
             QueueStartupBalloon("Monitor Wellness", settingsProblem, ToolTipIcon.Warning);
         MigrateMonitorSettings();
-        RestoreComfortPlan();
+        _comfortPlans = new ComfortPlanCoordinator(
+            _overrides, new FileComfortPlanStore(), () => _settings.DefaultComfortPlan,
+            () => DateOnly.FromDateTime(DateTime.Now), DebugLog.Write);
+        _comfortPlans.RestoreAtStart();
         if (_settings.MatchAmbientLight)
             AmbientLightSensor.WarmUp(); // slow right after a boot, so start it now, off the UI thread
         startup.Mark("settings");
@@ -254,23 +256,19 @@ public partial class App : Application
         };
         _trayIcon.BalloonTipClicked += (_, _) =>
         {
-            if (_pendingBalloonClickAction is Action action)
+            var (action, url) = _balloonClick.TakeClick();
+            if (action is not null)
             {
-                _pendingBalloonClickAction = null;
                 try { action(); }
                 catch (Exception ex) { DebugLog.Write($"Balloon click action failed: {ex.Message}"); }
                 return;
             }
-            if (_pendingBalloonClickUrl is not string url)
+            if (url is null)
                 return;
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
             catch (Exception ex) { DebugLog.Write($"Opening update URL failed: {ex.Message}"); }
         };
-        _trayIcon.BalloonTipClosed += (_, _) =>
-        {
-            _pendingBalloonClickUrl = null;
-            _pendingBalloonClickAction = null;
-        };
+        _trayIcon.BalloonTipClosed += (_, _) => _balloonClick.Clear();
 
         startup.Mark("tray icon");
         if (HdrDetector.IsAnyDisplayHdrEnabled())
@@ -325,7 +323,7 @@ public partial class App : Application
         _timer = new DispatcherTimer { Interval = ScheduleTickInterval };
         _timer.Tick += (_, _) =>
         {
-            UpdateComfortPlanForNewDay();
+            _comfortPlans.OnTick();
             RunScheduleTick();
             UpdateWindowsTheme();
         };
@@ -618,21 +616,14 @@ public partial class App : Application
         if (_trayIcon is null)
             return;
 
-        _pendingBalloonClickUrl = clickUrl;
-        _pendingBalloonClickAction = clickAction;
+        _balloonClick.Set(clickUrl, clickAction);
         _trayIcon.ShowBalloonTip(milliseconds, title, message, icon);
     }
 
     /// <summary>Queues a startup-detection balloon instead of showing it immediately — see the field doc comment on _pendingStartupBalloons for why.</summary>
-    private void QueueStartupBalloon(string title, string message, ToolTipIcon icon) => _pendingStartupBalloons.Enqueue((title, message, icon));
+    private void QueueStartupBalloon(string title, string message, ToolTipIcon icon) => _startupBalloons.Enqueue(title, message, icon);
 
-    private bool _startupBalloonsReleased;
-
-    private void StartDrainingStartupBalloons()
-    {
-        _startupBalloonsReleased = true;
-        ShowNextStartupBalloon();
-    }
+    private void StartDrainingStartupBalloons() => ShowStartupBalloon(_startupBalloons.Release());
 
     /// <summary>
     /// For a notice whose answer arrives after start-up (the auto-start check now runs in the background):
@@ -640,29 +631,24 @@ public partial class App : Application
     /// first-run onboarding still has the screen).
     /// </summary>
     private void QueueLateStartupBalloon(string title, string message, ToolTipIcon icon)
-    {
-        QueueStartupBalloon(title, message, icon);
-        if (_startupBalloonsReleased && _startupBalloonTimer?.IsEnabled != true)
-            ShowNextStartupBalloon();
-    }
+        => ShowStartupBalloon(_startupBalloons.EnqueueLate(title, message, icon));
 
-    private void ShowNextStartupBalloon()
+    /// <summary>Shows one start-up notice and, if more are waiting, starts the gap before the next.</summary>
+    private void ShowStartupBalloon(StartupBalloon? balloon)
     {
-        if (_pendingStartupBalloons.Count == 0)
+        if (balloon is null)
             return;
 
-        var (title, message, icon) = _pendingStartupBalloons.Dequeue();
-        ShowTrayBalloon(10_000, title, message, icon);
-
-        if (_pendingStartupBalloons.Count == 0)
+        ShowTrayBalloon(10_000, balloon.Title, balloon.Message, balloon.Icon);
+        if (!_startupBalloons.Waiting)
             return;
 
         _startupBalloonTimer?.Stop();
-        _startupBalloonTimer = new DispatcherTimer { Interval = StartupBalloonSpacing };
+        _startupBalloonTimer = new DispatcherTimer { Interval = StartupBalloons.Spacing };
         _startupBalloonTimer.Tick += (_, _) =>
         {
             _startupBalloonTimer!.Stop();
-            ShowNextStartupBalloon();
+            ShowStartupBalloon(_startupBalloons.OnSpacingElapsed());
         };
         _startupBalloonTimer.Start();
     }
@@ -720,7 +706,7 @@ public partial class App : Application
 
         DebugLog.Write($"First-run choices applied: break reminders {(wantsBreakReminders ? "on" : "unchanged")}, default comfort plan '{defaultComfortPlan}'.");
         _breakReminder?.Rebuild();
-        ApplyDefaultComfortPlanIfNoChoiceToday();
+        _comfortPlans.ApplyDefaultIfNoChoiceToday(); // the schedule is re-applied when the Settings window closes
         RunScheduleTick();
     }
 
@@ -791,7 +777,7 @@ public partial class App : Application
             _overlay.ExcludeFromCapture = _settings.ExcludeOverlayFromCapture;
         RebuildHotkey();
         _breakReminder?.Rebuild();
-        ApplyDefaultComfortPlanIfNoChoiceToday();
+        _comfortPlans.ApplyDefaultIfNoChoiceToday(); // the schedule is re-applied when the Settings window closes
         UpdateWindowsTheme(); // turning the option on takes effect now, not at the next tick
         if (_focusBreakMenuItem is not null)
             _focusBreakMenuItem.Text = FocusBreakMenuText();
@@ -978,12 +964,7 @@ public partial class App : Application
     private void EmergencyRestoreDisplay()
     {
         DebugLog.Write("Emergency Restore Screen activated");
-        if (_overrides.ManualComfortPlanName is not null)
-        {
-            DebugLog.Write($"Emergency Restore Screen cleared temporary comfort plan: {_overrides.ManualComfortPlanName}.");
-            RememberComfortPlan(null); // an emergency restore means "native screen today", also after a restart
-            _overrides.ManualComfortPlanName = null;
-        }
+        _comfortPlans.EmergencyRestore();
         _migraine?.RestoreImmediately();
         _displayApplier?.RestoreNative();
         PauseScheduleFor(EmergencyRestorePauseDuration);
@@ -1419,72 +1400,16 @@ public partial class App : Application
         return menu;
     }
 
-    private DateOnly _comfortPlanDay = DateOnly.FromDateTime(DateTime.Now);
-
-    /// <summary>At start-up: today's remembered choice if there is one, otherwise the "start each day with" plan.</summary>
-    private void RestoreComfortPlan()
-    {
-        _comfortPlanDay = DateOnly.FromDateTime(DateTime.Now);
-        string? plan = ComfortPlanMemory.PlanAtStartup(ComfortPlanStore.Load(), _settings.DefaultComfortPlan, _comfortPlanDay);
-        _overrides.ManualComfortPlanName = plan;
-        if (plan is not null)
-            DebugLog.Write($"Comfort plan restored at start: {plan}.");
-    }
-
-    /// <summary>A choice made by hand lasts until midnight (and survives a restart); then the daily default applies again.</summary>
-    private static void RememberComfortPlan(string? plan)
-        => ComfortPlanStore.Save(ComfortPlanMemory.Remember(plan, DateOnly.FromDateTime(DateTime.Now)));
-
-    private void UpdateComfortPlanForNewDay()
-    {
-        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-        if (today == _comfortPlanDay)
-            return;
-
-        _comfortPlanDay = today;
-        string? plan = ComfortPlanMemory.PlanWhenDayChanges(_settings.DefaultComfortPlan);
-        if (!string.Equals(plan, _overrides.ManualComfortPlanName, StringComparison.Ordinal))
-        {
-            _overrides.ManualComfortPlanName = plan;
-            DebugLog.Write(plan is null ? "New day: the comfort plan chosen yesterday has ended." : $"New day: starting with the {plan} comfort plan.");
-        }
-    }
-
-    /// <summary>Changing "start each day with" in Settings takes effect now, unless the person already chose something today.</summary>
-    private void ApplyDefaultComfortPlanIfNoChoiceToday()
-    {
-        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-        if (ComfortPlanMemory.HasChoiceFor(ComfortPlanStore.Load(), today))
-            return;
-
-        string? plan = ComfortPlanMemory.PlanAtStartup(null, _settings.DefaultComfortPlan, today);
-        if (!string.Equals(plan, _overrides.ManualComfortPlanName, StringComparison.Ordinal))
-        {
-            _overrides.ManualComfortPlanName = plan; // the schedule is re-applied when the Settings window closes
-            DebugLog.Write(plan is null ? "Default comfort plan cleared." : $"Default comfort plan set to {plan}.");
-        }
-    }
-
     private void SelectManualComfortPlan(string plan)
     {
-        if (!SensoryComfortPlans.IsSupported(plan))
-            return;
-
-        RememberComfortPlan(plan);
-        _overrides.ManualComfortPlanName = plan;
-        DebugLog.Write($"Temporary comfort plan selected: {plan}.");
-        RunScheduleTick();
+        if (_comfortPlans.Select(plan))
+            RunScheduleTick();
     }
 
     private void ClearManualComfortPlan()
     {
-        if (_overrides.ManualComfortPlanName is null)
-            return;
-
-        DebugLog.Write($"Temporary comfort plan cleared: {_overrides.ManualComfortPlanName}.");
-        RememberComfortPlan(null);
-        _overrides.ManualComfortPlanName = null;
-        RunScheduleTick();
+        if (_comfortPlans.ReturnToSavedSchedule())
+            RunScheduleTick();
     }
 
     /// <summary>
