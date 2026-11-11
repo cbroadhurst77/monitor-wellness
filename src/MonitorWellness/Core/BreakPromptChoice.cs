@@ -19,6 +19,9 @@ public enum BreakPromptChoice
     /// <summary>Ask again in a few minutes.</summary>
     Snooze,
 
+    /// <summary>"I already took one": the break was taken without using the prompt, so the count restarts and it is counted as taken.</summary>
+    AlreadyTookBreak,
+
     /// <summary>Dismissed on purpose.</summary>
     Skip,
 

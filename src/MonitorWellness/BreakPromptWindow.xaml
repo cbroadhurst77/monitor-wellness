@@ -1,7 +1,7 @@
 <Window x:Class="MonitorWellness.BreakPromptWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Time for a break" Width="340" SizeToContent="Height"
+        Title="Time for a break" Width="380" SizeToContent="Height"
         WindowStartupLocation="Manual" ResizeMode="NoResize"
         ShowInTaskbar="False" Topmost="True" ShowActivated="False">
     <Grid Margin="18">
@@ -15,13 +15,23 @@
                    AutomationProperties.Name="Time for a break"/>
         <TextBlock x:Name="MessageText" Grid.Row="1" Margin="0,6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MW.HelperText}"
                    Text="Look at something about 20 feet away for 20 seconds."/>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="StartButton" Content="Start 20 seconds" Padding="12,4" IsDefault="True" Click="Start_Click"
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Button x:Name="StartButton" Grid.Row="0" Grid.Column="0" Content="Start 20 seconds" Padding="8,5" Margin="0,0,4,4" IsDefault="True" Click="Start_Click"
                     AutomationProperties.Name="Start the 20-second break"/>
-            <Button Content="In 5 minutes" Padding="12,4" Margin="8,0,0,0" Click="Snooze_Click"
+            <Button x:Name="AlreadyButton" Grid.Row="0" Grid.Column="1" Content="I already took one" Padding="8,5" Margin="4,0,0,4" Click="Already_Click"
+                    AutomationProperties.Name="I already took a break"/>
+            <Button Grid.Row="1" Grid.Column="0" Content="In 5 minutes" Padding="8,5" Margin="0,0,4,0" Click="Snooze_Click"
                     AutomationProperties.Name="Remind me again in 5 minutes"/>
-            <Button Content="Skip" Padding="12,4" Margin="8,0,0,0" IsCancel="True" Click="Skip_Click"
+            <Button Grid.Row="1" Grid.Column="1" Content="Skip" Padding="8,5" Margin="4,0,0,0" IsCancel="True" Click="Skip_Click"
                     AutomationProperties.Name="Skip this reminder"/>
-        </StackPanel>
+        </Grid>
     </Grid>
 </Window>

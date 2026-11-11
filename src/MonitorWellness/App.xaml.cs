@@ -236,7 +236,8 @@ public partial class App : Application
             (milliseconds, message, icon, onClick) => ShowTrayBalloon(milliseconds, "Monitor Wellness", message, icon, clickAction: onClick),
             startBreak: ShowBreakFocusWindow,
             showPrompt: onChoice => ShowBreakPrompt(onChoice),
-            showStandUpPrompt: onChoice => ShowBreakPrompt(onChoice, BreakPromptKind.StandUp));
+            showStandUpPrompt: onChoice => ShowBreakPrompt(onChoice, BreakPromptKind.StandUp),
+            openSettings: () => OpenSettingsWindow());
 
         startup.Mark("display controllers and services");
         SystemEvents.PowerModeChanged += OnPowerModeChanged;

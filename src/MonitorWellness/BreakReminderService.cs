@@ -23,6 +23,13 @@ public sealed class BreakReminderService : IDisposable
     private readonly Func<Action<BreakPromptChoice>, bool>? _showPrompt;
     private readonly Func<Action<BreakPromptChoice>, bool>? _showStandUpPrompt;
     private readonly Action<HistoryEvent> _recordHistory;
+    private readonly Action? _openSettings;
+    private int _eyeSkips;
+    private int _standUpSkips;
+    private DateOnly? _suggestedOn;
+
+    /// <summary>After this many reminders in a row that were skipped or ignored, the app offers to make them less frequent.</summary>
+    internal const int SkipsBeforeSuggestion = 3;
     private TimeSpan _unrecordedActive;
     private DateTime _lastCountedUtc;
 
@@ -48,6 +55,7 @@ public sealed class BreakReminderService : IDisposable
     /// <param name="isInCall">Whether a microphone or camera is in use; only asked when reminders are set to wait during calls.</param>
     /// <param name="playSound">Plays the reminder sound; only called when the sound setting is on.</param>
     /// <param name="showStandUpPrompt">Shows the stand-up prompt; without it (or if it cannot be shown) a balloon is used.</param>
+    /// <param name="openSettings">Opens Settings; offered when reminders keep being skipped (so the person can make them less frequent).</param>
     /// <param name="recordHistory">Writes one history event (only used when the break history setting is on); the local history file by default.</param>
     public BreakReminderService(
         AppSettings settings,
@@ -61,7 +69,8 @@ public sealed class BreakReminderService : IDisposable
         Func<bool>? isInCall = null,
         Action? playSound = null,
         Func<Action<BreakPromptChoice>, bool>? showStandUpPrompt = null,
-        Action<HistoryEvent>? recordHistory = null)
+        Action<HistoryEvent>? recordHistory = null,
+        Action? openSettings = null)
     {
         _settings = settings;
         _isMigraineActive = isMigraineActive;
@@ -70,6 +79,7 @@ public sealed class BreakReminderService : IDisposable
         _showPrompt = showPrompt;
         _showStandUpPrompt = showStandUpPrompt;
         _recordHistory = recordHistory ?? HistoryStore.Append;
+        _openSettings = openSettings;
         _readIdle = readIdle ?? UserIdleDetector.GetIdleDuration;
         _isFullscreen = isFullscreen ?? FullscreenDetector.IsForegroundWindowLikelyFullscreen;
         _isInCall = isInCall ?? CallActivityDetector.IsInCall;
@@ -162,8 +172,12 @@ public sealed class BreakReminderService : IDisposable
     public void NotifyBreakTaken(bool movement = false)
     {
         _activeTime.Reset();
+        _eyeSkips = 0;
         if (movement)
+        {
             _standUpTime.Reset();
+            _standUpSkips = 0;
+        }
         Record(movement ? BreakHistory.MovementBreakTaken : BreakHistory.BreakTaken);
         DebugLog.Write(movement
             ? "BreakReminder: a movement break was taken; both counts restart."
@@ -326,9 +340,11 @@ public sealed class BreakReminderService : IDisposable
             switch (choice)
             {
                 case BreakPromptChoice.StartBreak:
+                case BreakPromptChoice.AlreadyTookBreak:
                     NotifyBreakTaken(movement: true);
                     break;
                 case BreakPromptChoice.Snooze:
+                    _standUpSkips = 0;
                     _standUpTime.SetAccumulated(StandUpInterval - PromptSnoozeDelay);
                     Record(BreakHistory.ReminderSnoozed);
                     DebugLog.Write("BreakReminder: stand-up prompt snoozed for 5 minutes.");
@@ -336,9 +352,11 @@ public sealed class BreakReminderService : IDisposable
                 case BreakPromptChoice.Skip:
                     Record(BreakHistory.ReminderSkipped);
                     DebugLog.Write("BreakReminder: stand-up prompt skipped.");
+                    RegisterSkip(standUp: true);
                     break;
                 case BreakPromptChoice.TimedOut:
                     Record(BreakHistory.ReminderTimedOut);
+                    RegisterSkip(standUp: true);
                     break;
             }
         }
@@ -346,6 +364,32 @@ public sealed class BreakReminderService : IDisposable
         {
             DebugLog.Write($"BreakReminder: handling the stand-up choice failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Counts a skipped or ignored reminder; after a few in a row (at most once a day) offers to make the
+    /// reminders less frequent instead of carrying on being skipped. In use, two of the first three real
+    /// prompts were skipped within seconds.
+    /// </summary>
+    private void RegisterSkip(bool standUp)
+    {
+        int streak = standUp ? ++_standUpSkips : ++_eyeSkips;
+        if (streak < SkipsBeforeSuggestion)
+            return;
+
+        if (standUp) _standUpSkips = 0; else _eyeSkips = 0;
+        DateOnly today = DateOnly.FromDateTime(_clock.GetLocalNow().DateTime);
+        if (_suggestedOn == today)
+            return;
+
+        _suggestedOn = today;
+        string what = standUp ? "stand-up reminders" : "break reminders";
+        DebugLog.Write($"BreakReminder: the last {SkipsBeforeSuggestion} {what} were skipped; suggesting fewer.");
+        _showBalloon(
+            10_000,
+            $"You've skipped the last {SkipsBeforeSuggestion} {what}. They may be coming too often — click here to change how often.",
+            ToolTipIcon.Info,
+            _openSettings);
     }
 
     /// <summary>Writes one history event when the person has turned the break history on. A history problem must never get in the way of a reminder.</summary>
@@ -438,10 +482,15 @@ public sealed class BreakReminderService : IDisposable
             switch (choice)
             {
                 case BreakPromptChoice.StartBreak:
+                    _eyeSkips = 0;
                     _startBreak?.Invoke();
+                    break;
+                case BreakPromptChoice.AlreadyTookBreak:
+                    NotifyBreakTaken(); // counted as a break taken, and the count restarts
                     break;
                 case BreakPromptChoice.Snooze:
                     // The count restarted when the prompt appeared; make the next one come in a few minutes, not a full interval.
+                    _eyeSkips = 0;
                     _activeTime.SetAccumulated(Interval - PromptSnoozeDelay);
                     Record(BreakHistory.ReminderSnoozed);
                     DebugLog.Write("BreakReminder: prompt snoozed for 5 minutes.");
@@ -449,9 +498,11 @@ public sealed class BreakReminderService : IDisposable
                 case BreakPromptChoice.Skip:
                     Record(BreakHistory.ReminderSkipped);
                     DebugLog.Write("BreakReminder: prompt skipped.");
+                    RegisterSkip(standUp: false);
                     break;
                 case BreakPromptChoice.TimedOut:
                     Record(BreakHistory.ReminderTimedOut);
+                    RegisterSkip(standUp: false);
                     break;
             }
         }

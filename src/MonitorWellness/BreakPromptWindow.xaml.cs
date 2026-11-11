@@ -57,6 +57,8 @@ public partial class BreakPromptWindow : Window
             MessageText.Text = "You have been at the computer a while. Stand up, stretch or walk for a few minutes.";
             StartButton.Content = "I'll take a break";
             System.Windows.Automation.AutomationProperties.SetName(StartButton, "I am taking a movement break");
+            AlreadyButton.Content = "I already moved";
+            System.Windows.Automation.AutomationProperties.SetName(AlreadyButton, "I already took a movement break");
         }
         else
         {
@@ -114,6 +116,8 @@ public partial class BreakPromptWindow : Window
     }
 
     private void Start_Click(object sender, RoutedEventArgs e) => Answer(BreakPromptChoice.StartBreak);
+
+    private void Already_Click(object sender, RoutedEventArgs e) => Answer(BreakPromptChoice.AlreadyTookBreak);
 
     private void Snooze_Click(object sender, RoutedEventArgs e) => Answer(BreakPromptChoice.Snooze);
 
